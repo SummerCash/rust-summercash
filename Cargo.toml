@@ -1,15 +1,15 @@
 [package]
-name = "rust-summercash"
+name = "summercash"
 version = "0.1.0"
 authors = ["Dowland Aiello <mitsukomegumii@gmail.com>"]
-edition = "2019"
+edition = "2018"
 
 [dependencies]
 
 [lib]
-name = "rust-summercash"
+name = "summercash"
 path = "src/lib.rs"
 
 [[bin]]
-name = "rust-summercash"
+name = "summercash"
 path = "src/main.rs"
