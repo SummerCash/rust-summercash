@@ -1,0 +1,15 @@
+[package]
+name = "rust-summercash"
+version = "0.1.0"
+authors = ["Dowland Aiello <mitsukomegumii@gmail.com>"]
+edition = "2019"
+
+[dependencies]
+
+[lib]
+name = "rust-summercash"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rust-summercash"
+path = "src/main.rs"
