@@ -30,8 +30,11 @@ pub fn num_finks_per_smc() -> BigUint {
 ///
 /// ```
 /// use summercash::common::fink; // Import the fink unit conversion utility
+/// use num::bigint::{BigInt, BigUint, Sign}; // Add support for large unsigned integers
+/// 
+/// use std::str::FromStr; // Let the bigint library implement from_str
 ///
-/// let n_smc = fink::convert_finks_to_smc(BigUint::from_str("1000000000000000000")); // 1 SMC
+/// let n_smc = fink::convert_finks_to_smc(BigUint::from_str("1000000000000000000").unwrap()); // 1 SMC
 /// ```
 pub fn convert_finks_to_smc(n_finks: BigUint) -> BigRational {
     return Ratio::from_integer(BigInt::from_biguint(Sign::Plus, n_finks))
@@ -48,8 +51,11 @@ pub fn convert_finks_to_smc(n_finks: BigUint) -> BigRational {
 ///
 /// ```
 /// use summercash::common::fink; // Import the fink unit conversion utility
+/// use num::rational::{BigRational, Ratio}; // Add support for large floats\
+/// 
+/// use std::str::FromStr; // Let the bigint library implement from_str
 ///
-/// let n_finks = fink::convert_smc_to_finks(BigRational::from_str("1/1")); // 1000000000000000000 finks
+/// let n_finks = fink::convert_smc_to_finks(BigRational::from_str("1/1").unwrap()); // 1000000000000000000 finks
 /// ```
 pub fn convert_smc_to_finks(n_smc: BigRational) -> BigUint {
     return (n_smc * Ratio::from_integer(BigInt::from_biguint(Sign::Plus, num_finks_per_smc())))
