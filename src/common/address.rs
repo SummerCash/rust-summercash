@@ -44,9 +44,11 @@ impl Address {
     /// ```
     /// use summercash::common::address; // Import the address utility
     ///
-    /// let address = address::new();
+    /// let address = address::new(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]); // [0, 1...] (values after index of 32 trimmed)
+    ///
+    /// let hex_encoded = address.to_str(); //
     /// ```
-    fn to_str(&self) -> String {
+    pub fn to_str(&self) -> String {
         return hex::encode(self); // Return string val
     }
 }
@@ -62,12 +64,15 @@ impl Address {
 /// ```
 /// use summercash::common::address; // Import the address utility
 ///
-/// let address = address::new(vec![0, 1...]); // [0, 1...] (values after index of 32 trimmed)
+/// let address = address::new(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]); // [0, 1...] (values after index of 32 trimmed)
 /// ```
 pub fn new(b: Vec<u8>) -> Address {
     let mut buffer: Address = Address([0; ADDRESS_SIZE]); // Initialize address buffer
 
-    buffer.copy_from_slice(b.as_slice()); // Copy contents of vec into buffer
+    let mut modifiable_b: Vec<u8> = b; // Get local scope b value
+    modifiable_b.truncate(ADDRESS_SIZE); // Trim past index 32
+
+    buffer.copy_from_slice(modifiable_b.as_slice()); // Copy contents of vec into buffer
 
     return buffer; // Return contents of buffer
 }
@@ -92,3 +97,19 @@ pub fn from_str(s: &str) -> Result<Address, hex::FromHexError> {
 }
 
 /* END EXPORTED METHODS */
+
+// Unit tests
+#[cfg(test)]
+mod tests {
+    use super::*; // Import names from outside module
+
+    #[test]
+    fn test_to_str() {
+        let address = new(vec![
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        ]); // [0, 1...] (values after index of 32 trimmed)
+
+        println!("{}", address.to_str());
+    }
+}

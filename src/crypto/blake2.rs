@@ -2,6 +2,8 @@ extern crate blake2; // Link blake2 hashing library
 
 use blake2::{Blake2s, Digest}; // Use blake2s
 
+/* BEGIN EXPORTED METHODS */
+
 /// Hash a given slice input, b via blake2s.
 /// 
 /// # Example
@@ -19,10 +21,12 @@ pub fn hash_slice(b: &[u8]) -> &[u8] {
     return hasher.result(); // Hash input
 }
 
+/* END EXPORTED METHODS */
+
 // Unit tests
 #[cfg(test)]
 mod tests {
-    user super::*; // Import names from outside module
+    use super::*; // Import names from outside module
 
     #[test]
     fn test_hash_slice() {
