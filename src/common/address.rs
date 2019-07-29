@@ -44,7 +44,7 @@ impl Address {
     /// ```
     /// use summercash::common::address; // Import the address utility
     ///
-    /// let address = address::new()
+    /// let address = address::new();
     /// ```
     fn to_str(&self) -> String {
         return hex::encode(self); // Return string val

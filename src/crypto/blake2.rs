@@ -12,8 +12,20 @@ use blake2::{Blake2s, Digest}; // Use blake2s
 /// let hash = blake2::hash_slice()
 /// ```
 pub fn hash_slice(b: &[u8]) -> &[u8] {
+    let mut hasher = Blake2s::new(); // Init hasher
+    
+    hasher.input(b); // Set input
 
+    return hasher.result(); // Hash input
 }
-pub fn blake2(b: &[u8]) -> &[u8] {
 
+// Unit tests
+#[cfg(test)]
+mod tests {
+    user super::*; // Import names from outside module
+
+    #[test]
+    fn test_hash_slice() {
+        let hashed = hash_slice(b"Test"); // Hash a test message
+    }
 }

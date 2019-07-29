@@ -14,7 +14,7 @@ use std::str::FromStr; // Let the bigint library implement from_str
 /// ```
 /// use summercash::common::fink; // Import the fink unit conversion utility
 ///
-/// let n_finks_per = fink::finks_per_smc(); // 1000000000000000000
+/// let n_finks_per = fink::num_finks_per_smc(); // 1000000000000000000
 /// ```
 pub fn num_finks_per_smc() -> BigUint {
     return BigUint::from_str("1000000000000000000").unwrap(); // Return number of finks per SMC
