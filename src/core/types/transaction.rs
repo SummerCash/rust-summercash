@@ -117,24 +117,7 @@ impl<'a> Transaction<'a> {
 /// let transaction = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0), b"test transaction payload", [some_parent_hash]); // Initialize transaction
 /// ```
 pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) {
-    let update
-    transaction = &Transaction {
-        transaction_data: TransactionData {
-            nonce: transaction.transaction_data.nonce,   // Set nonce
-            sender: transaction.transaction_data.sender, // Set sender
-            recipient: transaction.transaction_data.recipient, // Set recipient
-            value: transaction.transaction_data.value,   // Set value (in finks)
-            payload: transaction.transaction_data.payload, // Set payload
-            parents: transaction.transaction_data.parents, // Set parents
-            parent_receipts: transaction.transaction_data.parent_receipts, // Set parent receipts
-            timestamp: transaction.transaction_data.timestamp,                  // Set timestamp
-        },
-        hash: transaction.hash,                      // Set hash
-        signature: keypair.sign(&*transaction.hash), // Set signature
-        deployed_contract_address: transaction.deployed_contract_address,
-        contract_creation: transaction.contract_creation, // Set does create contract
-        genesis: transaction.genesis,                     // Set is genesis
-    };
+    transaction.signature = keypair.sign(&*transaction.hash); // Sign transaction
 }
 
 /* END EXPORTED METHODS */
