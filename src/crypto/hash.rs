@@ -73,7 +73,7 @@ impl Hash {
 
         match b {
             Ok(bytes) => return Ok(Hash::new(bytes)), // Return hash value
-            Err(error) => return Err(error) // Return result containing error
+            Err(error) => return Err(error),          // Return result containing error
         }; // Handle errors
     }
 
@@ -103,7 +103,8 @@ mod tests {
     #[test]
     fn test_to_str() {
         let hash = Hash::new(
-            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(),
+            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+                .unwrap(),
         ); // Construct a hash from a pre-determined hex value
 
         assert_eq!(
@@ -129,7 +130,8 @@ mod tests {
     #[test]
     fn test_from_str() {
         let hash =
-            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe hash hex encoding to a hash instance
+            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+                .unwrap(); // Convert a known safe hash hex encoding to a hash instance
 
         assert_eq!(
             hash.to_str(),

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 
 use super::receipt; // Import the receipt types
 
-use super::super::super::{common::address, crypto::hash, crypto::blake2}; // Import the hash & address modules
+use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
 /// A transaction between two different addresses on the SummerCash network.
 #[derive(Serialize, Deserialize)]
@@ -55,9 +55,7 @@ struct TransactionData<'a> {
 /* BEGIN EXPORTED METHODS */
 
 impl TransactionData {
-    pub fn to_bytes(&self) -> &[u8] {
-        
-    }
+    pub fn to_bytes(&self) -> &[u8] {}
 }
 
 /// Implement a set of transaction helper methods.
@@ -81,7 +79,7 @@ impl<'a> Transaction<'a> {
             payload: payload,               // Set payload
             parents: parents,               // Set parents
             parent_receipts: None.unwrap(), // Set parent receipts
-            timestamp: chrono::Utc::now(),     // Set timestamp
+            timestamp: chrono::Utc::now(),  // Set timestamp
         }; // Initialize transaction data
 
         Transaction {
