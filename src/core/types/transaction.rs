@@ -129,8 +129,22 @@ pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) 
 mod tests {
     use super::*; // Import names from the parent module
 
+    use super::super::super::common::fink; // Import the fink conversion utility
+
     #[test]
     fn test_new() {
-        
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+
+        let transaction = Transaction::new(
+            0,
+            address::Address::from_key_pair(sender_keypair),
+            address::Address::from_key_pair(recipient_keypair),
+            fink::convert_smc_to_finks(10),
+            b"test transaction payload",
+            None.unwrap(),
+        ); // Initialize transaction
     }
 }
