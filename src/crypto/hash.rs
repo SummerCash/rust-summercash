@@ -1,6 +1,6 @@
 extern crate hex; // Link hex encoding library
 
-use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defermut
+use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
 
 // The length of a standard hash (32 bytes).
 pub const HASH_SIZE: usize = 32;
@@ -45,7 +45,7 @@ impl Hash {
     /// use summercash::crypto::blake2; // Import the blake2 hashing utility
     ///
     /// let hash = blake2::hash_slice(b"hello world"); // Some hash vector
-    /// 
+    ///
     /// let hex_encoded = hash.to_str(); // 9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b
     /// ```
     pub fn to_str(&self) -> String {
@@ -75,19 +75,19 @@ pub fn new(b: Vec<u8>) -> Hash {
     return buffer; // Return contents of buffer
 }
 
-/// Convert a given hex-encoded string to an address instance.Address
+/// Convert a given hex-encoded hash string to an hash instance.
 ///
 /// # Example
 ///
 /// ```
 /// use summercash::crypto::hash; // Import the hash utility
 ///
-/// let hash = hash::from_str("hex_encoded_address"); // TODO: Put an actual address here for doc completion
+/// let hash = hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Some hash instance
 pub fn from_str(s: &str) -> Result<Hash, hex::FromHexError> {
-    let b = hex::decode(s); // Decode hex address value
+    let b = hex::decode(s); // Decode hex hash value
 
     match b {
-        Ok(bytes) => return Ok(new(bytes)), // Return address value
+        Ok(bytes) => return Ok(new(bytes)), // Return hash value
         Err(error) => {
             return Err(error); // Return result containing error
         }
