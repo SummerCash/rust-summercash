@@ -8,3 +8,4 @@ extern crate ed25519_dalek; // Link edwards25519 library
 extern crate hex; // Link hex encoding library
 extern crate num; // Link num library
 extern crate serde; // Link serde
+extern crate serde_json; // Link serde
