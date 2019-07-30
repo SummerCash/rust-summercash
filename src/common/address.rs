@@ -11,74 +11,62 @@ pub type Address = hash::Hash;
 
 /* BEGIN EXPORTED METHODS */
 
-/// Initialize a new address instance from a given byte vector.
-///
-/// # Example
-///
-/// ```
-/// use summercash::common::address; // Import the address utility
-///
-/// let address = address::new(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]); // [0, 1...] (values after index of 32 trimmed)
-/// ```
-pub fn new(b: Vec<u8>) -> Address {
-    return hash::new(b); // Return initialized address
-}
+impl Address {
+    /// Get a zero-value instance of an address.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use summercash::common::address; // Import the address utility
+    ///
+    /// let default_address = address::Address::default(); // Get default address
+    pub fn default() -> Address {
+        return Address::new(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); // Return zero value
+    }
 
-/// Convert a given hex-encoded address string to an address instance.
-///
-/// # Example
-///
-/// ```
-/// use summercash::common::address; // Import the address utility
-///
-/// let address = address::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Some address instance
-/// ```
-pub fn from_str(s: &str) -> Result<Address, hex::FromHexError> {
-    return hash::from_str(s); // Return result
-}
+    /// Derive an address from a given edwards25519 public key.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// extern crate ed25519_dalek;
+    /// extern crate rand;
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    /// use ed25519_dalek::Keypair; // Import the ed25519 keypair+signature types
+    ///
+    /// use summercash::common::address; // Import the address utility
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
+    ///
+    /// let address = address::Address::from_public_key(&keypair.public); // Derive address
+    /// ```
+    pub fn from_public_key(public_key: &PublicKey) -> Address {
+        return blake2::hash_slice(&public_key.to_bytes()); // Hash public key
+    }
 
-/// Derive an address from a given edwards25519 public key.
-///
-/// # Example
-///
-/// ```
-/// extern crate ed25519_dalek;
-/// extern crate rand;
-///
-/// use rand::rngs::OsRng; // Import the os's rng
-/// use ed25519_dalek::Keypair; // Import the ed25519 keypair+signature types
-///
-/// use summercash::common::address; // Import the address utility
-///
-/// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
-/// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
-///
-/// let address = address::from_public_key(&keypair.public); // Derive address
-/// ```
-pub fn from_public_key(public_key: &PublicKey) -> Address {
-    return blake2::hash_slice(&public_key.to_bytes()); // Hash public key
-}
-
-/// Derive an address from a given edwards25519 keypair.
-///
-/// # Example
-///
-/// ```
-/// extern crate ed25519_dalek;
-/// extern crate rand;
-///
-/// use rand::rngs::OsRng; // Import the os's rng
-/// use ed25519_dalek::Keypair; // Import the ed25519 keypair type
-///
-/// use summercash::common::address; // Import the address utility
-///
-/// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
-/// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
-///
-/// let address = address::from_key_pair(&keypair); // Derive address
-/// ```
-pub fn from_key_pair(key_pair: &Keypair) -> Address {
-    return blake2::hash_slice(&key_pair.public.to_bytes()); // Hash public key
+    /// Derive an address from a given edwards25519 keypair.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// extern crate ed25519_dalek;
+    /// extern crate rand;
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    /// use ed25519_dalek::Keypair; // Import the ed25519 keypair type
+    ///
+    /// use summercash::common::address; // Import the address utility
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
+    ///
+    /// let address = address::Address::from_key_pair(&keypair); // Derive address
+    /// ```
+    pub fn from_key_pair(key_pair: &Keypair) -> Address {
+        return blake2::hash_slice(&key_pair.public.to_bytes()); // Hash public key
+    }
 }
 
 /* END EXPORTED METHODS */
@@ -94,8 +82,18 @@ mod tests {
     use super::*; // Import names from our parent module
 
     #[test]
+    fn test_default() {
+        let default_address = Address::default(); // Get default address val
+
+        assert_eq!(
+            default_address.to_str(),
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        ); // Ensure default address is all zeros
+    }
+
+    #[test]
     fn test_new() {
-        let address = new(hex::decode(
+        let address = Address::new(hex::decode(
             "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b",
         )
         .unwrap()); // Construct an address from a pre-determined hex value
@@ -109,7 +107,7 @@ mod tests {
     #[test]
     fn test_from_str() {
         let address =
-            from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe address hex value to an address instance
+            Address::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe address hex value to an address instance
 
         assert_eq!(
             address.to_str(),
@@ -122,7 +120,7 @@ mod tests {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
-        let address = from_public_key(&keypair.public); // Derive address from public key
+        let address = Address::from_public_key(&keypair.public); // Derive address from public key
 
         assert_eq!(
             address.to_str(),
@@ -135,7 +133,7 @@ mod tests {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
-        let address = from_key_pair(&keypair); // Derive address from pair
+        let address = Address::from_key_pair(&keypair); // Derive address from pair
 
         assert_eq!(
             address.to_str(),
