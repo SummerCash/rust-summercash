@@ -11,3 +11,6 @@ Cargo.lock
 
 # JetBrains Prefs
 .idea/
+
+# VS Code Prefs
+.vscode/
