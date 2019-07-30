@@ -1,6 +1,3 @@
-extern crate blake2; // Link blake2 hashing library
-extern crate hex; // Link hex encoding library
-
 use blake2::{Blake2s, Digest}; // Use blake2s
 
 use super::hash; // Import the hash type module

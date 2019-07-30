@@ -1,6 +1,3 @@
-extern crate ed25519_dalek; // Link edwards25519 library
-extern crate hex; // Link hex encoding library
-
 use ed25519_dalek::{Keypair, PublicKey}; // Import the edwards25519 digital signature library
 
 use super::super::crypto::blake2;

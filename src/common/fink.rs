@@ -1,5 +1,3 @@
-extern crate num; // Link num library
-
 use num::bigint::{BigInt, BigUint, Sign}; // Add support for large unsigned integers
 use num::rational::{BigRational, Ratio}; // Add support for large floats
 
