@@ -5,6 +5,7 @@ use chrono; // Import time library
 use num::bigint::BigUint; // Add support for large unsigned integers
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
+use serde_json; // Import serde json
 
 use super::receipt; // Import receipt types
 
@@ -53,7 +54,10 @@ struct TransactionData<'a> {
 /* BEGIN EXPORTED METHODS */
 
 impl<'a> TransactionData<'a> {
-    pub fn to_bytes(&'a self) -> &[u8] { return b"test"; }
+    /// Serialize a given TransactionData instance into a byte vector.
+    pub fn to_bytes(&'a self) -> Vec<u8> {
+        serde_json::to_vec(self).unwrap() // Serialize
+    }
 }
 
 /// Implement a set of transaction helper methods.
@@ -82,7 +86,7 @@ impl<'a> Transaction<'a> {
 
         let mut transaction_data_bytes = vec![0; transaction_data.to_bytes().len()]; // Initialize transaction data buffer
 
-        transaction_data_bytes.clone_from_slice(transaction_data.to_bytes()); // Clone into buffer
+        transaction_data_bytes.clone_from_slice(transaction_data.to_bytes().as_slice()); // Clone into buffer
 
         Transaction {
             transaction_data: transaction_data, // Set transaction data
@@ -121,3 +125,12 @@ pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) 
 }
 
 /* END EXPORTED METHODS */
+
+mod tests {
+    use super::*; // Import names from the parent module
+
+    #[test]
+    fn test_new() {
+        
+    }
+}
