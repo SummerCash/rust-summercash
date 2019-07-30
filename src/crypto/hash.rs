@@ -95,3 +95,23 @@ pub fn from_str(s: &str) -> Result<Hash, hex::FromHexError> {
 }
 
 /* END EXPORTED METHODS */
+
+// Unit tests
+#[cfg(test)]
+mod tests {
+    use super::*; // Import names from outside module
+
+    #[test]
+    fn test_to_str() {
+        let hashed = hash_slice(b"hello world"); // Hash a test message
+
+        assert_eq!(
+            hashed.to_str(),
+            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
+        ); // Ensure properly hashed
+    }
+
+    fn test_new() {
+        let hash = 
+    }
+}
