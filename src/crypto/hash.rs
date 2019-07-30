@@ -33,8 +33,49 @@ impl AsRef<[u8]> for Hash {
     }
 }
 
+/* BEGIN EXPORTED METHODS */
+
 /// Implement a set of hash helper methods.
 impl Hash {
+    /// Initialize a new hash instance from a given byte vector.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use summercash::crypto::hash; // Import the hash utility
+    ///
+    /// let hash = hash::Hash::new(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]); // [0, 1...] (values after index of 32 trimmed)
+    /// ```
+    pub fn new(b: Vec<u8>) -> Hash {
+        let mut buffer: Hash = Hash([0; HASH_SIZE]); // Initialize hash buffer
+
+        let mut modifiable_b: Vec<u8> = b; // Get local scope b value
+        modifiable_b.truncate(HASH_SIZE); // Trim past index 32
+
+        buffer.copy_from_slice(modifiable_b.as_slice()); // Copy contents of vec into buffer
+
+        return buffer; // Return contents of buffer
+    }
+
+    /// Convert a given hex-encoded hash string to an hash instance.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use summercash::crypto::hash; // Import the hash utility
+    ///
+    /// let hash = hash::Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Some hash instance
+    pub fn from_str(s: &str) -> Result<Hash, hex::FromHexError> {
+        let b = hex::decode(s); // Decode hex hash value
+
+        match b {
+            Ok(bytes) => return Ok(Hash::new(bytes)), // Return hash value
+            Err(error) => {
+                return Err(error); // Return result containing error
+            }
+        }; // Handle errors
+    }
+
     /// Convert a hash to a hex-encoded string.
     ///
     /// # Example
@@ -51,47 +92,6 @@ impl Hash {
     }
 }
 
-/* BEGIN EXPORTED METHODS */
-
-/// Initialize a new hash instance from a given byte vector.
-///
-/// # Example
-///
-/// ```
-/// use summercash::crypto::hash; // Import the hash utility
-///
-/// let hash = hash::new(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]); // [0, 1...] (values after index of 32 trimmed)
-/// ```
-pub fn new(b: Vec<u8>) -> Hash {
-    let mut buffer: Hash = Hash([0; HASH_SIZE]); // Initialize hash buffer
-
-    let mut modifiable_b: Vec<u8> = b; // Get local scope b value
-    modifiable_b.truncate(HASH_SIZE); // Trim past index 32
-
-    buffer.copy_from_slice(modifiable_b.as_slice()); // Copy contents of vec into buffer
-
-    return buffer; // Return contents of buffer
-}
-
-/// Convert a given hex-encoded hash string to an hash instance.
-///
-/// # Example
-///
-/// ```
-/// use summercash::crypto::hash; // Import the hash utility
-///
-/// let hash = hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Some hash instance
-pub fn from_str(s: &str) -> Result<Hash, hex::FromHexError> {
-    let b = hex::decode(s); // Decode hex hash value
-
-    match b {
-        Ok(bytes) => return Ok(new(bytes)), // Return hash value
-        Err(error) => {
-            return Err(error); // Return result containing error
-        }
-    }; // Handle errors
-}
-
 /* END EXPORTED METHODS */
 
 // Unit tests
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_to_str() {
-        let hash = new(hex::decode(
+        let hash = Hash::new(hex::decode(
             "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b",
         )
         .unwrap()); // Construct a hash from a pre-determined hex value
@@ -114,11 +114,11 @@ mod tests {
 
     #[test]
     fn test_new() {
-        new(vec![
+        Hash::new(vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31,
         ]); // Construct a hash from pre-determined byte values
-        new(vec![
+        Hash::new(vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
         ]); // Construct a hash from an overflowing set of byte values
@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn test_from_str() {
         let hash =
-            from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe hash hex encoding to a hash instance
+            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe hash hex encoding to a hash instance
 
         assert_eq!(
             hash.to_str(),
