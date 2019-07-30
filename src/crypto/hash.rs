@@ -1,9 +1,12 @@
+use serde::{Deserialize, Serialize}; // Import serde serialization
+
 use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
 
 // The length of a standard hash (32 bytes).
 pub const HASH_SIZE: usize = 32;
 
 // A standard 32-byte blake2 hash.
+#[derive(Serialize, Deserialize)]
 pub struct Hash([u8; HASH_SIZE]);
 
 /* BEGIN HASH TYPE METHODS */
@@ -54,7 +57,7 @@ impl Hash {
 
         buffer.copy_from_slice(modifiable_b.as_slice()); // Copy contents of vec into buffer
 
-        return buffer; // Return contents of buffer
+        buffer // Return contents of buffer
     }
 
     /// Convert a given hex-encoded hash string to an hash instance.
@@ -70,9 +73,7 @@ impl Hash {
 
         match b {
             Ok(bytes) => return Ok(Hash::new(bytes)), // Return hash value
-            Err(error) => {
-                return Err(error); // Return result containing error
-            }
+            Err(error) => return Err(error) // Return result containing error
         }; // Handle errors
     }
 
@@ -88,7 +89,7 @@ impl Hash {
     /// let hex_encoded = hash.to_str(); // 9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b
     /// ```
     pub fn to_str(&self) -> String {
-        return hex::encode(self); // Return string val
+        hex::encode(self) // Return string val
     }
 }
 
@@ -102,8 +103,7 @@ mod tests {
     #[test]
     fn test_to_str() {
         let hash = Hash::new(
-            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
-                ?,
+            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(),
         ); // Construct a hash from a pre-determined hex value
 
         assert_eq!(
@@ -129,8 +129,7 @@ mod tests {
     #[test]
     fn test_from_str() {
         let hash =
-            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
-                ?; // Convert a known safe hash hex encoding to a hash instance
+            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe hash hex encoding to a hash instance
 
         assert_eq!(
             hash.to_str(),

@@ -1,28 +1,22 @@
 use ed25519_dalek::{Keypair, Signature}; // Import the edwards25519 digital signature library
 
-use time::Tm; // Import the timestamp type from the time library
+use chrono; // Import time library
 
 use num::bigint::BigUint; // Add support for large unsigned integers
 
 use std::collections::HashMap; // Import the hash map module
 
-use super::logs; // Import the logs module
+use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use serde::ser::{Serialize, SerializeStruct, Serializer}; // Import serde
+use super::receipt; // Import the receipt types
 
-use super::super::super::{common::address, crypto::hash}; // Import the hash & address modules
-
-/// A receipt of a transaction's execution.
-pub struct Receipt<'a> {
-    /// Hash of state at transaction
-    state_hash: hash::Hash,
-    /// Logs emitted at run time
-    logs: &'a [logs::Log<'a>],
-}
+use super::super::super::{common::address, crypto::hash, crypto::blake2}; // Import the hash & address modules
 
 /// A transaction between two different addresses on the SummerCash network.
+#[derive(Serialize, Deserialize)]
 pub struct Transaction<'a> {
     /// The contents of the transaction
+    #[serde(borrow)]
     transaction_data: TransactionData<'a>,
     /// The hash of the transaction
     hash: hash::Hash,
@@ -37,6 +31,7 @@ pub struct Transaction<'a> {
 }
 
 /// A container representing the contents of a transaction.
+#[derive(Serialize, Deserialize)]
 struct TransactionData<'a> {
     /// The index of the transaction in the sender's set of txs
     nonce: u128,
@@ -47,59 +42,21 @@ struct TransactionData<'a> {
     /// The amount of finks sent along with the Transaction
     value: BigUint,
     /// The data sent to the transaction recipient (i.e. contract call bytecode)
+    #[serde(with = "serde_bytes")]
     payload: &'a [u8],
     /// The hashes of the transaction's parents
-    parents: &'a [hash::Hash],
+    parents: Vec<hash::Hash>,
     /// The list of resolved parent receipts
-    parent_receipts: HashMap<hash::Hash, Receipt<'a>>,
+    parent_receipts: receipt::ReceiptMap<'a>,
     /// The transaction's timestamp
-    timestamp: Tm,
+    timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 /* BEGIN EXPORTED METHODS */
 
-/// Implement a set of serialization helper methods.
-impl Receipt {
-    /// Serialize the receipt to a byte slice.
-    pub fn serialize<S>(&self, serializer: S) -> Result<S:: Ok, S::Error> where S: Serializer, {
-        let mut state = serializer.serialize_struct("Receipt", 2)?; // Serialize receipt struct
-
-        let serialized_logs: Vec<&[u8]>; // Initialize serialized logs buffer
-
-        for log in self.logs { // Iterate through logs
-            serialized_logs.push(log.serialize()?); // Serialize log
-        }
-
-        state.serialize_field("state_hash", &*self.state_hash); // Serialize state hash field
-        state.serialize_field("logs", &self.logs[0]); // Serialize logs field
-    }
-}
-
 impl TransactionData {
-    pub fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("TransactionData", 8)?; // Serialize TransactionData struct
-
-        let parents: Vec<[u8; hash::HASH_SIZE]>; // Initialize parents buffer
-
-        for parent in self.parents {
-            // Iterate through parents
-            parents.push(**parent); // Append normalized parent to list of normalized parents
-        }
-
-        state.serialize_field("nonce", &self.nonce)?; // Serialize nonce field
-        state.serialize_field("sender", &*self.sender)?; // Serialize sender field
-        state.serialize_field("recipient", &*self.recipient)?; // Serialize recipient field
-        state.serialize_field("value", &self.value.to_bytes_le())?; // Serialize value field
-        state.serialize_field("payload", &self.payload)?; // Serialize payload field
-        state.serialize_field("parents", &parents)?; // Serialize parents field
-        state.serialize_field("parent_receipts", &self.parent_receipts); // Serialize parent receipts field
-        state.serialize_field("timestamp", &self.timestamp); // Serializse timestamp field
-    }
     pub fn to_bytes(&self) -> &[u8] {
-        return;
+        
     }
 }
 
@@ -114,22 +71,24 @@ impl<'a> Transaction<'a> {
         recipient: address::Address,
         value_finks: BigUint,
         payload: &'a [u8],
-        parents: &'a [hash::Hash],
+        parents: Vec<hash::Hash>,
     ) -> Transaction<'a> {
+        let transaction_data = TransactionData {
+            nonce: nonce,                   // Set nonce
+            sender: sender,                 // Set sender
+            recipient: recipient,           // Set recipient
+            value: value_finks,             // Set value (in finks)
+            payload: payload,               // Set payload
+            parents: parents,               // Set parents
+            parent_receipts: None.unwrap(), // Set parent receipts
+            timestamp: chrono::Utc::now(),     // Set timestamp
+        }; // Initialize transaction data
+
         Transaction {
-            transaction_data: TransactionData {
-                nonce: nonce,                   // Set nonce
-                sender: sender,                 // Set sender
-                recipient: recipient,           // Set recipient
-                value: value_finks,             // Set value (in finks)
-                payload: payload,               // Set payload
-                parents: parents,               // Set parents
-                parent_receipts: None?, // Set parent receipts
-                timestamp: time::now_utc(),     // Set timestamp
-            }, // Set transaction data
-            hash: crypto::blake2::hash_slice(),
-            signature: None?, // Set signature
-            deployed_contract_address: None?,
+            transaction_data: transaction_data, // Set transaction data
+            hash: blake2::hash_slice(),
+            signature: None.unwrap(), // Set signature
+            deployed_contract_address: None.unwrap(),
             contract_creation: false, // Set does create contract
             genesis: false,           // Set is genesis
         }
