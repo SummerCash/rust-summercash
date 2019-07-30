@@ -1,5 +1,3 @@
-extern crate hex; // Link hex encoding library
-
 use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
 
 // The length of a standard hash (32 bytes).
