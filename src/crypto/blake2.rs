@@ -1,10 +1,10 @@
-use blake2::{Blake2s, Digest}; // Use blake2s
+use blake2::{Blake2b, Digest}; // Use blake2b
 
 use super::hash; // Import the hash type module
 
 /* BEGIN EXPORTED METHODS */
 
-/// Hash a given slice input, b via blake2s.
+/// Hash a given slice input, b via blake2b.
 ///
 /// # Example
 ///
@@ -14,7 +14,7 @@ use super::hash; // Import the hash type module
 /// let hash = blake2::hash_slice(&[1, 2, 3, 4]);
 /// ```
 pub fn hash_slice(b: &[u8]) -> hash::Hash {
-    let mut hasher = Blake2s::new(); // Init hasher
+    let mut hasher = Blake2b::new(); // Init hasher
 
     hasher.input(b); // Set input
 

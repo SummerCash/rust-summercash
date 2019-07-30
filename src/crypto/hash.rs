@@ -101,10 +101,10 @@ mod tests {
 
     #[test]
     fn test_to_str() {
-        let hash = Hash::new(hex::decode(
-            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b",
-        )
-        .unwrap()); // Construct a hash from a pre-determined hex value
+        let hash = Hash::new(
+            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+                ?,
+        ); // Construct a hash from a pre-determined hex value
 
         assert_eq!(
             hash.to_str(),
@@ -118,16 +118,19 @@ mod tests {
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31,
         ]); // Construct a hash from pre-determined byte values
-        Hash::new(vec![
+        let hash = Hash::new(vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
         ]); // Construct a hash from an overflowing set of byte values
+
+        println!("{}", hash.to_str()); // Log hash hex value
     } // This test simply checks for panics
 
     #[test]
     fn test_from_str() {
         let hash =
-            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe hash hex encoding to a hash instance
+            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+                ?; // Convert a known safe hash hex encoding to a hash instance
 
         assert_eq!(
             hash.to_str(),
