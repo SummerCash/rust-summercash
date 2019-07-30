@@ -8,6 +8,8 @@ pub const ADDRESS_SIZE: usize = 32;
 /// A standard 32-byte blake2 hash of an account's public key.
 pub type Address = hash::Hash;
 
+/* BEGIN EXPORTED METHODS */
+
 /// Initialize a new address instance from a given byte vector.
 ///
 /// # Example
@@ -32,4 +34,32 @@ pub fn new(b: Vec<u8>) -> Address {
 /// ```
 pub fn from_str(s: &str) -> Result<Address, hex::FromHexError> {
     return hash::from_str(s); // Return result
+}
+
+/* END EXPORTED METHODS */
+
+// Unit tests
+#[cfg(test)]
+mod tests {
+    use super::*; // Import names from our parent module
+
+    #[test]
+    fn test_new() {
+        let address = new(hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap()); // Construct an address from a pre-determined hex value
+
+        assert_eq!(
+            address.to_str(),
+            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
+        ); // Ensure address was constructed properly, and that to_str() works
+    }
+
+    #[test]
+    fn test_from_str() {
+        let address = from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe address hex value to an address instance
+
+        assert_eq!(
+            address.to_str(),
+            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
+        ); // Ensure our original input was preserved
+    }
 }

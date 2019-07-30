@@ -124,6 +124,6 @@ mod tests {
         assert_eq!(
             hash.to_str(),
             "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
-        ); // Ensure our original input remains
+        ); // Ensure our original input was preserved
     }
 }
