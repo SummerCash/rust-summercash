@@ -7,5 +7,4 @@ extern crate chrono; // Link chrono library
 extern crate ed25519_dalek; // Link edwards25519 library
 extern crate hex; // Link hex encoding library
 extern crate num; // Link num library
-extern crate serde;
-extern crate time; // Link time library // Link serialization library
+extern crate serde; // Link serde

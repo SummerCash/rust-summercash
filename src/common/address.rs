@@ -21,10 +21,10 @@ impl Address {
     ///
     /// let default_address = address::Address::default(); // Get default address
     pub fn default() -> Address {
-        return Address::new(vec![
+        Address::new(vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
-        ]); // Return zero value
+        ]) // Return zero value
     }
 
     /// Derive an address from a given edwards25519 public key.
@@ -46,7 +46,7 @@ impl Address {
     /// let address = address::Address::from_public_key(&keypair.public); // Derive address
     /// ```
     pub fn from_public_key(public_key: &PublicKey) -> Address {
-        return blake2::hash_slice(&public_key.to_bytes()); // Hash public key
+        blake2::hash_slice(&public_key.to_bytes()) // Hash public key
     }
 
     /// Derive an address from a given edwards25519 keypair.
@@ -68,7 +68,7 @@ impl Address {
     /// let address = address::Address::from_key_pair(&keypair); // Derive address
     /// ```
     pub fn from_key_pair(key_pair: &Keypair) -> Address {
-        return blake2::hash_slice(&key_pair.public.to_bytes()); // Hash public key
+        blake2::hash_slice(&key_pair.public.to_bytes()) // Return hashed public key
     }
 }
 
@@ -97,7 +97,7 @@ mod tests {
     #[test]
     fn test_new() {
         let address = Address::new(
-            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")?,
+            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(),
         ); // Construct an address from a pre-determined hex value
 
         assert_eq!(
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn test_from_str() {
         let address =
-            Address::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")?; // Convert a known safe address hex value to an address instance
+            Address::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe address hex value to an address instance
 
         assert_eq!(
             address.to_str(),
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_from_public_key() {
-        let mut csprng: OsRng = OsRng::new()?; // Generate source of randomness
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
         let address = Address::from_public_key(&keypair.public); // Derive address from public key
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_from_key_pair() {
-        let mut csprng: OsRng = OsRng::new()?; // Generate source of randomness
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
         let address = Address::from_key_pair(&keypair); // Derive address from pair

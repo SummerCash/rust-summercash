@@ -18,7 +18,7 @@ pub fn hash_slice(b: &[u8]) -> hash::Hash {
 
     hasher.input(b); // Set input
 
-    return hash::Hash::new(hasher.result()[..].to_vec()); // Hash input
+    hash::Hash::new(hasher.result()[..].to_vec()) // Hash input
 }
 
 /* END EXPORTED METHODS */
