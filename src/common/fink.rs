@@ -58,7 +58,8 @@ pub fn convert_finks_to_smc(n_finks: BigUint) -> BigRational {
 pub fn convert_smc_to_finks(n_smc: BigRational) -> BigUint {
     (n_smc * Ratio::from_integer(BigInt::from_biguint(Sign::Plus, num_finks_per_smc())))
         .to_integer()
-        .to_biguint().unwrap() // Return number of finks
+        .to_biguint()
+        .unwrap() // Return number of finks
 }
 
 /* END EXPORTED METHODS */

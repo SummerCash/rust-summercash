@@ -97,7 +97,8 @@ mod tests {
     #[test]
     fn test_new() {
         let address = Address::new(
-            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(),
+            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+                .unwrap(),
         ); // Construct an address from a pre-determined hex value
 
         assert_eq!(
@@ -109,7 +110,8 @@ mod tests {
     #[test]
     fn test_from_str() {
         let address =
-            Address::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b").unwrap(); // Convert a known safe address hex value to an address instance
+            Address::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+                .unwrap(); // Convert a known safe address hex value to an address instance
 
         assert_eq!(
             address.to_str(),
