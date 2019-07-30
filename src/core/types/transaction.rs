@@ -4,11 +4,9 @@ use chrono; // Import time library
 
 use num::bigint::BigUint; // Add support for large unsigned integers
 
-use std::collections::HashMap; // Import the hash map module
-
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::receipt; // Import the receipt types
+use super::receipt; // Import receipt types
 
 use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
@@ -54,8 +52,8 @@ struct TransactionData<'a> {
 
 /* BEGIN EXPORTED METHODS */
 
-impl TransactionData {
-    pub fn to_bytes(&self) -> &[u8] {}
+impl<'a> TransactionData<'a> {
+    pub fn to_bytes(&'a self) -> &[u8] { return b"test"; }
 }
 
 /// Implement a set of transaction helper methods.
@@ -71,7 +69,7 @@ impl<'a> Transaction<'a> {
         payload: &'a [u8],
         parents: Vec<hash::Hash>,
     ) -> Transaction<'a> {
-        let transaction_data = TransactionData {
+        let transaction_data: TransactionData = TransactionData {
             nonce: nonce,                   // Set nonce
             sender: sender,                 // Set sender
             recipient: recipient,           // Set recipient
@@ -82,9 +80,13 @@ impl<'a> Transaction<'a> {
             timestamp: chrono::Utc::now(),  // Set timestamp
         }; // Initialize transaction data
 
+        let mut transaction_data_bytes = vec![0; transaction_data.to_bytes().len()]; // Initialize transaction data buffer
+
+        transaction_data_bytes.clone_from_slice(transaction_data.to_bytes()); // Clone into buffer
+
         Transaction {
             transaction_data: transaction_data, // Set transaction data
-            hash: blake2::hash_slice(),
+            hash: blake2::hash_slice(transaction_data_bytes.as_slice()),
             signature: None.unwrap(), // Set signature
             deployed_contract_address: None.unwrap(),
             contract_creation: false, // Set does create contract
@@ -114,8 +116,9 @@ impl<'a> Transaction<'a> {
 ///
 /// let transaction = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0), b"test transaction payload", [some_parent_hash]); // Initialize transaction
 /// ```
-pub fn sign_transaction<'a>(keypair: Keypair, transaction: &Transaction) -> &Transaction {
-    &Transaction {
+pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) {
+    let update
+    transaction = &Transaction {
         transaction_data: TransactionData {
             nonce: transaction.transaction_data.nonce,   // Set nonce
             sender: transaction.transaction_data.sender, // Set sender
@@ -124,14 +127,14 @@ pub fn sign_transaction<'a>(keypair: Keypair, transaction: &Transaction) -> &Tra
             payload: transaction.transaction_data.payload, // Set payload
             parents: transaction.transaction_data.parents, // Set parents
             parent_receipts: transaction.transaction_data.parent_receipts, // Set parent receipts
-            timestamp: time::now_utc(),                  // Set timestamp
+            timestamp: transaction.transaction_data.timestamp,                  // Set timestamp
         },
         hash: transaction.hash,                      // Set hash
         signature: keypair.sign(&*transaction.hash), // Set signature
         deployed_contract_address: transaction.deployed_contract_address,
         contract_creation: transaction.contract_creation, // Set does create contract
         genesis: transaction.genesis,                     // Set is genesis
-    }
+    };
 }
 
 /* END EXPORTED METHODS */
