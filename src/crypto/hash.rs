@@ -6,7 +6,7 @@ use std::{ops::{Deref, DerefMut}}; // Allow implementation of deref&defer_mut
 pub const HASH_SIZE: usize = 32;
 
 // A standard 32-byte blake2 hash.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Hash([u8; HASH_SIZE]);
 
 /* BEGIN HASH TYPE METHODS */
