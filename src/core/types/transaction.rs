@@ -1,4 +1,4 @@
-use ed25519_dalek::{Keypair, Signature}; // Import the edwards25519 digital signature library
+use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
 
 use chrono; // Import time library
 
@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 use serde_json; // Import serde json
 
 use super::receipt; // Import receipt types
+use super::signature; // Import signature type
 
 use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
@@ -28,39 +29,39 @@ pub enum SignatureError {
 pub struct Transaction<'a> {
     /// The contents of the transaction
     #[serde(borrow)]
-    transaction_data: TransactionData<'a>,
+    pub transaction_data: TransactionData<'a>,
     /// The hash of the transaction
-    hash: hash::Hash,
-    /// The recipient's signature
-    signature: Option<Signature>,
+    pub hash: hash::Hash,
+    /// The transaction's signature
+    pub signature: Option<signature::Signature>,
     /// The address of the deployed contract (if applicable)
-    deployed_contract_address: Option<address::Address>,
+    pub deployed_contract_address: Option<address::Address>,
     /// Whether or not this transaction creates a contract
-    contract_creation: bool,
+    pub contract_creation: bool,
     /// Whether or not this transaction is the network genesis
-    genesis: bool,
+    pub genesis: bool,
 }
 
 /// A container representing the contents of a transaction.
 #[derive(Serialize, Deserialize, Clone)]
-struct TransactionData<'a> {
+pub struct TransactionData<'a> {
     /// The index of the transaction in the sender's set of txs
-    nonce: u128,
+    pub nonce: u128,
     /// The sender of the transaction
-    sender: address::Address,
+    pub sender: address::Address,
     /// The recipient of the transaction
-    recipient: address::Address,
+    pub recipient: address::Address,
     /// The amount of finks sent along with the Transaction
-    value: BigUint,
+    pub value: BigUint,
     /// The data sent to the transaction recipient (i.e. contract call bytecode)
     #[serde(with = "serde_bytes")]
-    payload: &'a [u8],
+    pub payload: &'a [u8],
     /// The hashes of the transaction's parents
-    parents: Vec<hash::Hash>,
+    pub parents: Vec<hash::Hash>,
     /// The list of resolved parent receipts
-    parent_receipts: Option<receipt::ReceiptMap<'a>>,
+    pub parent_receipts: Option<receipt::ReceiptMap<'a>>,
     /// The transaction's timestamp
-    timestamp: chrono::DateTime<chrono::Utc>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 /* BEGIN EXPORTED METHODS */
@@ -76,7 +77,32 @@ impl<'a> TransactionData<'a> {
 impl<'a> Transaction<'a> {
     /// Initialize a new transaction instance from a given set of parameters.
     ///
-    /// # Example TODO: Example
+    /// # Example
+    ///
+    /// ```
+    /// extern crate num; // Link num library
+    /// extern crate rand; // Link rand library
+    ///
+    /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    ///
+    /// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    ///
+    /// use summercash::core::types::transaction; // Import the transaction library
+    /// use summercash::{common::address, crypto::hash}; // Import the address library
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    ///
+    /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+    /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+    ///
+    /// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+    /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+    ///
+    /// let tx = &mut transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+    /// ```
     pub fn new(
         nonce: u128,
         sender: address::Address,
@@ -109,6 +135,44 @@ impl<'a> Transaction<'a> {
             genesis: false,           // Set is genesis
         }
     }
+
+    /// Verify the signature attached to a transaction.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// extern crate num; // Link num library
+    /// extern crate rand; // Link rand library
+    ///
+    /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    ///
+    /// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    ///
+    /// use summercash::core::types::transaction; // Import the transaction library
+    /// use summercash::{common::address, crypto::hash}; // Import the address library
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    ///
+    /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+    /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+    ///
+    /// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+    /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+    ///
+    /// let tx = &mut transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+    /// transaction::sign_transaction(sender_keypair, tx).unwrap(); // Sign tx
+    ///
+    /// let sig_valid = tx.verify_signature(); // Verify signature
+    /// ```
+    pub fn verify_signature(&self) -> bool {
+        match &self.signature {
+            None => false,                                    // Nil signature can't be valid
+            Some(signature) => signature.verify(&*self.hash), // Verify signature
+        }
+    }
 }
 
 /// Sign a given transaction with the provided ed25519 keypair.
@@ -117,20 +181,28 @@ impl<'a> Transaction<'a> {
 ///
 /// ```
 /// extern crate num; // Link num library
+/// extern crate rand; // Link rand library
 ///
 /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
-///
 /// use num::bigint::BigUint; // Add support for large unsigned integers
+///
+/// use rand::rngs::OsRng; // Import the os's rng
+///
+/// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
 ///
 /// use summercash::core::types::transaction; // Import the transaction library
 /// use summercash::{common::address, crypto::hash}; // Import the address library
 ///
-/// let sender = address::Address::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Decode sender address from hex
-/// let recipient = address::Address::from_str("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"); // Decode recipient address from hex
+/// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
 ///
-/// let some_parent_hash = hash::Hash::from_str("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202"); // Decode parent hash from hex
+/// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+/// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
 ///
-/// let transaction = transaction::Transaction::new(0, sender.unwrap(), recipient.unwrap(), BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+/// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+/// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+///
+/// let tx = &mut transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+/// transaction::sign_transaction(sender_keypair, tx).unwrap(); // Sign tx
 /// ```
 pub fn sign_transaction(
     keypair: Keypair,
@@ -145,7 +217,12 @@ pub fn sign_transaction(
         }); // Return error in result
     }
 
-    transaction.signature = Some(keypair.sign(&*transaction.hash)); // Sign transaction
+    let signature = signature::Signature {
+        public_key: keypair.public,
+        signature: keypair.sign(&*transaction.hash),
+    }; // Initialize signature
+
+    transaction.signature = Some(signature); // Set signature
 
     Ok(()) // Everything's good, right? I mean, it's not like anyone ever asks or anything. But then, again, in the end, does it really matter? I suppose from the viewpoint that our idea of existence is based purely on perception, this notion would in fact be correct.
 }

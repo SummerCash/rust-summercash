@@ -11,3 +11,4 @@ extern crate hex; // Link hex encoding library
 extern crate num; // Link num library
 extern crate serde; // Link serde
 extern crate serde_json; // Link serde
+extern crate rand; // Link rand library
