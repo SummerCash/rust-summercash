@@ -2,7 +2,7 @@ use super::logs; // Import the logs module
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::super::crypto::hash; // Import the address utility
+use super::super::super::crypto::hash; // Import the address utility
 
 /// A receipt of a transaction's execution.
 #[derive(Serialize, Deserialize, Clone)]
