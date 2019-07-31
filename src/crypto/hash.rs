@@ -101,14 +101,14 @@ impl Hash {
     }
 
     /// Initialize and return a new hash instance derived from self.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```
     /// use summercash::crypto::blake2; // Import the blake2 hashing utility
-    /// 
+    ///
     /// let hash = blake2::hash_slice(b"hello world!"); // Some hash vector
-    /// 
+    ///
     /// let hash2 = hash.clone(); // Copy value from first hash instance
     /// ```
     pub fn clone(&self) -> Hash {

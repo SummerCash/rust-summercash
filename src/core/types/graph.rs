@@ -1,7 +1,7 @@
-use super::transaction; // Import transaction types
-use super::state; // Import state module
+use super::state;
+use super::transaction; // Import transaction types // Import state module
 
-use super::super::super::{crypto::hash}; // Import address types
+use super::super::super::crypto::hash; // Import address types
 
 /// A node in any particular state-entry/transaction-based DAG.
 pub struct Node<'a> {
@@ -22,7 +22,7 @@ pub struct Graph<'a> {
 /// Implement a set of node helper methods.
 impl<'a> Node<'a> {
     /// Initialize a new node with a given state entry and transaction.
-    /// 
+    ///
     /// # Example
     ///
     /// ```
@@ -48,21 +48,24 @@ impl<'a> Node<'a> {
     /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
-    /// 
+    ///
     /// let node = graph::Node::new(tx, None); // Initialize node
     /// ```
-    pub fn new(transaction: transaction::Transaction<'a>, state_entry: Option<state::state_entry::Entry>) -> Node {
+    pub fn new(
+        transaction: transaction::Transaction<'a>,
+        state_entry: Option<state::state_entry::Entry>,
+    ) -> Node {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash
 
         Node {
             transaction: transaction, // Set transaction
             state_entry: state_entry, // Set state entry
-            hash: transaction_hash, // Set transaction hash
+            hash: transaction_hash,   // Set transaction hash
         } // Return initialized node
     }
 
     /// Verify the contents of a given node (i.e. hashes match).
-    /// 
+    ///
     /// # Example
     ///
     /// ```
@@ -88,17 +91,19 @@ impl<'a> Node<'a> {
     /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
-    /// 
+    ///
     /// let node = graph::Node::new(tx, None); // Initialize node
-    /// 
+    ///
     /// let is_valid = node.verify_contents(); // False, since state entry is None
     /// ```
     pub fn verify_contents(&self) -> bool {
         match &self.state_entry {
             // Has state entry
-            Some(entry) => 
-                if entry.hash == self.hash { // Check state entry hash matches node hash
-                    if self.transaction.hash == self.hash { // Check transaction hash matches node hash
+            Some(entry) => {
+                if entry.hash == self.hash {
+                    // Check state entry hash matches node hash
+                    if self.transaction.hash == self.hash {
+                        // Check transaction hash matches node hash
                         true // Hashes are valid
                     } else {
                         false // Hashes are invalid
@@ -106,14 +111,14 @@ impl<'a> Node<'a> {
                 } else {
                     false // Hashes are invalid
                 }
-            ,
+            }
             // No state entry
-            None => false
+            None => false,
         }
     }
 
     /// Perform all possible verification tests (both to check that values exist, and that they are indeed valid; e.g. validate signatures).
-    /// 
+    ///
     /// # Example
     ///
     /// ```
@@ -139,17 +144,16 @@ impl<'a> Node<'a> {
     /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
-    /// 
+    ///
     /// let node = graph::Node::new(tx, None); // Initialize node
-    /// 
+    ///
     /// let is_valid = node.perform_validity_checks(); // False, since state entry is None TODO: Add more checks
     /// ```
     pub fn perform_validity_checks(&self) -> bool {
         let contents_valid = self.verify_contents(); // Verify contents of self
 
         match contents_valid {
-            true =>
-                self.transaction.verify_signature(),
+            true => self.transaction.verify_signature(),
             false => false,
         }
     }
@@ -158,7 +162,7 @@ impl<'a> Node<'a> {
 /// Implement a set of graph helper methods.
 impl<'a> Graph<'a> {
     /// Initialize a new graph instance.
-    /// 
+    ///
     /// # Example
     ///
     /// ```
@@ -184,14 +188,18 @@ impl<'a> Graph<'a> {
     /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
-    /// 
+    ///
     /// let dag = graph::Graph::new(tx); // Initialize graph
     /// ```
     pub fn new(root_transaction: transaction::Transaction<'a>) -> Graph<'a> {
         let root_transaction_hash = root_transaction.hash.clone(); // Clone transaction hash
 
-        Graph{
-            nodes: vec![Node{transaction: root_transaction, state_entry: None, hash: root_transaction_hash}], // Set nodes
+        Graph {
+            nodes: vec![Node {
+                transaction: root_transaction,
+                state_entry: None,
+                hash: root_transaction_hash,
+            }], // Set nodes
         } // Return initialized graph
     }
 }
