@@ -11,6 +11,15 @@ use super::receipt; // Import receipt types
 
 use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
+/// An error encountered while signing a tx.
+#[derive(Debug, Fail)]
+pub enum SignatureError {
+    #[fail(display = "transaction sender address does not match public key hash: {}", address.to_str())]
+    InvalidAddressPublicKeyCombination {
+        address: address::Address,
+    }
+}
+
 /// A transaction between two different addresses on the SummerCash network.
 #[derive(Serialize, Deserialize)]
 pub struct Transaction<'a> {
@@ -74,14 +83,14 @@ impl<'a> Transaction<'a> {
         parents: Vec<hash::Hash>,
     ) -> Transaction<'a> {
         let transaction_data: TransactionData = TransactionData {
-            nonce: nonce,                   // Set nonce
-            sender: sender,                 // Set sender
-            recipient: recipient,           // Set recipient
-            value: value_finks,             // Set value (in finks)
-            payload: payload,               // Set payload
-            parents: parents,               // Set parents
-            parent_receipts: None, // Set parent receipts
-            timestamp: chrono::Utc::now(),  // Set timestamp
+            nonce: nonce,                  // Set nonce
+            sender: sender,                // Set sender
+            recipient: recipient,          // Set recipient
+            value: value_finks,            // Set value (in finks)
+            payload: payload,              // Set payload
+            parents: parents,              // Set parents
+            parent_receipts: None,         // Set parent receipts
+            timestamp: chrono::Utc::now(), // Set timestamp
         }; // Initialize transaction data
 
         let mut transaction_data_bytes = vec![0; transaction_data.to_bytes().len()]; // Initialize transaction data buffer
@@ -120,8 +129,16 @@ impl<'a> Transaction<'a> {
 ///
 /// let transaction = transaction::Transaction::new(0, sender.unwrap(), recipient.unwrap(), BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
 /// ```
-pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) {
+pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) -> Result<(), SignatureError> {
+    let derived_sender_address = address::Address::from_key_pair(&keypair); // Derive sender address from key pair
+
+    if transaction.transaction_data.sender != derived_sender_address { // Check is not sender
+        Err(SignatureError::InvalidAddressPublicKeyCombination{public_key_hash: derived_sender_address});
+    }
+
     transaction.signature = Some(keypair.sign(&*transaction.hash)); // Sign transaction
+
+    Ok(()); // Everything's good, right?
 }
 
 /* END EXPORTED METHODS */
@@ -154,6 +171,9 @@ mod tests {
             vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
         ); // Initialize transaction
 
-        assert_eq!(str::from_utf8(transaction.transaction_data.payload).unwrap(), "test transaction payload"); // Ensure payload intact
+        assert_eq!(
+            str::from_utf8(transaction.transaction_data.payload).unwrap(),
+            "test transaction payload"
+        ); // Ensure payload intact
     }
 }

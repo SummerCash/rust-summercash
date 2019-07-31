@@ -1,15 +1,23 @@
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
+use std::{ops::{Deref, DerefMut}}; // Allow implementation of deref&defer_mut
 
 // The length of a standard hash (32 bytes).
 pub const HASH_SIZE: usize = 32;
 
 // A standard 32-byte blake2 hash.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Hash([u8; HASH_SIZE]);
 
 /* BEGIN HASH TYPE METHODS */
+
+/// Implement the hash deep equality checker.
+impl PartialEq for Hash {
+    /// Check if self is equivalent to a given hash, other.
+    fn eq(&self, other: &Hash) -> bool {
+        self.iter().zip(other.iter()).all(|(a,b)| a == b) // Check each byte equal
+    }
+}
 
 /// Implement the std deref op.
 impl Deref for Hash {

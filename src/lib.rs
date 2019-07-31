@@ -2,6 +2,8 @@ pub mod common; // Export the common module
 pub mod core;
 pub mod crypto; // Export the crypto module // Export the core module
 
+#[macro_use] extern crate failure;
+
 extern crate blake2; // Link blake2 hashing library
 extern crate chrono; // Link chrono library
 extern crate ed25519_dalek; // Link edwards25519 library
