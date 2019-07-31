@@ -2,7 +2,7 @@ use super::logs; // Import the logs module
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::crypto::hash; // Import the address utility
+use super::super::super::super::crypto::hash; // Import the address utility
 
 /// A receipt of a transaction's execution.
 #[derive(Serialize, Deserialize, Clone)]
@@ -21,5 +21,5 @@ pub struct ReceiptMap<'a> {
     pub associated_transactions: Vec<hash::Hash>,
     /// All of the corresponding receipts
     #[serde(borrow)]
-    pub state_hashes: Vec<Receipt<'a>>,
+    pub receipts: Vec<Receipt<'a>>,
 }

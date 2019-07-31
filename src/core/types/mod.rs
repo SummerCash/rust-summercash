@@ -1,4 +1,2 @@
-pub mod logs; // Export the log types
-pub mod receipt; // Export the receipt types
-pub mod signature;
-pub mod transaction; // Export the transaction type // Export the signature type
+pub mod tx; // Export the transaction module
+pub mod state; // Export the state module
