@@ -2,7 +2,7 @@ use std::collections; // Import the stdlib collections library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::super::{crypto::hash, crypto::blake2}; // Import the hash modules
+use super::super::super::super::{crypto::blake2, crypto::hash}; // Import the hash modules
 
 use num::bigint::BigUint; // Add support for large unsigned integers
 
@@ -59,7 +59,10 @@ mod tests {
     pub fn test_new() {
         let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balances hash map
 
-        balances.insert(blake2::hash_slice(b"test").to_str(), BigUint::from_i64(1).unwrap()); // Balance of 1 fink
+        balances.insert(
+            blake2::hash_slice(b"test").to_str(),
+            BigUint::from_i64(1).unwrap(),
+        ); // Balance of 1 fink
 
         let entry: Entry = Entry::new(balances); // Initialize state entry
 
