@@ -1,7 +1,21 @@
-use super::state;
-use super::transaction; // Import transaction types // Import state module
+use super::state; // Import state module
+use super::transaction; // Import transaction types
+
+use collections; // Import collections module
 
 use super::super::super::crypto::hash; // Import address types
+
+/// An error encountered while signing a tx.
+#[derive(Debug, Fail)]
+pub enum OperationError {
+    #[fail(
+        display = "encountered an error while performing an operation on graph: {}",
+        error
+    )]
+    InvalidAddressPublicKeyCombination {
+        error: String, // The hex-encoded sender address
+    },
+}
 
 /// A node in any particular state-entry/transaction-based DAG.
 pub struct Node<'a> {
@@ -17,6 +31,8 @@ pub struct Node<'a> {
 pub struct Graph<'a> {
     /// A list of nodes in the graph
     pub nodes: Vec<Node<'a>>,
+
+    address_routes: 
 }
 
 /// Implement a set of node helper methods.
@@ -201,5 +217,12 @@ impl<'a> Graph<'a> {
                 hash: root_transaction_hash,
             }], // Set nodes
         } // Return initialized graph
+    }
+
+    /// Push a new item to the graph.
+    pub fn push(mut self, transaction: transaction::Transaction<'a>, state_entry: Option<state::state_entry::Entry>) -> usize {
+        self.nodes.push(Node::new(transaction, state_entry)); // Push node to graph
+
+        return self.nodes.len() - 1; // Return index of transaction
     }
 }
