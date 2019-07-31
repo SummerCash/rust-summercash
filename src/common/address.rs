@@ -40,7 +40,7 @@ impl Address {
     ///
     /// use summercash::common::address; // Import the address utility
     ///
-    /// let mut csprng: OsRng = OsRng::new()?; // Generate source of randomness
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
     /// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
     ///
     /// let address = address::Address::from_public_key(&keypair.public); // Derive address
@@ -62,7 +62,7 @@ impl Address {
     ///
     /// use summercash::common::address; // Import the address utility
     ///
-    /// let mut csprng: OsRng = OsRng::new()?; // Generate source of randomness
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
     /// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
     ///
     /// let address = address::Address::from_key_pair(&keypair); // Derive address

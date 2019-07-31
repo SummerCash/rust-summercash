@@ -20,9 +20,9 @@ pub struct Transaction<'a> {
     /// The hash of the transaction
     hash: hash::Hash,
     /// The recipient's signature
-    signature: Signature,
+    signature: Option<Signature>,
     /// The address of the deployed contract (if applicable)
-    deployed_contract_address: address::Address,
+    deployed_contract_address: Option<address::Address>,
     /// Whether or not this transaction creates a contract
     contract_creation: bool,
     /// Whether or not this transaction is the network genesis
@@ -46,7 +46,7 @@ struct TransactionData<'a> {
     /// The hashes of the transaction's parents
     parents: Vec<hash::Hash>,
     /// The list of resolved parent receipts
-    parent_receipts: receipt::ReceiptMap<'a>,
+    parent_receipts: Option<receipt::ReceiptMap<'a>>,
     /// The transaction's timestamp
     timestamp: chrono::DateTime<chrono::Utc>,
 }
@@ -80,7 +80,7 @@ impl<'a> Transaction<'a> {
             value: value_finks,             // Set value (in finks)
             payload: payload,               // Set payload
             parents: parents,               // Set parents
-            parent_receipts: None.unwrap(), // Set parent receipts
+            parent_receipts: None, // Set parent receipts
             timestamp: chrono::Utc::now(),  // Set timestamp
         }; // Initialize transaction data
 
@@ -91,8 +91,8 @@ impl<'a> Transaction<'a> {
         Transaction {
             transaction_data: transaction_data, // Set transaction data
             hash: blake2::hash_slice(transaction_data_bytes.as_slice()),
-            signature: None.unwrap(), // Set signature
-            deployed_contract_address: None.unwrap(),
+            signature: None, // Set signature
+            deployed_contract_address: None,
             contract_creation: false, // Set does create contract
             genesis: false,           // Set is genesis
         }
@@ -118,18 +118,25 @@ impl<'a> Transaction<'a> {
 ///
 /// let some_parent_hash = hash::Hash::from_str("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202"); // Decode parent hash from hex
 ///
-/// let transaction = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0), b"test transaction payload", [some_parent_hash]); // Initialize transaction
+/// let transaction = transaction::Transaction::new(0, sender.unwrap(), recipient.unwrap(), BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
 /// ```
 pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) {
-    transaction.signature = keypair.sign(&*transaction.hash); // Sign transaction
+    transaction.signature = Some(keypair.sign(&*transaction.hash)); // Sign transaction
 }
 
 /* END EXPORTED METHODS */
 
+#[cfg(test)]
 mod tests {
     use super::*; // Import names from the parent module
 
-    use super::super::super::common::fink; // Import the fink conversion utility
+    use rand::rngs::OsRng; // Import the os's rng
+
+    use num::BigRational; // Import the big rational type
+
+    use std::{str, str::FromStr}; // Let the bigint library implement from_str
+
+    use super::super::super::super::common::fink; // Import the fink conversion utility
 
     #[test]
     fn test_new() {
@@ -140,11 +147,13 @@ mod tests {
 
         let transaction = Transaction::new(
             0,
-            address::Address::from_key_pair(sender_keypair),
-            address::Address::from_key_pair(recipient_keypair),
-            fink::convert_smc_to_finks(10),
+            address::Address::from_key_pair(&sender_keypair),
+            address::Address::from_key_pair(&recipient_keypair),
+            fink::convert_smc_to_finks(BigRational::from_str("10/1").unwrap()),
             b"test transaction payload",
-            None.unwrap(),
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
         ); // Initialize transaction
+
+        assert_eq!(str::from_utf8(transaction.transaction_data.payload).unwrap(), "test transaction payload"); // Ensure payload intact
     }
 }
