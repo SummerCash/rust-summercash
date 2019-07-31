@@ -3,7 +3,7 @@ use ed25519_dalek; // Import the edwards25519 digital signature library
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
 /// An edwards25519 signature.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct Signature {
     /// The public key corresponding to a transaction sender address
     pub public_key: ed25519_dalek::PublicKey,
