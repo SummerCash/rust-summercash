@@ -94,16 +94,22 @@ impl<'a> Node<'a> {
     /// let is_valid = node.verify_contents(); // False, since state entry is None
     /// ```
     pub fn verify_contents(&self) -> bool {
-        match 
-        if let Some(entry) = &self.state_entry { // Check state entry exists
-            if entry.hash == self.hash { // Check state entry hash matches node hash
-                if self.transaction.hash == self.hash { // Check transaction hash matches node hash
-                    true // Hashes are valid
+        match &self.state_entry {
+            // Has state entry
+            Some(entry) => 
+                if entry.hash == self.hash { // Check state entry hash matches node hash
+                    if self.transaction.hash == self.hash { // Check transaction hash matches node hash
+                        true // Hashes are valid
+                    } else {
+                        false // Hashes are invalid
+                    }
+                } else {
+                    false // Hashes are invalid
                 }
-            }
+            ,
+            // No state entry
+            None => false
         }
-        
-        false // Hashes not valid
     }
 }
 
