@@ -111,6 +111,48 @@ impl<'a> Node<'a> {
             None => false
         }
     }
+
+    /// Perform all possible verification tests (both to check that values exist, and that they are indeed valid; e.g. validate signatures).
+    /// 
+    /// # Example
+    ///
+    /// ```
+    /// extern crate num; // Link num library
+    /// extern crate rand; // Link rand library
+    ///
+    /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    ///
+    /// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    ///
+    /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
+    /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    ///
+    /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+    /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+    ///
+    /// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+    /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+    ///
+    /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+    /// 
+    /// let node = graph::Node::new(tx, None); // Initialize node
+    /// 
+    /// let is_valid = node.perform_validity_checks(); // False, since state entry is None TODO: Add more checks
+    /// ```
+    pub fn perform_validity_checks(&self) -> bool {
+        let contents_valid = self.verify_contents(); // Verify contents of self
+
+        match contents_valid {
+            true =>
+                self.transaction.verify_signature(),
+            false => false,
+        }
+    }
 }
 
 /// Implement a set of graph helper methods.
