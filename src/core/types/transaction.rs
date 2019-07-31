@@ -10,7 +10,7 @@ use serde_json; // Import serde json
 use super::receipt; // Import receipt types
 use super::signature; // Import signature type
 
-use super::super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
+use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
 /// An error encountered while signing a tx.
 #[derive(Debug, Fail)]
@@ -242,7 +242,7 @@ mod tests {
 
     use std::{str, str::FromStr}; // Let the bigint library implement from_str
 
-    use super::super::super::super::super::common::fink; // Import the fink conversion utility
+    use super::super::super::super::common::fink; // Import the fink conversion utility
 
     #[test]
     fn test_new() {
