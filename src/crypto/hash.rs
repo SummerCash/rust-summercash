@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
 pub const HASH_SIZE: usize = 32;
 
 // A standard 32-byte blake2 hash.
-#[derive(Serialize, Deserialize, Clone, Eq, Hash, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Eq, Hash, Debug)]
 pub struct Hash([u8; HASH_SIZE]);
 
 /* BEGIN HASH TYPE METHODS */
@@ -98,6 +98,25 @@ impl Hash {
     /// ```
     pub fn to_str(&self) -> String {
         hex::encode(self) // Return string val
+    }
+
+    /// Initialize and return a new hash instance derived from self.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// use summercash::crypto::blake2; // Import the blake2 hashing utility
+    /// 
+    /// let hash = blake2::hash_slice(b"hello world!"); // Some hash vector
+    /// 
+    /// let hash2 = hash.clone(); // Copy value from first hash instance
+    /// ```
+    pub fn clone(&self) -> Hash {
+        let mut hash = Hash::new(vec![0; HASH_SIZE]); // Initialize hash buffer
+
+        hash.copy_from_slice(&**self); // Copy into buffer
+
+        return hash; // Return cloned hash
     }
 }
 

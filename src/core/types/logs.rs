@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Log<'a> {
     /// The topics of the log
-    pub topics: Vec<String>,
+    pub topics: Vec<&'a str>,
     /// The message of the log
     #[serde(with = "serde_bytes")]
     pub message: &'a [u8],
