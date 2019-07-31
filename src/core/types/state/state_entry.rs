@@ -9,15 +9,15 @@ use num::bigint::BigUint; // Add support for large unsigned integers
 /// The state at a particular point in time.
 pub struct Entry {
     /// Body of the state entry
-    data: EntryData,
+    pub data: EntryData,
     /// Hash of the state entry
-    hash: hash::Hash,
+    pub hash: hash::Hash,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EntryData {
     /// Balances of every account at point in time
-    balances: collections::HashMap<String, BigUint>,
+    pub balances: collections::HashMap<String, BigUint>,
 }
 
 /// Implement a set of state entry serialization helper methods.
