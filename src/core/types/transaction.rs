@@ -14,14 +14,17 @@ use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Imp
 /// An error encountered while signing a tx.
 #[derive(Debug, Fail)]
 pub enum SignatureError {
-    #[fail(display = "transaction sender address does not match public key hash: {}", address.to_str())]
+    #[fail(
+        display = "transaction sender address does not match public key hash: {}",
+        address_hex
+    )]
     InvalidAddressPublicKeyCombination {
-        address: address::Address,
-    }
+        address_hex: String, // The hex-encoded sender address
+    },
 }
 
 /// A transaction between two different addresses on the SummerCash network.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Transaction<'a> {
     /// The contents of the transaction
     #[serde(borrow)]
@@ -39,7 +42,7 @@ pub struct Transaction<'a> {
 }
 
 /// A container representing the contents of a transaction.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct TransactionData<'a> {
     /// The index of the transaction in the sender's set of txs
     nonce: u128,
@@ -64,7 +67,7 @@ struct TransactionData<'a> {
 
 impl<'a> TransactionData<'a> {
     /// Serialize a given TransactionData instance into a byte vector.
-    pub fn to_bytes(&'a self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(self).unwrap() // Serialize
     }
 }
@@ -129,16 +132,22 @@ impl<'a> Transaction<'a> {
 ///
 /// let transaction = transaction::Transaction::new(0, sender.unwrap(), recipient.unwrap(), BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
 /// ```
-pub fn sign_transaction<'a>(keypair: Keypair, transaction: &'a mut Transaction) -> Result<(), SignatureError> {
+pub fn sign_transaction(
+    keypair: Keypair,
+    transaction: &mut Transaction,
+) -> Result<(), SignatureError> {
     let derived_sender_address = address::Address::from_key_pair(&keypair); // Derive sender address from key pair
 
-    if transaction.transaction_data.sender != derived_sender_address { // Check is not sender
-        Err(SignatureError::InvalidAddressPublicKeyCombination{public_key_hash: derived_sender_address});
+    if transaction.transaction_data.sender != derived_sender_address {
+        // Check is not sender
+        return Err(SignatureError::InvalidAddressPublicKeyCombination {
+            address_hex: derived_sender_address.to_str(),
+        }); // Return error in result
     }
 
     transaction.signature = Some(keypair.sign(&*transaction.hash)); // Sign transaction
 
-    Ok(()); // Everything's good, right?
+    Ok(()) // Everything's good, right? I mean, it's not like anyone ever asks or anything. But then, again, in the end, does it really matter? I suppose from the viewpoint that our idea of existence is based purely on perception, this notion would in fact be correct.
 }
 
 /* END EXPORTED METHODS */
@@ -175,5 +184,24 @@ mod tests {
             str::from_utf8(transaction.transaction_data.payload).unwrap(),
             "test transaction payload"
         ); // Ensure payload intact
+    }
+
+    #[test]
+    fn test_sign_transaction() {
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+
+        let transaction = &mut Transaction::new(
+            0,
+            address::Address::from_key_pair(&sender_keypair),
+            address::Address::from_key_pair(&recipient_keypair),
+            fink::convert_smc_to_finks(BigRational::from_str("10/1").unwrap()),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize transaction
+
+        sign_transaction(sender_keypair, transaction).unwrap(); // Sign transaction
     }
 }
