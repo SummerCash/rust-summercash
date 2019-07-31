@@ -10,7 +10,7 @@ use serde_json; // Import serde json
 use super::receipt; // Import receipt types
 use super::signature; // Import signature type
 
-use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
+use super::super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
 /// An error encountered while signing a tx.
 #[derive(Debug, Fail)]
@@ -60,6 +60,8 @@ pub struct TransactionData<'a> {
     pub parents: Vec<hash::Hash>,
     /// The list of resolved parent receipts
     pub parent_receipts: Option<receipt::ReceiptMap<'a>>,
+    /// The hash of the combined parent state
+    pub parent_state_hash: Option<hash::Hash>,
     /// The transaction's timestamp
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
@@ -119,12 +121,13 @@ impl<'a> Transaction<'a> {
             payload: payload,              // Set payload
             parents: parents,              // Set parents
             parent_receipts: None,         // Set parent receipts
+            parent_state_hash: None,       // Set parent state hash
             timestamp: chrono::Utc::now(), // Set timestamp
         }; // Initialize transaction data
 
         let mut transaction_data_bytes = vec![0; transaction_data.to_bytes().len()]; // Initialize transaction data buffer
 
-        transaction_data_bytes.clone_from_slice(transaction_data.to_bytes().as_slice()); // Clone into buffer
+        transaction_data_bytes.clone_from_slice(transaction_data.to_bytes().as_slice()); // Copy into buffer
 
         Transaction {
             transaction_data: transaction_data, // Set transaction data
@@ -239,7 +242,7 @@ mod tests {
 
     use std::{str, str::FromStr}; // Let the bigint library implement from_str
 
-    use super::super::super::super::common::fink; // Import the fink conversion utility
+    use super::super::super::super::super::common::fink; // Import the fink conversion utility
 
     #[test]
     fn test_new() {
@@ -280,5 +283,26 @@ mod tests {
         ); // Initialize transaction
 
         sign_transaction(sender_keypair, transaction).unwrap(); // Sign transaction
+    }
+
+    #[test]
+    fn test_verify_transaction_signature() {
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+
+        let transaction = &mut Transaction::new(
+            0,
+            address::Address::from_key_pair(&sender_keypair),
+            address::Address::from_key_pair(&recipient_keypair),
+            fink::convert_smc_to_finks(BigRational::from_str("10/1").unwrap()),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize transaction
+
+        sign_transaction(sender_keypair, transaction).unwrap(); // Sign transaction
+
+        assert!(transaction.verify_signature()); // Ensure signature valid
     }
 }

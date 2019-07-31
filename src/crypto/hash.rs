@@ -6,12 +6,12 @@ use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
 pub const HASH_SIZE: usize = 32;
 
 // A standard 32-byte blake2 hash.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Eq, Hash, Debug)]
 pub struct Hash([u8; HASH_SIZE]);
 
 /* BEGIN HASH TYPE METHODS */
 
-/// Implement the hash deep equality checker.
+/// Implement the hash partial equality checker.
 impl PartialEq for Hash {
     /// Check if self is equivalent to a given hash, other.
     fn eq(&self, other: &Hash) -> bool {
