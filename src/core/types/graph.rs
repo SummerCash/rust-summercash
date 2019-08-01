@@ -465,4 +465,38 @@ mod tests {
 
         assert_eq!(node_index, 1); // Ensure is second transaction in DAG
     }
+
+    #[test]
+    fn test_update() {
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+
+        let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+        let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+
+        let root_tx = transaction::Transaction::new(
+            0,
+            sender,
+            recipient,
+            BigUint::from_i64(0).unwrap(),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize root transaction
+        let tx_2 = transaction::Transaction::new(
+            1,
+            sender,
+            recipient,
+            BigUint::from_i64(0).unwrap(),
+            b"test transaction payload 2",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize second transaction
+
+        let mut dag: Graph = Graph::new(root_tx); // Initialize graph
+
+        dag.update(0, tx_2, None); // Update root transaction
+
+        assert_eq!(dag.get(0).transaction.transaction_data.payload, b"test transaction payload 2"); // Ensure has updated transaction
+    }
 }
