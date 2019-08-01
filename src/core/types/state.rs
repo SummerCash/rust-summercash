@@ -2,7 +2,7 @@ use std::collections; // Import the stdlib collections library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::super::{crypto::blake2, crypto::hash}; // Import the hash modules
+use super::super::super::{crypto::blake2, crypto::hash}; // Import the hash modules
 
 use num::bigint::BigUint; // Add support for large unsigned integers
 
@@ -51,10 +51,14 @@ impl Entry {
     pub fn merge_entries(prev_entry: Entry, entries: Vec<Entry>) -> Entry {
         let mut balances: collections::HashMap<String, BigUint> = prev_entry.data.balances.clone(); // Initialize balances map
 
-        for entry in entries { // Iterate through entries
-            for (k, v) in entry.data.balances.iter() { // Iterate through balances
-                if balances.contains_key(k) { // Check already exists in balances
-                    let balance_difference = entry.data.balances.get(k).unwrap() - balances.get(k).unwrap(); // Calculate balance difference
+        for entry in entries {
+            // Iterate through entries
+            for (k, v) in entry.data.balances.iter() {
+                // Iterate through balances
+                if balances.contains_key(k) {
+                    // Check already exists in balances
+                    let balance_difference =
+                        entry.data.balances.get(k).unwrap() - balances.get(k).unwrap(); // Calculate balance difference
 
                     let mut_balance = balances.get_mut(k).unwrap(); // Get mutable balance
 
@@ -73,7 +77,7 @@ impl Entry {
 mod tests {
     use super::*; // Import names from parent module
 
-    use super::super::super::super::super::common::address; // Import the hash & address modules
+    use super::super::super::super::common::address; // Import the hash & address modules
 
     use crate::num::FromPrimitive; // Let the bigint library implement from_i64
 
