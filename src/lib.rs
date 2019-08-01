@@ -1,6 +1,6 @@
 pub mod common; // Export the common module
-pub mod core;
-pub mod crypto; // Export the crypto module // Export the core module
+pub mod core; // Export the core module
+pub mod crypto; // Export the crypto module
 
 #[macro_use]
 extern crate failure;
@@ -13,3 +13,4 @@ extern crate num; // Link num library
 extern crate rand; // Link rand library
 extern crate serde; // Link serde
 extern crate serde_json; // Link serde
+extern crate sled; // Link sled crate

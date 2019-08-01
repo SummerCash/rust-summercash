@@ -1,6 +1,8 @@
 use super::state; // Import state module
 use super::transaction; // Import transaction types
 
+use sled; // Import sled database
+
 use std::collections; // Import collections module
 
 use super::super::super::{common::address, crypto::hash}; // Import address, hash types
@@ -43,6 +45,8 @@ pub struct Graph<'a> {
     address_routes: collections::HashMap<address::Address, usize>,
     /// A list of children for a given node in the graph
     node_children: collections::HashMap<hash::Hash, Vec<hash::Hash>>,
+    /// A persisted database instance
+    db: Option<sled::Db>,
 }
 
 /// Implement a set of node helper methods.
@@ -215,6 +219,7 @@ impl<'a> Graph<'a> {
             }], // Set nodes
             address_routes: address_routes, // Set address routes
             node_children: collections::HashMap::new(), // Set node children
+            db: None, // Set db
         } // Return initialized dag
     }
 
@@ -406,6 +411,11 @@ impl<'a> Graph<'a> {
                 error: "no route to node found".to_owned(), // Set error
             }) // Return error in result
         }
+    }
+
+    /// Read a graph instance from the disk.
+    pub fn read_from_disk(&self) -> Graph<'a> {
+        let db = 
     }
 }
 
