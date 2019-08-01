@@ -1,5 +1,7 @@
 use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
 
+use std::collections; // Import the collections library
+
 use chrono; // Import time library
 
 use num::bigint::BigUint; // Add support for large unsigned integers
@@ -179,8 +181,23 @@ impl<'a> Transaction<'a> {
     }
 
     /// Execute creates a new state entry from the current transaction, regardless of network state. TODO: Support contracts
-    pub fn execute(&self) -> state_entry::Entry {
+    pub fn execute(&self, prev_entry: Option<state_entry::Entry>) -> state_entry::Entry {
+        match prev_entry {
+            Some(entry) => {
+                let mut balances: collections::HashMap<String, BigUint> = entry.data.balances.clone(); // Initialize balances map
 
+                *balances.get_mut(&self.transaction_data.sender.to_str()).unwrap() -= self.transaction_data.value.clone(); // Subtract transaction value from sender balance
+                *balances.get_mut(&self.transaction_data.recipient.to_str()).unwrap() += self.transaction_data.value.clone(); // Add transaction value to recipient balance
+
+                state_entry::Entry::new(balances) // Return state entry
+            },
+            None => {
+                let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balance map
+                balances.insert(self.transaction_data.recipient.to_str(), self.transaction_data.value.clone()); // Set recipient balance to tx value
+
+                state_entry::Entry::new(balances) // Return state entry
+            }
+        }
     }
 }
 
