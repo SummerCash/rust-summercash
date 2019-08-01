@@ -181,6 +181,34 @@ impl<'a> Transaction<'a> {
     }
 
     /// Execute creates a new state entry from the current transaction, regardless of network state. TODO: Support contracts
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// extern crate num; // Link num library
+    /// extern crate rand; // Link rand library
+    ///
+    /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    ///
+    /// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    ///
+    /// use summercash::core::types::transaction; // Import the transaction library
+    /// use summercash::{common::address, crypto::hash}; // Import the address library
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    ///
+    /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+    /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+    ///
+    /// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+    /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+    ///
+    /// let tx = &mut transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+    /// let resulting_state_entry = tx.execute(None); // Must specify a previous state entry if this is not the genesis transaction (if this transaction has multiple parents, use state::merge_entries)
+    /// ```
     pub fn execute(&self, prev_entry: Option<state::Entry>) -> state::Entry {
         match prev_entry {
             Some(entry) => {
