@@ -9,6 +9,7 @@ use serde_json; // Import serde json
 
 use super::receipt; // Import receipt types
 use super::signature; // Import signature type
+use super::state::state_entry; // Import the state entry types
 
 use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
@@ -175,6 +176,11 @@ impl<'a> Transaction<'a> {
             None => false,                                    // Nil signature can't be valid
             Some(signature) => signature.verify(&*self.hash), // Verify signature
         }
+    }
+
+    /// Execute creates a new state entry from the current transaction, regardless of network state. TODO: Support contracts
+    pub fn execute(&self) -> state_entry::Entry {
+
     }
 }
 
