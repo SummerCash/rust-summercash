@@ -46,31 +46,31 @@ impl Entry {
             hash: blake2::hash_slice(entry_data_bytes.as_slice()), // Set hash
         }
     }
+}
 
-    /// Merge multiple state entires into one batch state entry.
-    pub fn merge_entries(prev_entry: Entry, entries: Vec<Entry>) -> Entry {
-        let mut balances: collections::HashMap<String, BigUint> = prev_entry.data.balances.clone(); // Initialize balances map
+/// Merge multiple state entires into one batch state entry.
+pub fn merge_entries(prev_entry: Entry, entries: Vec<Entry>) -> Entry {
+    let mut balances: collections::HashMap<String, BigUint> = prev_entry.data.balances.clone(); // Initialize balances map
 
-        for entry in entries {
-            // Iterate through entries
-            for (k, v) in entry.data.balances.iter() {
-                // Iterate through balances
-                if balances.contains_key(k) {
-                    // Check already exists in balances
-                    let balance_difference =
-                        entry.data.balances.get(k).unwrap() - balances.get(k).unwrap(); // Calculate balance difference
+    for entry in entries {
+        // Iterate through entries
+        for (k, v) in entry.data.balances.iter() {
+            // Iterate through balances
+            if balances.contains_key(k) {
+                // Check already exists in balances
+                let balance_difference =
+                    entry.data.balances.get(k).unwrap() - balances.get(k).unwrap(); // Calculate balance difference
 
-                    let mut_balance = balances.get_mut(k).unwrap(); // Get mutable balance
+                let mut_balance = balances.get_mut(k).unwrap(); // Get mutable balance
 
-                    *mut_balance += balance_difference; // Set balance to difference between balance at old state and balance at tx
-                } else {
-                    balances.insert(k.to_string(), v.clone()); // Set balance
-                }
+                *mut_balance += balance_difference; // Set balance to difference between balance at old state and balance at tx
+            } else {
+                balances.insert(k.to_string(), v.clone()); // Set balance
             }
         }
-
-        Entry::new(balances) // Return initialized state entry
     }
+
+    Entry::new(balances) // Return initialized state entry
 }
 
 #[cfg(test)]
