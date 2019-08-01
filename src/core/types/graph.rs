@@ -267,6 +267,48 @@ impl<'a> Graph<'a> {
         self.nodes.len() - 1 // Return index of transaction
     }
 
+    /// Update an item in the graph.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// extern crate num; // Link num library
+    /// extern crate rand; // Link rand library
+    ///
+    /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    ///
+    /// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    ///
+    /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
+    /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    ///
+    /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+    /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+    ///
+    /// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+    /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+    ///
+    /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+    /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
+    ///
+    /// let mut dag = graph::Graph::new(tx); // Initialize graph
+    /// 
+    /// dag.update(0, tx2, None); // Update transaction in DAG
+    /// ```
+    pub fn update(
+        &mut self,
+        index: usize,
+        transaction: transaction::Transaction<'a>,
+        state_entry: Option<state::state_entry::Entry>,
+    ) {
+        self.nodes[index] = Node::new(transaction, state_entry); // Set node in graph
+    }
+
     /// Get a reference to the node at a given index.
     ///
     /// # Example
@@ -339,9 +381,9 @@ impl<'a> Graph<'a> {
     /// let mut dag = graph::Graph::new(tx); // Initialize graph
     ///
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
-    /// let node = dag.get_hash(tx2_hash); // Get a reference to the corresponding node
+    /// let node = dag.get_with_hash(tx2_hash); // Get a reference to the corresponding node
     /// ```
-    pub fn get_hash(&self, hash: hash::Hash) -> Result<&'a Node, OperationError> {
+    pub fn get_with_hash(&self, hash: hash::Hash) -> Result<&'a Node, OperationError> {
         if self.address_routes.contains_key(&hash) {
             // Check hash route to node with hash
             Ok(&self.nodes[*self.address_routes.get(&hash).unwrap()]) // Return node
@@ -351,5 +393,32 @@ impl<'a> Graph<'a> {
                 error: "no route to node found".to_owned(), // Set error
             }) // Return error in result
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    use num::bigint::BigUint; // Add support for large unsigned integers
+    use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    use rand::rngs::OsRng; // Import the os's rng
+
+    use super::*; // Import names from parent module
+
+    #[test]
+    fn test_new() {
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+        
+        let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+        let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+
+        let root_tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize root transaction
+
+        let dag: Graph = Graph::new(root_tx); // Initialize graph
+
+        assert_eq!(dag.nodes[0].transaction.transaction_data.payload, b"test transaction payload"); // Ensure transaction payload retained
     }
 }
