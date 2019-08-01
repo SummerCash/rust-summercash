@@ -9,11 +9,12 @@ use super::super::super::{common::address, crypto::hash}; // Import address, has
 #[derive(Debug, Fail)]
 pub enum OperationError {
     #[fail(
-        display = "encountered an error while performing an operation on graph: {}",
-        error
+        display = "encountered an error while attempting lookup for key {}: {}",
+        key, error
     )]
-    InvalidAddressPublicKeyCombination {
-        error: String, // The hex-encoded sender address
+    NoLookupResults {
+        key: String,   // The queried key
+        error: String, // The error
     },
 }
 
@@ -258,6 +259,7 @@ impl<'a> Graph<'a> {
         state_entry: Option<state::state_entry::Entry>,
     ) -> usize {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash value
+
         self.nodes.push(Node::new(transaction, state_entry)); // Push node to graph
         self.address_routes
             .insert(transaction_hash, self.nodes.len() - 1); // Set route to node
@@ -301,5 +303,53 @@ impl<'a> Graph<'a> {
     /// ```
     pub fn get(&self, index: usize) -> &'a Node {
         &self.nodes[index] // Return node
+    }
+
+    /// Get a reference to a node with the given hash.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// extern crate num; // Link num library
+    /// extern crate rand; // Link rand library
+    ///
+    /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    ///
+    /// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    ///
+    /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
+    /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    ///
+    /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+    /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+    ///
+    /// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+    /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+    ///
+    /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+    ///
+    /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
+    /// let tx2_hash = tx2.hash.clone(); // Clone transaction 2 hash
+    ///
+    /// let mut dag = graph::Graph::new(tx); // Initialize graph
+    ///
+    /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
+    /// let node = dag.get_hash(tx2_hash); // Get a reference to the corresponding node
+    /// ```
+    pub fn get_hash(&self, hash: hash::Hash) -> Result<&'a Node, OperationError> {
+        if self.address_routes.contains_key(&hash) {
+            // Check hash route to node with hash
+            Ok(&self.nodes[*self.address_routes.get(&hash).unwrap()]) // Return node
+        } else {
+            Err(OperationError::NoLookupResults {
+                key: hash.to_str(),                         // Set key
+                error: "no route to node found".to_owned(), // Set error
+            }) // Return error in result
+        }
     }
 }
