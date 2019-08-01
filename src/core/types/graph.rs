@@ -268,9 +268,9 @@ impl<'a> Graph<'a> {
     }
 
     /// Update an item in the graph.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```
     /// extern crate num; // Link num library
     /// extern crate rand; // Link rand library
@@ -297,7 +297,7 @@ impl<'a> Graph<'a> {
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
     /// let mut dag = graph::Graph::new(tx); // Initialize graph
-    /// 
+    ///
     /// dag.update(0, tx2, None); // Update transaction in DAG
     /// ```
     pub fn update(
@@ -408,17 +408,61 @@ mod tests {
     #[test]
     fn test_new() {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
-        
+
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
-        
+
         let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
         let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
 
-        let root_tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize root transaction
+        let root_tx = transaction::Transaction::new(
+            0,
+            sender,
+            recipient,
+            BigUint::from_i64(0).unwrap(),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize root transaction
 
         let dag: Graph = Graph::new(root_tx); // Initialize graph
 
-        assert_eq!(dag.nodes[0].transaction.transaction_data.payload, b"test transaction payload"); // Ensure transaction payload retained
+        assert_eq!(
+            dag.nodes[0].transaction.transaction_data.payload,
+            b"test transaction payload"
+        ); // Ensure transaction payload retained
+    }
+
+    #[test]
+    fn test_push() {
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+
+        let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+        let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+
+        let root_tx = transaction::Transaction::new(
+            0,
+            sender,
+            recipient,
+            BigUint::from_i64(0).unwrap(),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize root transaction
+        let tx_2 = transaction::Transaction::new(
+            1,
+            sender,
+            recipient,
+            BigUint::from_i64(0).unwrap(),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize second transaction
+
+        let mut dag: Graph = Graph::new(root_tx); // Initialize graph
+
+        let node_index: usize = dag.push(tx_2, None); // Push second transaction
+
+        assert_eq!(node_index, 1); // Ensure is second transaction in DAG
     }
 }
