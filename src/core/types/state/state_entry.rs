@@ -7,6 +7,7 @@ use super::super::super::super::{crypto::blake2, crypto::hash}; // Import the ha
 use num::bigint::BigUint; // Add support for large unsigned integers
 
 /// The state at a particular point in time.
+#[derive(Clone)]
 pub struct Entry {
     /// Body of the state entry
     pub data: EntryData,
@@ -29,7 +30,6 @@ impl EntryData {
 }
 
 /// Implement a set of state helper methods.
-#[derive(Clone)]
 impl Entry {
     /// Initialize a new Entry instance.
     pub fn new(balances: collections::HashMap<String, BigUint>) -> Entry {
@@ -47,19 +47,25 @@ impl Entry {
         }
     }
 
-    /// Combine multiple state entires into one batch state entry.
-    pub fn combine_entries(prev_entry: Entry, entries: Vec<Entry>) -> Entry {
-        let balances = prev_entry.data.balances.clone(); // Initialize balances map
+    /// Merge multiple state entires into one batch state entry.
+    pub fn merge_entries(prev_entry: Entry, entries: Vec<Entry>) -> Entry {
+        let mut balances: collections::HashMap<String, BigUint> = prev_entry.data.balances.clone(); // Initialize balances map
 
         for entry in entries { // Iterate through entries
-            let iter = entry.data.balances.iter(); // Get iterator
+            for (k, v) in entry.data.balances.iter() { // Iterate through balances
+                if balances.contains_key(k) { // Check already exists in balances
+                    let balance_difference = entry.data.balances.get(k).unwrap() - balances.get(k).unwrap(); // Calculate balance difference
 
-            iter.for_each(fn )
+                    let mut_balance = balances.get_mut(k).unwrap(); // Get mutable balance
 
-            for address in entry.data.balances.values() { // Iterate through values
-
+                    *mut_balance += balance_difference; // Set balance to difference between balance at old state and balance at tx
+                } else {
+                    balances.insert(k.to_string(), v.clone()); // Set balance
+                }
             }
         }
+
+        Entry::new(balances) // Return initialized state entry
     }
 }
 
