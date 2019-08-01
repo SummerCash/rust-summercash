@@ -18,11 +18,11 @@ pub enum OperationError {
     },
     #[fail(
         display = "failed to execute transaction with hash {}; state has already been resolved",
-        transaction_hash,
+        transaction_hash
     )]
     AlreadyExecuted {
         transaction_hash: String, // The transaction hash
-    }
+    },
 }
 
 /// A node in any particular state-entry/transaction-based DAG.
@@ -30,7 +30,7 @@ pub struct Node<'a> {
     /// The transaction associated with a given node
     pub transaction: transaction::Transaction<'a>,
     /// The state entry associated with a given node
-    pub state_entry: Option<state::state_entry::Entry>,
+    pub state_entry: Option<state::Entry>,
     /// The hash of the transaction associated with a given node
     pub hash: hash::Hash,
 }
@@ -79,7 +79,7 @@ impl<'a> Node<'a> {
     /// ```
     pub fn new(
         transaction: transaction::Transaction<'a>,
-        state_entry: Option<state::state_entry::Entry>,
+        state_entry: Option<state::Entry>,
     ) -> Node {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash
 
@@ -209,9 +209,9 @@ impl<'a> Graph<'a> {
 
         Graph {
             nodes: vec![Node {
-                transaction: root_transaction, // Set transaction
-                state_entry: Some(root_transaction_state_entry),             // Set state entry
-                hash: root_transaction_hash,   // Set hash
+                transaction: root_transaction,                   // Set transaction
+                state_entry: Some(root_transaction_state_entry), // Set state entry
+                hash: root_transaction_hash,                     // Set hash
             }], // Set nodes
             address_routes: address_routes, // Set address routes
             node_children: collections::HashMap::new(), // Set node children
@@ -253,7 +253,7 @@ impl<'a> Graph<'a> {
     pub fn push(
         &mut self,
         transaction: transaction::Transaction<'a>,
-        state_entry: Option<state::state_entry::Entry>,
+        state_entry: Option<state::Entry>,
     ) -> usize {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash value
         let transaction_parents = transaction.transaction_data.parents.clone(); // Clone transaction parents
@@ -262,14 +262,19 @@ impl<'a> Graph<'a> {
         self.address_routes
             .insert(transaction_hash, self.nodes.len() - 1); // Set route to node
 
-        for parent in transaction_parents { // Iterate through transaction parents
-            if !self.node_children.contains_key(&parent) { // Check parent does not already exist in list of child routes from parent
+        for parent in transaction_parents {
+            // Iterate through transaction parents
+            if !self.node_children.contains_key(&parent) {
+                // Check parent does not already exist in list of child routes from parent
                 self.node_children.insert(parent, vec![transaction_hash]); // Set transaction hash as child of parent in graph
 
                 break; // Break loop
             }
 
-            self.node_children.get_mut(&parent).unwrap().push(transaction_hash); // Add transaction as child of parent in graph
+            self.node_children
+                .get_mut(&parent)
+                .unwrap()
+                .push(transaction_hash); // Add transaction as child of parent in graph
         }
 
         self.nodes.len() - 1 // Return index of transaction
@@ -312,7 +317,7 @@ impl<'a> Graph<'a> {
         &mut self,
         index: usize,
         transaction: transaction::Transaction<'a>,
-        state_entry: Option<state::state_entry::Entry>,
+        state_entry: Option<state::Entry>,
     ) {
         self.nodes[index] = Node::new(transaction, state_entry); // Set node in graph
     }

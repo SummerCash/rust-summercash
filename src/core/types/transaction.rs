@@ -11,7 +11,7 @@ use serde_json; // Import serde json
 
 use super::receipt; // Import receipt types
 use super::signature; // Import signature type
-use super::state::state_entry; // Import the state entry types
+use super::state; // Import the state entry types
 
 use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
 
@@ -181,21 +181,30 @@ impl<'a> Transaction<'a> {
     }
 
     /// Execute creates a new state entry from the current transaction, regardless of network state. TODO: Support contracts
-    pub fn execute(&self, prev_entry: Option<state_entry::Entry>) -> state_entry::Entry {
+    pub fn execute(&self, prev_entry: Option<state::Entry>) -> state::Entry {
         match prev_entry {
             Some(entry) => {
-                let mut balances: collections::HashMap<String, BigUint> = entry.data.balances.clone(); // Initialize balances map
+                let mut balances: collections::HashMap<String, BigUint> =
+                    entry.data.balances.clone(); // Initialize balances map
 
-                *balances.get_mut(&self.transaction_data.sender.to_str()).unwrap() -= self.transaction_data.value.clone(); // Subtract transaction value from sender balance
-                *balances.get_mut(&self.transaction_data.recipient.to_str()).unwrap() += self.transaction_data.value.clone(); // Add transaction value to recipient balance
+                *balances
+                    .get_mut(&self.transaction_data.sender.to_str())
+                    .unwrap() -= self.transaction_data.value.clone(); // Subtract transaction value from sender balance
+                *balances
+                    .get_mut(&self.transaction_data.recipient.to_str())
+                    .unwrap() += self.transaction_data.value.clone(); // Add transaction value to recipient balance
 
-                state_entry::Entry::new(balances) // Return state entry
-            },
+                state::Entry::new(balances) // Return state entry
+            }
             None => {
-                let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balance map
-                balances.insert(self.transaction_data.recipient.to_str(), self.transaction_data.value.clone()); // Set recipient balance to tx value
+                let mut balances: collections::HashMap<String, BigUint> =
+                    collections::HashMap::new(); // Initialize balance map
+                balances.insert(
+                    self.transaction_data.recipient.to_str(),
+                    self.transaction_data.value.clone(),
+                ); // Set recipient balance to tx value
 
-                state_entry::Entry::new(balances) // Return state entry
+                state::Entry::new(balances) // Return state entry
             }
         }
     }
