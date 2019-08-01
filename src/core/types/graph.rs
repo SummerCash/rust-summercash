@@ -41,6 +41,8 @@ pub struct Graph<'a> {
     pub nodes: Vec<Node<'a>>,
     /// A list of routes to addresses in the graph (by usize index)
     address_routes: collections::HashMap<address::Address, usize>,
+    /// A list of children for a given node in the graph
+    node_children: collections::HashMap<hash::Hash, Vec<hash::Hash>>,
 }
 
 /// Implement a set of node helper methods.
@@ -200,6 +202,7 @@ impl<'a> Graph<'a> {
     /// ```
     pub fn new(root_transaction: transaction::Transaction<'a>) -> Graph<'a> {
         let root_transaction_hash = root_transaction.hash.clone(); // Clone transaction hash
+        let root_transaction_state_entry = root_transaction.execute(None); // Execute root transaction
 
         let mut address_routes = collections::HashMap::new(); // Initialize address routes map
         address_routes.insert(root_transaction_hash, 0); // Set root transaction route
@@ -207,10 +210,11 @@ impl<'a> Graph<'a> {
         Graph {
             nodes: vec![Node {
                 transaction: root_transaction, // Set transaction
-                state_entry: None,             // Set state entry
+                state_entry: Some(root_transaction_state_entry),             // Set state entry
                 hash: root_transaction_hash,   // Set hash
             }], // Set nodes
             address_routes: address_routes, // Set address routes
+            node_children: collections::HashMap::new(), // Set node children
         } // Return initialized dag
     }
 
@@ -252,10 +256,21 @@ impl<'a> Graph<'a> {
         state_entry: Option<state::state_entry::Entry>,
     ) -> usize {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash value
+        let transaction_parents = transaction.transaction_data.parents.clone(); // Clone transaction parents
 
         self.nodes.push(Node::new(transaction, state_entry)); // Push node to graph
         self.address_routes
             .insert(transaction_hash, self.nodes.len() - 1); // Set route to node
+
+        for parent in transaction_parents { // Iterate through transaction parents
+            if !self.node_children.contains_key(&parent) { // Check parent does not already exist in list of child routes from parent
+                self.node_children.insert(parent, vec![transaction_hash]); // Set transaction hash as child of parent in graph
+
+                break; // Break loop
+            }
+
+            self.node_children.get_mut(&parent).unwrap().push(transaction_hash); // Add transaction as child of parent in graph
+        }
 
         self.nodes.len() - 1 // Return index of transaction
     }
@@ -385,17 +400,6 @@ impl<'a> Graph<'a> {
                 key: hash.to_str(),                         // Set key
                 error: "no route to node found".to_owned(), // Set error
             }) // Return error in result
-        }
-    }
-
-    /// Execute an old, recently attached transaction, and return the state hash.
-    pub fn resolve_state(&self, index: usize) -> Result<hash::Hash, OperationError> {
-        let node = self.get(index); // Get node
-
-        if let state_entry = Some(node.state_entry) { // Check has state entry already
-            Err(OperationError::AlreadyExecuted{transaction_hash: node.hash.to_str()}) // Return error in result
-        } else {
-            node.state_entry = state::state_entry::Entry::new()
         }
     }
 }
