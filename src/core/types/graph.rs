@@ -16,6 +16,13 @@ pub enum OperationError {
         key: String,   // The queried key
         error: String, // The error
     },
+    #[fail(
+        display = "failed to execute transaction with hash {}; state has already been resolved",
+        transaction_hash,
+    )]
+    AlreadyExecuted {
+        transaction_hash: String, // The transaction hash
+    }
 }
 
 /// A node in any particular state-entry/transaction-based DAG.
@@ -114,24 +121,7 @@ impl<'a> Node<'a> {
     /// let is_valid = node.verify_contents(); // False, since state entry is None
     /// ```
     pub fn verify_contents(&self) -> bool {
-        match &self.state_entry {
-            // Has state entry
-            Some(entry) => {
-                if entry.hash == self.hash {
-                    // Check state entry hash matches node hash
-                    if self.transaction.hash == self.hash {
-                        // Check transaction hash matches node hash
-                        true // Hashes are valid
-                    } else {
-                        false // Hashes are invalid
-                    }
-                } else {
-                    false // Hashes are invalid
-                }
-            }
-            // No state entry
-            None => false,
-        }
+        self.transaction.hash == self.hash // Return hashes are equivalent
     }
 
     /// Perform all possible verification tests (both to check that values exist, and that they are indeed valid; e.g. validate signatures).
@@ -395,6 +385,17 @@ impl<'a> Graph<'a> {
                 key: hash.to_str(),                         // Set key
                 error: "no route to node found".to_owned(), // Set error
             }) // Return error in result
+        }
+    }
+
+    /// Execute an old, recently attached transaction, and return the state hash.
+    pub fn resolve_state(&self, index: usize) -> Result<hash::Hash, OperationError> {
+        let node = self.get(index); // Get node
+
+        if let state_entry = Some(node.state_entry) { // Check has state entry already
+            Err(OperationError::AlreadyExecuted{transaction_hash: node.hash.to_str()}) // Return error in result
+        } else {
+            node.state_entry = state::state_entry::Entry::new()
         }
     }
 }

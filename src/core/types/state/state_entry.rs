@@ -16,7 +16,7 @@ pub struct Entry {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EntryData {
-    /// Balances of every account at point in time
+    /// Balances of every account at a certain point in time
     pub balances: collections::HashMap<String, BigUint>,
 }
 
@@ -29,8 +29,9 @@ impl EntryData {
 }
 
 /// Implement a set of state helper methods.
+#[derive(Clone)]
 impl Entry {
-    /// Initialize a new Entry instance
+    /// Initialize a new Entry instance.
     pub fn new(balances: collections::HashMap<String, BigUint>) -> Entry {
         let entry_data: EntryData = EntryData {
             balances: balances, // Set balances
@@ -43,6 +44,21 @@ impl Entry {
         Entry {
             data: entry_data,                                      // Set data
             hash: blake2::hash_slice(entry_data_bytes.as_slice()), // Set hash
+        }
+    }
+
+    /// Combine multiple state entires into one batch state entry.
+    pub fn combine_entries(prev_entry: Entry, entries: Vec<Entry>) -> Entry {
+        let balances = prev_entry.data.balances.clone(); // Initialize balances map
+
+        for entry in entries { // Iterate through entries
+            let iter = entry.data.balances.iter(); // Get iterator
+
+            iter.for_each(fn )
+
+            for address in entry.data.balances.values() { // Iterate through values
+
+            }
         }
     }
 }
