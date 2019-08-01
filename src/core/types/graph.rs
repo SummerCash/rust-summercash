@@ -500,9 +500,12 @@ mod tests {
 
         dag.update(0, tx_2, None); // Update root transaction
 
-        assert_eq!(dag.get(0).transaction.transaction_data.payload, b"test transaction payload 2"); // Ensure has updated transaction
+        assert_eq!(
+            dag.get(0).transaction.transaction_data.payload,
+            b"test transaction payload 2"
+        ); // Ensure has updated transaction
     }
-    
+
     #[test]
     fn test_get() {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
@@ -526,7 +529,10 @@ mod tests {
 
         let found_root_tx = dag.get(0); // Get root tx
 
-        assert_eq!(found_root_tx.transaction.transaction_data.payload, b"test transaction payload"); // Ensure is same transaction
+        assert_eq!(
+            found_root_tx.transaction.transaction_data.payload,
+            b"test transaction payload"
+        ); // Ensure is same transaction
     }
 
     #[test]
@@ -553,6 +559,9 @@ mod tests {
 
         let found_root_tx = dag.get_with_hash(root_tx_hash).unwrap(); // Get root tx
 
-        assert_eq!(found_root_tx.transaction.transaction_data.payload, b"test transaction payload"); // Ensure is same transaction
+        assert_eq!(
+            found_root_tx.transaction.transaction_data.payload,
+            b"test transaction payload"
+        ); // Ensure is same transaction
     }
 }
