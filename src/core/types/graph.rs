@@ -211,13 +211,16 @@ impl<'a> Graph<'a> {
     pub fn new(root_transaction: transaction::Transaction<'a>) -> Graph<'a> {
         let root_transaction_hash = root_transaction.hash.clone(); // Clone transaction hash
 
+        let mut address_routes = collections::HashMap::new(); // Initialize address routes map
+        address_routes.insert(root_transaction_hash, 0); // Set root transaction route
+
         Graph {
             nodes: vec![Node {
                 transaction: root_transaction, // Set transaction
                 state_entry: None,             // Set state entry
                 hash: root_transaction_hash,   // Set hash
             }], // Set nodes
-            address_routes: collections::HashMap::new(), // Set address routes
+            address_routes: address_routes, // Set address routes
         } // Return initialized dag
     }
 
@@ -498,5 +501,58 @@ mod tests {
         dag.update(0, tx_2, None); // Update root transaction
 
         assert_eq!(dag.get(0).transaction.transaction_data.payload, b"test transaction payload 2"); // Ensure has updated transaction
+    }
+    
+    #[test]
+    fn test_get() {
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+
+        let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+        let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+
+        let root_tx = transaction::Transaction::new(
+            0,
+            sender,
+            recipient,
+            BigUint::from_i64(0).unwrap(),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize root transaction
+
+        let dag: Graph = Graph::new(root_tx); // Initialize graph
+
+        let found_root_tx = dag.get(0); // Get root tx
+
+        assert_eq!(found_root_tx.transaction.transaction_data.payload, b"test transaction payload"); // Ensure is same transaction
+    }
+
+    #[test]
+    fn test_get_with_hash() {
+        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+
+        let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+        let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+
+        let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+        let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+
+        let root_tx = transaction::Transaction::new(
+            0,
+            sender,
+            recipient,
+            BigUint::from_i64(0).unwrap(),
+            b"test transaction payload",
+            vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
+        ); // Initialize root transaction
+        let root_tx_hash = root_tx.hash.clone(); // Clone root tx hash
+
+        let dag: Graph = Graph::new(root_tx); // Initialize graph
+
+        let found_root_tx = dag.get_with_hash(root_tx_hash).unwrap(); // Get root tx
+
+        assert_eq!(found_root_tx.transaction.transaction_data.payload, b"test transaction payload"); // Ensure is same transaction
     }
 }
