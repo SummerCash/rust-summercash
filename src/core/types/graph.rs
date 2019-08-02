@@ -468,6 +468,11 @@ impl Graph {
             db: Some(db), // Set db to none until we initialize our graph
         } // Return initialized graph
     }
+
+    /// Write a graph instance to the disk, and close the associated database instance.
+    pub fn write_to_disk(&self) {
+        
+    }
 }
 
 #[cfg(test)]
