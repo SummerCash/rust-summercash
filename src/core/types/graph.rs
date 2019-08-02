@@ -183,8 +183,7 @@ impl<'a> Node<'a> {
 
     /// Deserialize a graph node instance from a vector.
     pub fn from_bytes(b: &'a [u8]) -> Node<'a> {
-        Node::new(transaction::Transaction::new(0, super::super::super::crypto::hash::Hash::new(vec![0; hash::HASH_SIZE]), super::super::super::crypto::hash::Hash::new(vec![0; hash::HASH_SIZE]), num::BigUint::default(), b"test", vec![]), None)
-        // bincode::config().deserialize(b).unwrap()
+        bincode::deserialize(b).unwrap()
     }
 }
 
@@ -443,7 +442,7 @@ impl<'a> Graph<'a> {
         let mut iter = db.scan(b"0"); // Get iterator (start at genesis transaction)
 
         loop {
-            let current_node: Node; // Initialize current node buffer
+            let current_node: Node<'a>; // Initialize current node buffer
 
             match iter.next() { // Handle different next values
                 // A value exists, set current node to deserialized next value
