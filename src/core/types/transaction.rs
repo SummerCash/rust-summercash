@@ -30,10 +30,9 @@ pub enum SignatureError {
 
 /// A transaction between two different addresses on the SummerCash network.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Transaction<'a> {
+pub struct Transaction {
     /// The contents of the transaction
-    #[serde(borrow)]
-    pub transaction_data: TransactionData<'a>,
+    pub transaction_data: TransactionData,
     /// The hash of the transaction
     pub hash: hash::Hash,
     /// The transaction's signature
@@ -48,7 +47,7 @@ pub struct Transaction<'a> {
 
 /// A container representing the contents of a transaction.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct TransactionData<'a> {
+pub struct TransactionData {
     /// The index of the transaction in the sender's set of txs
     pub nonce: u128,
     /// The sender of the transaction
@@ -58,12 +57,11 @@ pub struct TransactionData<'a> {
     /// The amount of finks sent along with the Transaction
     pub value: BigUint,
     /// The data sent to the transaction recipient (i.e. contract call bytecode)
-    #[serde(with = "serde_bytes")]
-    pub payload: &'a [u8],
+    pub payload: Vec<u8>,
     /// The hashes of the transaction's parents
     pub parents: Vec<hash::Hash>,
     /// The list of resolved parent receipts
-    pub parent_receipts: Option<receipt::ReceiptMap<'a>>,
+    pub parent_receipts: Option<receipt::ReceiptMap>,
     /// The hash of the combined parent state
     pub parent_state_hash: Option<hash::Hash>,
     /// The transaction's timestamp
@@ -72,7 +70,7 @@ pub struct TransactionData<'a> {
 
 /* BEGIN EXPORTED METHODS */
 
-impl<'a> TransactionData<'a> {
+impl TransactionData {
     /// Serialize a given TransactionData instance into a byte vector.
     pub fn to_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(self).unwrap() // Serialize
@@ -80,7 +78,7 @@ impl<'a> TransactionData<'a> {
 }
 
 /// Implement a set of transaction helper methods.
-impl<'a> Transaction<'a> {
+impl Transaction {
     /// Initialize a new transaction instance from a given set of parameters.
     ///
     /// # Example
@@ -114,15 +112,15 @@ impl<'a> Transaction<'a> {
         sender: address::Address,
         recipient: address::Address,
         value_finks: BigUint,
-        payload: &'a [u8],
+        payload: &[u8],
         parents: Vec<hash::Hash>,
-    ) -> Transaction<'a> {
+    ) -> Transaction {
         let transaction_data: TransactionData = TransactionData {
             nonce: nonce,                  // Set nonce
             sender: sender,                // Set sender
             recipient: recipient,          // Set recipient
             value: value_finks,            // Set value (in finks)
-            payload: payload,              // Set payload
+            payload: payload.to_vec(),              // Set payload
             parents: parents,              // Set parents
             parent_receipts: None,         // Set parent receipts
             parent_state_hash: None,       // Set parent state hash
@@ -332,7 +330,7 @@ mod tests {
         ); // Initialize transaction
 
         assert_eq!(
-            str::from_utf8(transaction.transaction_data.payload).unwrap(),
+            str::from_utf8(transaction.transaction_data.payload.as_slice()).unwrap(),
             "test transaction payload"
         ); // Ensure payload intact
     }

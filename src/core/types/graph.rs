@@ -8,7 +8,7 @@ use std::collections; // Import collections module
 use serde::{Deserialize, Serialize}; // Import serde serialization
 use bincode; // Import serde bincode
 
-use super::super::super::{common::address, common::io, crypto::hash}; // Import address, hash types
+use super::super::super::{common::io, crypto::hash}; // Import address, hash types
 
 /// An error encountered while signing a tx.
 #[derive(Debug, Fail)]
@@ -32,10 +32,9 @@ pub enum OperationError {
 
 /// A node in any particular state-entry/transaction-based DAG.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Node<'a> {
+pub struct Node {
     /// The transaction associated with a given node
-    #[serde(borrow)]
-    pub transaction: transaction::Transaction<'a>,
+    pub transaction: transaction::Transaction,
     /// The state entry associated with a given node
     pub state_entry: Option<state::Entry>,
     /// The hash of the transaction associated with a given node
@@ -43,11 +42,12 @@ pub struct Node<'a> {
 }
 
 /// A generic DAG used to store state entries, as well as transactions.
-pub struct Graph<'a> {
+#[derive(Clone)]
+pub struct Graph {
     /// A list of nodes in the graph
-    pub nodes: Vec<Node<'a>>,
+    pub nodes: Vec<Node>,
     /// A list of routes to addresses in the graph (by usize index)
-    hash_routes: collections::HashMap<address::Address, usize>,
+    hash_routes: collections::HashMap<hash::Hash, usize>,
     /// A list of children for a given node in the graph
     node_children: collections::HashMap<hash::Hash, Vec<hash::Hash>>,
     /// A persisted database instance
@@ -55,7 +55,7 @@ pub struct Graph<'a> {
 }
 
 /// Implement a set of node helper methods.
-impl<'a> Node<'a> {
+impl Node {
     /// Initialize a new node with a given state entry and transaction.
     ///
     /// # Example
@@ -87,7 +87,7 @@ impl<'a> Node<'a> {
     /// let node = graph::Node::new(tx, None); // Initialize node
     /// ```
     pub fn new(
-        transaction: transaction::Transaction<'a>,
+        transaction: transaction::Transaction,
         state_entry: Option<state::Entry>,
     ) -> Node {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash
@@ -182,13 +182,13 @@ impl<'a> Node<'a> {
     }
 
     /// Deserialize a graph node instance from a vector.
-    pub fn from_bytes(b: &'a [u8]) -> Node<'a> {
+    pub fn from_bytes(b: &[u8]) -> Node {
         bincode::deserialize(b).unwrap()
     }
 }
 
 /// Implement a set of graph helper methods.
-impl<'a> Graph<'a> {
+impl Graph {
     /// Initialize a new graph instance.
     ///
     /// # Example
@@ -219,7 +219,7 @@ impl<'a> Graph<'a> {
     ///
     /// let dag = graph::Graph::new(tx); // Initialize graph
     /// ```
-    pub fn new(root_transaction: transaction::Transaction<'a>) -> Graph<'a> {
+    pub fn new(root_transaction: transaction::Transaction) -> Graph {
         let root_transaction_hash = root_transaction.hash.clone(); // Clone transaction hash
         let root_transaction_state_entry = root_transaction.execute(None); // Execute root transaction
 
@@ -272,7 +272,7 @@ impl<'a> Graph<'a> {
     /// ```
     pub fn push(
         &mut self,
-        transaction: transaction::Transaction<'a>,
+        transaction: transaction::Transaction,
         state_entry: Option<state::Entry>,
     ) -> usize {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash value
@@ -336,7 +336,7 @@ impl<'a> Graph<'a> {
     pub fn update(
         &mut self,
         index: usize,
-        transaction: transaction::Transaction<'a>,
+        transaction: transaction::Transaction,
         state_entry: Option<state::Entry>,
     ) {
         self.nodes[index] = Node::new(transaction, state_entry); // Set node in graph
@@ -376,7 +376,7 @@ impl<'a> Graph<'a> {
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get(index_of_transaction); // Get a reference to the corresponding node
     /// ```
-    pub fn get(&self, index: usize) -> &'a Node {
+    pub fn get(&self, index: usize) -> &Node {
         &self.nodes[index] // Return node
     }
 
@@ -416,7 +416,7 @@ impl<'a> Graph<'a> {
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get_with_hash(tx2_hash); // Get a reference to the corresponding node
     /// ```
-    pub fn get_with_hash(&self, hash: hash::Hash) -> Result<&'a Node, OperationError> {
+    pub fn get_with_hash(&self, hash: hash::Hash) -> Result<&Node, OperationError> {
         if self.hash_routes.contains_key(&hash) {
             // Check hash route to node with hash
             Ok(&self.nodes[*self.hash_routes.get(&hash).unwrap()]) // Return node
@@ -429,41 +429,44 @@ impl<'a> Graph<'a> {
     }
 
     /// Read a graph instance from the disk.
-    pub fn read_from_disk(&self) -> Graph<'a> {
+    pub fn read_from_disk(&self) -> Graph {
         let db = sled::Db::start_default(io::db_dir()).unwrap(); // Open database
 
-        let mut graph = Graph{
-            nodes: vec![], // Set nodes
-            hash_routes: collections::hash_map::HashMap::new(), // Set address routes
-            node_children: collections::hash_map::HashMap::new(), // Set node children
-            db: None, // Set db to none until we initialize our graph
-        }; // Initialize graph instance
+        let mut nodes: Vec<Node> = vec![]; // Empty vector
+        let mut hash_routes: collections::hash_map::HashMap<hash::Hash, usize> = collections::hash_map::HashMap::new(); // Initialize hash routes map buffer
+        let mut node_children: collections::hash_map::HashMap<hash::Hash, Vec<hash::Hash>> = collections::hash_map::HashMap::new(); // Initialize child routes map buffer
 
-        let mut iter = db.scan(b"0"); // Get iterator (start at genesis transaction)
+        let iter = db.scan(b"0"); // Get iterator (start at genesis transaction)
 
-        loop {
-            let current_node: Node<'a>; // Initialize current node buffer
+        iter.for_each(|key_val_pair| {
+            match key_val_pair { // Make sure we're not getting a zero value
+            // Value exists, could be collected
+                Ok(val) => {
+                    let current_node: Node = Node::from_bytes(&val.1.to_vec()[..]); // Deserialize node
 
-            match iter.next() { // Handle different next values
-                // A value exists, set current node to deserialized next value
-                Some(val) => {
-                    match val {
-                        // No error occurred, set current node
-                        Ok(val) => current_node = Node::from_bytes(&val.1),
-                        // An error occurred, skip over this node
-                        _ => continue,
+                    hash_routes.insert(current_node.hash.clone(), nodes.len()); // Insert route to node
+
+                    for parent in current_node.transaction.transaction_data.clone().parents { // Iterate through parents
+                        if !node_children.contains_key(&parent.clone()) { // Check parent routes not initialized
+                            node_children.insert(parent.clone(), vec![current_node.hash.clone()]); // Insert route to child
+                        }
+
+                        node_children.get_mut(&parent.clone()).unwrap().push(current_node.hash.clone()); // Insert route to child
                     }
+
+                    nodes.push(current_node); // Add current node to nodes list
                 },
-                // No value exists, break
-                None => break,
-            };
+                // Could not be collected
+                _ => (),
+            }
+        }); // Add nodes to graph vars
 
-            graph.push(current_node.transaction, current_node.state_entry); // Add node to graph
-        }
-
-        graph.db = Some(db); // Set graph db
-
-        graph // Return initialized graph
+        Graph{
+            nodes: nodes, // Set nodes
+            hash_routes: hash_routes, // Set address routes
+            node_children: node_children, // Set node children
+            db: Some(db), // Set db to none until we initialize our graph
+        } // Return initialized graph
     }
 }
 
@@ -473,6 +476,8 @@ mod tests {
     use num::bigint::BigUint; // Add support for large unsigned integers
     use num::traits::FromPrimitive; // Allow overloading of from_i64()
     use rand::rngs::OsRng; // Import the os's rng
+
+    use super::super::super::super::common::address; // Import address module
 
     use super::*; // Import names from parent module
 
