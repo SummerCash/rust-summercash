@@ -3,10 +3,10 @@ use super::transaction; // Import transaction types
 
 use sled; // Import sled database
 
-use std::collections; // Import collections module
+use std::collections; // Import collections, io modules
 
-use serde::{Deserialize, Serialize}; // Import serde serialization
-use bincode; // Import serde bincode
+use bincode;
+use serde::{Deserialize, Serialize}; // Import serde serialization // Import serde bincode
 
 use super::super::super::{common::io, crypto::hash}; // Import address, hash types
 
@@ -86,10 +86,7 @@ impl Node {
     ///
     /// let node = graph::Node::new(tx, None); // Initialize node
     /// ```
-    pub fn new(
-        transaction: transaction::Transaction,
-        state_entry: Option<state::Entry>,
-    ) -> Node {
+    pub fn new(transaction: transaction::Transaction, state_entry: Option<state::Entry>) -> Node {
         let transaction_hash = transaction.hash.clone(); // Clone transaction hash
 
         Node {
@@ -232,9 +229,9 @@ impl Graph {
                 state_entry: Some(root_transaction_state_entry), // Set state entry
                 hash: root_transaction_hash,                     // Set hash
             }], // Set nodes
-            hash_routes: hash_routes, // Set address routes
+            hash_routes: hash_routes,                   // Set address routes
             node_children: collections::HashMap::new(), // Set node children
-            db: None, // Set db
+            db: None,                                   // Set db
         } // Return initialized dag
     }
 
@@ -376,8 +373,37 @@ impl Graph {
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get(index_of_transaction); // Get a reference to the corresponding node
     /// ```
-    pub fn get(&self, index: usize) -> &Node {
-        &self.nodes[index] // Return node
+    pub fn get(&mut self, index: usize) -> Result<Option<&Node>, sled::Error> {
+        let node = &mut self.nodes[index]; // Get ref to node
+
+        // Check was partially or fully loaded
+        match node.state_entry {
+            // Loaded fully
+            Some(_) => Ok(Some(node)),
+            // Loaded partially
+            None => {
+                // Check db opened
+                if let Some(db) = &self.db {
+                    let node_query_result = db.get(index.to_string().as_bytes())?; // Query db for node
+
+                    // Handle different result types
+                    match node_query_result {
+                        // Success!
+                        Some(bytes_encoded_node) => {
+                            let deserialized_node: Node =
+                                Node::from_bytes(&bytes_encoded_node.to_vec()[..]); // Deserialize node
+                            node.state_entry = deserialized_node.state_entry; // Set state entry
+
+                            return Ok(Some(node)); // Return deserialized node
+                        }
+                        // Couldn't find node in db
+                        None => return Ok(Some(node)),
+                    };
+                }
+
+                Ok(Some(node)) // Return node, since we can't do a full load anyway
+            }
+        }
     }
 
     /// Get a reference to a node with the given hash.
@@ -428,59 +454,92 @@ impl Graph {
         }
     }
 
-    /// Read a graph instance from the disk.
-    /// 
-    /// # Example
-    /// 
-    /// ```
-    /// use summercash::core::types::graph; // Import the graph module
-    /// 
-    /// let dag: graph::Graph = graph::Graph::read_from_disk(); // Read graph from disk
-    /// ```
-    pub fn read_from_disk() -> Graph {
+    /// Read the entirety of a persisted graph, or just state entry headers.
+    fn read_some_from_disk(read_all: bool) -> Graph {
         let db = sled::Db::start_default(io::db_dir()).unwrap(); // Open database
 
         let mut nodes: Vec<Node> = vec![]; // Empty vector
-        let mut hash_routes: collections::hash_map::HashMap<hash::Hash, usize> = collections::hash_map::HashMap::new(); // Initialize hash routes map buffer
-        let mut node_children: collections::hash_map::HashMap<hash::Hash, Vec<hash::Hash>> = collections::hash_map::HashMap::new(); // Initialize child routes map buffer
+        let mut hash_routes: collections::hash_map::HashMap<hash::Hash, usize> =
+            collections::hash_map::HashMap::new(); // Initialize hash routes map buffer
+        let mut node_children: collections::hash_map::HashMap<hash::Hash, Vec<hash::Hash>> =
+            collections::hash_map::HashMap::new(); // Initialize child routes map buffer
 
         let iter = db.scan(b"0"); // Get iterator (start at genesis transaction)
 
         iter.for_each(|key_val_pair| {
-            match key_val_pair { // Make sure we're not getting a zero value
-            // Value exists, could be collected
+            match key_val_pair {
+                // Make sure we're not getting a zero value
+                // Value exists, could be collected
                 Ok(val) => {
-                    let current_node: Node = Node::from_bytes(&val.1.to_vec()[..]); // Deserialize node
+                    let mut current_node: Node = Node::from_bytes(&val.1.to_vec()[..]); // Deserialize node
+
+                    if !read_all {
+                        // Check should disregard state data
+                        current_node.state_entry = None; // Set state entry to nil
+                    }
 
                     hash_routes.insert(current_node.hash.clone(), nodes.len()); // Insert route to node
 
-                    for parent in current_node.transaction.transaction_data.clone().parents { // Iterate through parents
-                        if !node_children.contains_key(&parent.clone()) { // Check parent routes not initialized
+                    for parent in current_node.transaction.transaction_data.clone().parents {
+                        // Iterate through parents
+                        if !node_children.contains_key(&parent.clone()) {
+                            // Check parent routes not initialized
                             node_children.insert(parent.clone(), vec![current_node.hash.clone()]); // Insert route to child
                         }
 
-                        node_children.get_mut(&parent.clone()).unwrap().push(current_node.hash.clone()); // Insert route to child
+                        node_children
+                            .get_mut(&parent.clone())
+                            .unwrap()
+                            .push(current_node.hash.clone()); // Insert route to child
                     }
 
                     nodes.push(current_node); // Add current node to nodes list
-                },
+                }
                 // Could not be collected
                 _ => (),
             }
         }); // Add nodes to graph vars
 
-        Graph{
-            nodes: nodes, // Set nodes
-            hash_routes: hash_routes, // Set address routes
+        Graph {
+            nodes: nodes,                 // Set nodes
+            hash_routes: hash_routes,     // Set address routes
             node_children: node_children, // Set node children
-            db: Some(db), // Set db to none until we initialize our graph
+            db: Some(db),                 // Set db to none until we initialize our graph
         } // Return initialized graph
     }
 
-    /// Write a graph instance to the disk, and close the associated database instance.
-    /// 
+    /// Read the transactions--but not state data--in a graph from the disk.
+    ///
     /// # Example
-    /// 
+    ///
+    /// ```
+    /// use summercash::core::types::graph; // Import the graph module
+    ///
+    /// let dag: graph::Graph = graph::Graph::read_partial_from_disk(); // Read txs, but not state data from disk
+    /// dag.write_to_disk(); // Close the database
+    /// ```
+    pub fn read_partial_from_disk() -> Graph {
+        Graph::read_some_from_disk(false) // Read just transaction headers
+    }
+
+    /// Read a graph instance from the disk.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use summercash::core::types::graph; // Import the graph module
+    ///
+    /// let dag: graph::Graph = graph::Graph::read_from_disk(); // Read graph from disk
+    /// dag.write_to_disk(); // Close the database
+    /// ```
+    pub fn read_from_disk() -> Graph {
+        Graph::read_some_from_disk(true) // Read entirety of graph
+    }
+
+    /// Write a graph instance to the disk, and close the associated database instance.
+    ///
+    /// # Example
+    ///
     /// ```
     /// extern crate num; // Link num library
     /// extern crate rand; // Link rand library
@@ -508,8 +567,36 @@ impl Graph {
     /// let dag: graph::Graph = graph::Graph::new(tx); // Initialize graph
     /// dag.write_to_disk(); // Write graph to disk
     /// ```
-    pub fn write_to_disk(&self) {
+    pub fn write_to_disk(&self) -> Result<(), sled::Error> {
+        let mut i = 0; // Init incrementor
 
+        // Get database instance
+        if let Some(db) = &self.db {
+            // Iterate through nodes
+            for node in &self.nodes {
+                // Check not already in db
+                if !db.contains_key(i.to_string().as_bytes()).unwrap() {
+                    let set_result = db.set(i.to_string().as_bytes(), node.to_bytes()); // Insert node bytes
+
+                    match set_result {
+                        // Returned error
+                        Err(error) => return Err(error),
+                        // No errors, carry on
+                        _ => continue,
+                    }; // Check for errors while setting in db
+                }
+
+                i = i + 1; // Increment
+            }
+
+            db.flush()?; // Close db
+        } else {
+            return Err(sled::Error::Unsupported(
+                "could not open database".to_owned(),
+            )); // Return error
+        }
+
+        Ok(()) // Done!
     }
 }
 
@@ -617,7 +704,12 @@ mod tests {
         dag.update(0, tx_2, None); // Update root transaction
 
         assert_eq!(
-            dag.get(0).transaction.transaction_data.payload,
+            dag.get(0)
+                .unwrap()
+                .unwrap()
+                .transaction
+                .transaction_data
+                .payload,
             b"test transaction payload 2"
         ); // Ensure has updated transaction
     }
@@ -641,9 +733,9 @@ mod tests {
             vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
         ); // Initialize root transaction
 
-        let dag: Graph = Graph::new(root_tx); // Initialize graph
+        let mut dag: Graph = Graph::new(root_tx); // Initialize graph
 
-        let found_root_tx = dag.get(0); // Get root tx
+        let found_root_tx = dag.get(0).unwrap().unwrap(); // Get root tx
 
         assert_eq!(
             found_root_tx.transaction.transaction_data.payload,

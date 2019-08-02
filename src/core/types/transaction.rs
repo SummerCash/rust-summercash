@@ -6,9 +6,9 @@ use chrono; // Import time library
 
 use num::bigint::BigUint; // Add support for large unsigned integers
 
+use bincode;
 use serde::{Deserialize, Serialize}; // Import serde serialization
-use serde_json; // Import serde json
-use bincode; // Import serde bincode
+use serde_json; // Import serde json // Import serde bincode
 
 use super::receipt; // Import receipt types
 use super::signature; // Import signature type
@@ -120,7 +120,7 @@ impl Transaction {
             sender: sender,                // Set sender
             recipient: recipient,          // Set recipient
             value: value_finks,            // Set value (in finks)
-            payload: payload.to_vec(),              // Set payload
+            payload: payload.to_vec(),     // Set payload
             parents: parents,              // Set parents
             parent_receipts: None,         // Set parent receipts
             parent_state_hash: None,       // Set parent state hash
