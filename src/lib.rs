@@ -14,3 +14,5 @@ extern crate rand; // Link rand library
 extern crate serde; // Link serde
 extern crate serde_json; // Link serde
 extern crate sled; // Link sled crate
+extern crate path_clean; // Link path clean crate
+extern crate bincode; // Link bincode crate

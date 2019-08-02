@@ -8,6 +8,7 @@ use num::bigint::BigUint; // Add support for large unsigned integers
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 use serde_json; // Import serde json
+use bincode; // Import serde bincode
 
 use super::receipt; // Import receipt types
 use super::signature; // Import signature type
@@ -235,6 +236,16 @@ impl<'a> Transaction<'a> {
                 state::Entry::new(balances) // Return state entry
             }
         }
+    }
+
+    /// Serialize a given transaction instance into a byte vector.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        bincode::serialize(&self).unwrap() // Serialize
+    }
+
+    /// Deserialize a transaction instance from a given byte vector.
+    pub fn from_bytes(b: &[u8]) -> Transaction {
+        bincode::deserialize(b).unwrap() // Deserialize
     }
 }
 

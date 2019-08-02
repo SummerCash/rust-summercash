@@ -7,7 +7,7 @@ use super::super::super::{crypto::blake2, crypto::hash}; // Import the hash modu
 use num::bigint::BigUint; // Add support for large unsigned integers
 
 /// The state at a particular point in time.
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Entry {
     /// Body of the state entry
     pub data: EntryData,
