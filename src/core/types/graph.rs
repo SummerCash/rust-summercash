@@ -435,7 +435,7 @@ impl Graph {
     /// ```
     /// use summercash::core::types::graph; // Import the graph module
     /// 
-    /// let graph: graph::Graph = graph::Graph::read_from_disk(); // Read graph from disk
+    /// let dag: graph::Graph = graph::Graph::read_from_disk(); // Read graph from disk
     /// ```
     pub fn read_from_disk() -> Graph {
         let db = sled::Db::start_default(io::db_dir()).unwrap(); // Open database
@@ -505,7 +505,8 @@ impl Graph {
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     ///
-    /// let node = graph::Node::new(tx, None); // Initialize node
+    /// let dag: graph::Graph = graph::Graph::new(tx); // Initialize graph
+    /// dag.write_to_disk(); // Write graph to disk
     /// ```
     pub fn write_to_disk(&self) {
 
