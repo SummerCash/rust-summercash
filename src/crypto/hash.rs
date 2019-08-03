@@ -146,12 +146,10 @@ mod tests {
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31,
         ]); // Construct a hash from pre-determined byte values
-        let hash = Hash::new(vec![
+        Hash::new(vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
         ]); // Construct a hash from an overflowing set of byte values
-
-        println!("{}", hash.to_str()); // Log hash hex value
     } // This test simply checks for panics
 
     #[test]

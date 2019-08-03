@@ -75,7 +75,6 @@ impl Node {
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
     /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
-    ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
     ///
@@ -190,7 +189,7 @@ impl Graph {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// extern crate num; // Link num library
     /// extern crate rand; // Link rand library
     ///
@@ -215,8 +214,47 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     ///
     /// let dag = graph::Graph::new(tx); // Initialize graph
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn new(root_transaction: transaction::Transaction) -> Graph {
+        Graph::new_with_db_path(root_transaction, &io::db_dir()) // Return initialized graph
+    }
+
+    /// Initialize a new graph instance, and store the corresponding db in db_path.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// extern crate num; // Link num library
+    /// extern crate rand; // Link rand library
+    /// extern crate path_clean; // Link path clean library
+    ///
+    /// use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    ///
+    /// use path_clean; // Import path clean module
+    ///
+    /// use rand::rngs::OsRng; // Import the os's rng
+    ///
+    /// use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
+    ///
+    /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
+    /// use summercash::{common::{address, io}, crypto::hash}; // Import the address, hash libraries
+    ///
+    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    ///
+    /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
+    /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
+    ///
+    /// let sender = address::Address::from_key_pair(&sender_keypair); // Derive sender from sender key pair
+    /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
+    ///
+    /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
+    ///
+    /// let dag = graph::Graph::new_with_db_path(tx, format!(io::data_dir(), "/data")); // Initialize graph
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
+    /// ```
+    pub fn new_with_db_path(root_transaction: transaction::Transaction, db_path: &str) -> Graph {
         let root_transaction_hash = root_transaction.hash.clone(); // Clone transaction hash
         let root_transaction_state_entry = root_transaction.execute(None); // Execute root transaction
 
@@ -231,7 +269,7 @@ impl Graph {
             }], // Set nodes
             hash_routes: hash_routes,                   // Set address routes
             node_children: collections::HashMap::new(), // Set node children
-            db: None,                                   // Set db
+            db: Some(sled::Db::start_default(db_path).unwrap()), // Set db
         } // Return initialized dag
     }
 
@@ -239,7 +277,7 @@ impl Graph {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// extern crate num; // Link num library
     /// extern crate rand; // Link rand library
     ///
@@ -266,6 +304,8 @@ impl Graph {
     ///
     /// let mut dag = graph::Graph::new(tx); // Initialize graph
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
+    ///
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn push(
         &mut self,
@@ -301,7 +341,7 @@ impl Graph {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// extern crate num; // Link num library
     /// extern crate rand; // Link rand library
     ///
@@ -327,8 +367,8 @@ impl Graph {
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
     /// let mut dag = graph::Graph::new(tx); // Initialize graph
-    ///
     /// dag.update(0, tx2, None); // Update transaction in DAG
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn update(
         &mut self,
@@ -372,6 +412,8 @@ impl Graph {
     ///
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get(index_of_transaction); // Get a reference to the corresponding node
+    ///
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn get(&mut self, index: usize) -> Result<Option<&Node>, sled::Error> {
         let node = &mut self.nodes[index]; // Get ref to node
@@ -410,7 +452,7 @@ impl Graph {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// extern crate num; // Link num library
     /// extern crate rand; // Link rand library
     ///
@@ -441,6 +483,8 @@ impl Graph {
     ///
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get_with_hash(tx2_hash); // Get a reference to the corresponding node
+    ///
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn get_with_hash(&self, hash: hash::Hash) -> Result<&Node, OperationError> {
         if self.hash_routes.contains_key(&hash) {
@@ -512,11 +556,11 @@ impl Graph {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use summercash::core::types::graph; // Import the graph module
     ///
     /// let dag: graph::Graph = graph::Graph::read_partial_from_disk(); // Read txs, but not state data from disk
-    /// dag.write_to_disk(); // Close the database
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn read_partial_from_disk() -> Graph {
         Graph::read_some_from_disk(false) // Read just transaction headers
@@ -526,11 +570,11 @@ impl Graph {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use summercash::core::types::graph; // Import the graph module
     ///
     /// let dag: graph::Graph = graph::Graph::read_from_disk(); // Read graph from disk
-    /// dag.write_to_disk(); // Close the database
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn read_from_disk() -> Graph {
         Graph::read_some_from_disk(true) // Read entirety of graph
@@ -540,7 +584,7 @@ impl Graph {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// extern crate num; // Link num library
     /// extern crate rand; // Link rand library
     ///
@@ -565,7 +609,7 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     ///
     /// let dag: graph::Graph = graph::Graph::new(tx); // Initialize graph
-    /// dag.write_to_disk(); // Write graph to disk
+    /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn write_to_disk(&self) -> Result<(), sled::Error> {
         let mut i = 0; // Init incrementor
@@ -602,10 +646,14 @@ impl Graph {
 
 #[cfg(test)]
 mod tests {
+    use crate::rand::Rng; // Import rand
     use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
     use num::bigint::BigUint; // Add support for large unsigned integers
     use num::traits::FromPrimitive; // Allow overloading of from_i64()
+    use rand; // Import the rand module
     use rand::rngs::OsRng; // Import the os's rng
+
+    use path_clean; // Import path clean module
 
     use super::super::super::super::common::address; // Import address module
 
@@ -614,6 +662,9 @@ mod tests {
     #[test]
     fn test_new() {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
+
+        let rand: u16 = rng.gen(); // Generate random number
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -630,17 +681,25 @@ mod tests {
             vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
         ); // Initialize root transaction
 
-        let dag: Graph = Graph::new(root_tx); // Initialize graph
+        let dag: Graph = Graph::new_with_db_path(
+            root_tx,
+            &path_clean::clean(&format!("{}/.tests/{}", io::db_dir(), rand.to_string())),
+        ); // Initialize graph
 
         assert_eq!(
             dag.nodes[0].transaction.transaction_data.payload,
             b"test transaction payload"
         ); // Ensure transaction payload retained
+
+        assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     }
 
     #[test]
     fn test_push() {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
+
+        let rand: u16 = rng.gen(); // Generate random number
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -665,16 +724,24 @@ mod tests {
             vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
         ); // Initialize second transaction
 
-        let mut dag: Graph = Graph::new(root_tx); // Initialize graph
+        let mut dag: Graph = Graph::new_with_db_path(
+            root_tx,
+            &path_clean::clean(&format!("{}/.tests/{}", io::db_dir(), rand.to_string())),
+        ); // Initialize graph
 
         let node_index: usize = dag.push(tx_2, None); // Push second transaction
 
         assert_eq!(node_index, 1); // Ensure is second transaction in DAG
+
+        assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     }
 
     #[test]
     fn test_update() {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
+
+        let rand: u16 = rng.gen(); // Generate random number
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -699,7 +766,10 @@ mod tests {
             vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
         ); // Initialize second transaction
 
-        let mut dag: Graph = Graph::new(root_tx); // Initialize graph
+        let mut dag: Graph = Graph::new_with_db_path(
+            root_tx,
+            &path_clean::clean(&format!("{}/.tests/{}", io::db_dir(), rand.to_string())),
+        ); // Initialize graph
 
         dag.update(0, tx_2, None); // Update root transaction
 
@@ -712,11 +782,16 @@ mod tests {
                 .payload,
             b"test transaction payload 2"
         ); // Ensure has updated transaction
+
+        assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     }
 
     #[test]
     fn test_get() {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
+
+        let rand: u16 = rng.gen(); // Generate random number
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -733,7 +808,10 @@ mod tests {
             vec![hash::Hash::new(vec![0; hash::HASH_SIZE])],
         ); // Initialize root transaction
 
-        let mut dag: Graph = Graph::new(root_tx); // Initialize graph
+        let mut dag: Graph = Graph::new_with_db_path(
+            root_tx,
+            &path_clean::clean(&format!("{}/.tests/{}", io::db_dir(), rand.to_string())),
+        ); // Initialize graph
 
         let found_root_tx = dag.get(0).unwrap().unwrap(); // Get root tx
 
@@ -741,11 +819,16 @@ mod tests {
             found_root_tx.transaction.transaction_data.payload,
             b"test transaction payload"
         ); // Ensure is same transaction
+
+        assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     }
 
     #[test]
     fn test_get_with_hash() {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
+
+        let rand: u16 = rng.gen(); // Generate random number
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -763,7 +846,10 @@ mod tests {
         ); // Initialize root transaction
         let root_tx_hash = root_tx.hash.clone(); // Clone root tx hash
 
-        let dag: Graph = Graph::new(root_tx); // Initialize graph
+        let dag: Graph = Graph::new_with_db_path(
+            root_tx,
+            &path_clean::clean(&format!("{}/.tests/{}", io::db_dir(), rand.to_string())),
+        ); // Initialize graph
 
         let found_root_tx = dag.get_with_hash(root_tx_hash).unwrap(); // Get root tx
 
@@ -771,5 +857,7 @@ mod tests {
             found_root_tx.transaction.transaction_data.payload,
             b"test transaction payload"
         ); // Ensure is same transaction
+
+        assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     }
 }
