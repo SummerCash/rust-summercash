@@ -6,6 +6,8 @@ use std::io::Write; // Allow overriding of the write_all attr
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
+use super::super::super::common; // Import the io module
+
 /// The current version of rust-summercash.
 pub static NODE_VERSION: &str = "v0.1.0";
 
@@ -22,9 +24,9 @@ pub struct Config {
 impl Config {
     /// Persist a given config to the disk.
     pub fn write_to_disk(&self) -> io::Result<()> {
-        fs::create_dir_all(super::io::config_dir())?; // Make config directory
+        fs::create_dir_all(common::io::config_dir())?; // Make config directory
 
-        let mut file = fs::File::create(super::io::format_config_dir(&format!(
+        let mut file = fs::File::create(common::io::format_config_dir(&format!(
             "network_{}.json",
             self.network_name
         )))?; // Initialize file
@@ -34,7 +36,7 @@ impl Config {
 
     /// Read a persisted config form the disk.
     pub fn read_from_disk(network_name: &str) -> io::Result<Config> {
-        let file = fs::File::open(super::io::format_config_dir(&format!(
+        let file = fs::File::open(common::io::format_config_dir(&format!(
             "network_{}.json",
             network_name
         )))?; // Open config file
