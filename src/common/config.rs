@@ -2,6 +2,7 @@ use num::bigint::BigUint; // Add support for large unsigned integers
 
 use std::fs; // Import the filesystem library
 use std::io; // Import the io library
+use std::io::Write; // Allow overriding of the write_all attr
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
@@ -21,8 +22,54 @@ pub struct Config {
 impl Config {
     /// Persist a given config to the disk.
     pub fn write_to_disk(&self) -> io::Result<()> {
-        let mut file = fs::File::create(super::common::io::format_config_dir(format!("network_{}.config", self.network_name)))?; // Initialize file
-        file.write_all(b"Hello, world!")?;
-        Ok(())
+        fs::create_dir_all(super::io::config_dir())?; // Make config directory
+
+        let mut file = fs::File::create(super::io::format_config_dir(&format!(
+            "network_{}.config",
+            self.network_name
+        )))?; // Initialize file
+        file.write_all(serde_json::to_vec(self)?.as_slice())?; // Serialize
+        Ok(()) // All good!
+    }
+
+    /// Read a persisted config form the disk.
+    pub fn read_from_disk(network_name: &str) -> io::Result<Config> {
+        let file = fs::File::open(super::io::format_config_dir(&format!(
+            "network_{}.config",
+            network_name
+        )))?; // Open config file
+
+        Ok(serde_json::from_reader(file)?) // Return read config
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Import names from parent module
+
+    use std::str::FromStr; // Allow overriding of from_str() helper method.
+
+    #[test]
+    fn test_write_to_disk() {
+        let config = Config {
+            reward_per_gas: BigUint::from_str("10000000000000000000000000000000000000000").unwrap(), // Venezuela style
+            network_name: "olympic".to_owned(),
+        }; // Initialize network config
+
+        config.write_to_disk().unwrap(); // Panic if not Ok()
+    }
+
+    #[test]
+    fn test_read_from_disk() {
+        let config = Config {
+            reward_per_gas: BigUint::from_str("10000000000000000000000000000000000000000").unwrap(), // Venezuela style
+            network_name: "olympic".to_owned(),
+        }; // Initialize network config
+
+        config.write_to_disk().unwrap(); // Panic if not Ok()
+
+        let read_config = Config::read_from_disk("olympic").unwrap(); // Read config
+        assert_eq!(read_config.reward_per_gas, config.reward_per_gas); // Ensure deserialized correctly
+        assert_eq!(read_config.network_name, config.network_name); // Ensure deserialized correctly
     }
 }
