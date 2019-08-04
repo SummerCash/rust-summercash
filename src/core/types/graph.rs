@@ -5,8 +5,8 @@ use sled; // Import sled database
 
 use std::collections; // Import collections, io modules
 
-use bincode;
-use serde::{Deserialize, Serialize}; // Import serde serialization // Import serde bincode
+use bincode; // Import serde bincode
+use serde::{Deserialize, Serialize}; // Import serde serialization
 
 use super::super::super::{common::io, crypto::hash}; // Import address, hash types
 
