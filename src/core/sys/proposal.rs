@@ -48,7 +48,7 @@ impl Proposal {
     ///     amended_value: BigUint::from_str("10").unwrap().to_bytes_le(), // Set amended value
     /// }; // Initialize operation
     ///
-    /// let proposal = proposal::Proposal::new("test_proposal", proposal::ProposalData::new("reward_per_gas", operation)); // Initialize proposal
+    /// let proposal = proposal::Proposal::new("test_proposal".to_owned(), proposal::ProposalData::new("reward_per_gas".to_owned(), operation)); // Initialize proposal
     /// ```
     pub fn new(proposal_name: String, proposal_data: ProposalData) -> Proposal {
         let mut proposal = Proposal {
@@ -87,7 +87,7 @@ impl ProposalData {
     ///     amended_value: BigUint::from_str("10").unwrap().to_bytes_le(), // Set amended value
     /// }; // Initialize operation
     /// 
-    /// let proposal_data = proposal::ProposalData::new("reward_per_gas", operation); // Initialize proposal data
+    /// let proposal_data = proposal::ProposalData::new("reward_per_gas".to_owned(), operation); // Initialize proposal data
     /// ```
     pub fn new(param_name: String, operation: Operation) -> ProposalData {
         ProposalData {
