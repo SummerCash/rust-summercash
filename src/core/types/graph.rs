@@ -213,11 +213,11 @@ impl Graph {
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     ///
-    /// let dag = graph::Graph::new(tx); // Initialize graph
+    /// let dag = graph::Graph::new(tx, "olympic"); // Initialize graph
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
-    pub fn new(root_transaction: transaction::Transaction) -> Graph {
-        Graph::new_with_db_path(root_transaction, &io::db_dir()) // Return initialized graph
+    pub fn new(root_transaction: transaction::Transaction, network_name: &str) -> Graph {
+        Graph::new_with_db_path(root_transaction, &io::format_db_dir(network_name)) // Return initialized graph
     }
 
     /// Initialize a new graph instance, and store the corresponding db in db_path.
@@ -302,7 +302,7 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
-    /// let mut dag = graph::Graph::new(tx); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     ///
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
@@ -366,7 +366,7 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
-    /// let mut dag = graph::Graph::new(tx); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
     /// dag.update(0, tx2, None); // Update transaction in DAG
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
@@ -408,7 +408,7 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
-    /// let mut dag = graph::Graph::new(tx); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
     ///
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get(index_of_transaction); // Get a reference to the corresponding node
@@ -479,7 +479,7 @@ impl Graph {
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     /// let tx2_hash = tx2.hash.clone(); // Clone transaction 2 hash
     ///
-    /// let mut dag = graph::Graph::new(tx); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
     ///
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get_with_hash(tx2_hash); // Get a reference to the corresponding node
@@ -499,8 +499,8 @@ impl Graph {
     }
 
     /// Read the entirety of a persisted graph, or just state entry headers.
-    fn read_some_from_disk(read_all: bool) -> Graph {
-        let db = sled::Db::start_default(io::db_dir()).unwrap(); // Open database
+    fn read_some_from_disk(read_all: bool, network_name: &str) -> Graph {
+        let db = sled::Db::start_default(io::format_db_dir(network_name)).unwrap(); // Open database
 
         let mut nodes: Vec<Node> = vec![]; // Empty vector
         let mut hash_routes: collections::hash_map::HashMap<hash::Hash, usize> =
@@ -562,8 +562,8 @@ impl Graph {
     /// let dag: graph::Graph = graph::Graph::read_partial_from_disk(); // Read txs, but not state data from disk
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
-    pub fn read_partial_from_disk() -> Graph {
-        Graph::read_some_from_disk(false) // Read just transaction headers
+    pub fn read_partial_from_disk(network_name: &str) -> Graph {
+        Graph::read_some_from_disk(false, network_name) // Read just transaction headers
     }
 
     /// Read a graph instance from the disk.
@@ -576,8 +576,8 @@ impl Graph {
     /// let dag: graph::Graph = graph::Graph::read_from_disk(); // Read graph from disk
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
-    pub fn read_from_disk() -> Graph {
-        Graph::read_some_from_disk(true) // Read entirety of graph
+    pub fn read_from_disk(network_name: &str) -> Graph {
+        Graph::read_some_from_disk(true, network_name) // Read entirety of graph
     }
 
     /// Write a graph instance to the disk, and close the associated database instance.
@@ -608,7 +608,7 @@ impl Graph {
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     ///
-    /// let dag: graph::Graph = graph::Graph::new(tx); // Initialize graph
+    /// let dag: graph::Graph = graph::Graph::new(tx, "olympic"); // Initialize graph
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn write_to_disk(&self) -> Result<(), sled::Error> {

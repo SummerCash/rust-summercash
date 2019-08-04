@@ -13,6 +13,11 @@ pub fn db_dir() -> String {
     path_clean::clean(&raw_data_dir) // Return db dir
 }
 
+/// Append a given string to the db dir.
+pub fn format_db_dir(s: &str) -> String {
+    path_clean::clean(&format!("{}/{}", db_dir(), s)) // Return dir
+}
+
 /// Get the path in which config files are stored.
 pub fn config_dir() -> String {
     let mut raw_data_dir = data_dir().clone(); // Set raw data dir

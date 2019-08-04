@@ -25,17 +25,17 @@ impl Config {
         fs::create_dir_all(super::io::config_dir())?; // Make config directory
 
         let mut file = fs::File::create(super::io::format_config_dir(&format!(
-            "network_{}.config",
+            "network_{}.json",
             self.network_name
         )))?; // Initialize file
-        file.write_all(serde_json::to_vec(self)?.as_slice())?; // Serialize
+        file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
         Ok(()) // All good!
     }
 
     /// Read a persisted config form the disk.
     pub fn read_from_disk(network_name: &str) -> io::Result<Config> {
         let file = fs::File::open(super::io::format_config_dir(&format!(
-            "network_{}.config",
+            "network_{}.json",
             network_name
         )))?; // Open config file
 
