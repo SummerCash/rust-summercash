@@ -1,2 +1,2 @@
-pub mod config;
-pub mod proposal; // Export the proposal type // Export the config module
+pub mod config; // Export the config module
+pub mod proposal; // Export the proposal type

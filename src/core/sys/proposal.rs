@@ -45,7 +45,7 @@ impl Proposal {
     /// use std::str::FromStr; // Allow overriding of from_str() helper method
     ///
     /// let operation = proposal::Operation::Amend {
-    ///     amended_value: BigUint::from_str("10000000000000000000000000000000000000000").unwrap().to_bytes_le(), // Set amended value
+    ///     amended_value: BigUint::from_str("10").unwrap().to_bytes_le(), // Set amended value
     /// }; // Initialize operation
     ///
     /// let proposal = proposal::Proposal::new("test_proposal", proposal::ProposalData::new("reward_per_gas", operation)); // Initialize proposal
@@ -75,6 +75,20 @@ impl Proposal {
 /// Implement a set of proposal data helper methods.
 impl ProposalData {
     /// Initialize a new ProposalData instance with the given parameters.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// use summercash::core::sys::proposal; // Import proposal types
+    /// use num::bigint::BigUint; // Add support for large unsigned integers
+    /// use std::str::FromStr; // Allow overriding of from_str() helper method
+    ///
+    /// let operation = proposal::Operation::Amend {
+    ///     amended_value: BigUint::from_str("10").unwrap().to_bytes_le(), // Set amended value
+    /// }; // Initialize operation
+    /// 
+    /// let proposal_data = proposal::ProposalData::new("reward_per_gas", operation); // Initialize proposal data
+    /// ```
     pub fn new(param_name: String, operation: Operation) -> ProposalData {
         ProposalData {
             param_name: param_name, // Set param name
