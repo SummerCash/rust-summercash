@@ -47,9 +47,9 @@ pub struct Graph {
     /// A list of nodes in the graph
     pub nodes: Vec<Node>,
     /// A list of routes to addresses in the graph (by usize index)
-    hash_routes: collections::HashMap<hash::Hash, usize>,
+    pub hash_routes: collections::HashMap<hash::Hash, usize>,
     /// A list of children for a given node in the graph
-    node_children: collections::HashMap<hash::Hash, Vec<hash::Hash>>,
+    pub node_children: collections::HashMap<hash::Hash, Vec<hash::Hash>>,
     /// A persisted database instance
     db: Option<sled::Db>,
 }
@@ -641,6 +641,26 @@ impl Graph {
         }
 
         Ok(()) // Done!
+    }
+
+    /// Resolve states for all parent nodes, direct or indirect.
+    pub fn execute_parent_nodes(&self, index: usize) -> Result<state::Entry, sled::Error> {
+        // Get node
+        if let Some(node) = self.get(index)? {
+            let merged_parent_entries: state::Entry; // Declare merged parent entry buffer
+
+                 for parent in node.transaction.transaction_data.parents { // Iterate through node parents
+                if let Some(index) = self.hash_routes.get(&parent) { // Get route to parent
+                    self.nodes[*index].state_entry = Some(self.nodes[*index].transaction.execute()); // Set state entry
+                } else {
+                    continue; // Continue
+                }
+            }
+
+            Ok(merged_parent_entries) // Return merged entries
+        } else {
+            Err(sled::Error::CollectionNotFound(vec![index as u8])) // Return error
+        }
     }
 }
 

@@ -135,8 +135,9 @@ impl System {
                                         Err(ExecutionError::Miscellaneous{error: parent_node_result.unwrap_err().to_string()}) // Return error
                                     } else {
                                         let parent_nodes: Vec<graph::Node>; // Init parent nodes vec
-                                        for parent_of_parent in parent_node_result.unwrap().transaction.
-                                        self.ledger.update(self.ledger.hash_routes.get(&parent).unwrap(), parent_node_result.unwrap().execute())
+                                        for parent_of_parent in parent_node_result.unwrap().transaction.transaction_data.parents { // Iterate through parents
+                                            self.ledger.update(self.ledger.hash_routes.get(&parent).unwrap(), parent_node_result.unwrap().transaction.execute())
+                                        }
 
                                         Ok(()) // Mhm
                                     }
