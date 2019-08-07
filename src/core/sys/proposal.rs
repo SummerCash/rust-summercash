@@ -75,9 +75,9 @@ impl Proposal {
 /// Implement a set of proposal data helper methods.
 impl ProposalData {
     /// Initialize a new ProposalData instance with the given parameters.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```
     /// use summercash::core::sys::proposal; // Import proposal types
     /// use num::bigint::BigUint; // Add support for large unsigned integers
@@ -86,7 +86,7 @@ impl ProposalData {
     /// let operation = proposal::Operation::Amend {
     ///     amended_value: BigUint::from_str("10").unwrap().to_bytes_le(), // Set amended value
     /// }; // Initialize operation
-    /// 
+    ///
     /// let proposal_data = proposal::ProposalData::new("reward_per_gas".to_owned(), operation); // Initialize proposal data
     /// ```
     pub fn new(param_name: String, operation: Operation) -> ProposalData {

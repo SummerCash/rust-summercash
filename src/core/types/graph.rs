@@ -644,22 +644,54 @@ impl Graph {
     }
 
     /// Resolve states for all parent nodes, direct or indirect.
-    pub fn execute_parent_nodes(&self, child_index: usize) -> Result<state::Entry, sled::Error> {
+    pub fn execute_parent_nodes(
+        &mut self,
+        child_index: usize,
+    ) -> Result<state::Entry, sled::Error> {
         // Get node
         if let Some(node) = self.get(child_index)? {
-            let merged_pervious_entry: state::Entry; // Declare merged parent of parent entry buffer
-            let merged_parent_entries: state::Entry; // Declare merged parent entry buffer
+            let mut parent_entries: Vec<state::Entry> = vec![]; // Initialize parent entries vec
 
-            for parent in node.transaction.transaction_data.parents { // Iterate through node parents
-                if let Some(index) = self.hash_routes.get(&parent) { // Get index of parent                    
-                    if self.nodes[*index].state_entry.is_some() { // Check already has state entry
-                        
+            for parent in node.transaction.transaction_data.parents.clone() {
+                // Iterate through node parents
+                if let Some(index) = self.clone().hash_routes.get(&parent) {
+                    // Get index of parent
+                    if let Some(state_entry) = self.nodes[*index].state_entry.clone() {
+                        // Check already has state entry
+                        parent_entries.push(state_entry); // Add state entry to parent entries vec
+
+                        continue; // Continue
                     }
-                    if let Some(prev_state_entry) = self.nodes[*index].transaction.execute()
+
+                    if self.nodes[*index]
+                        .transaction
+                        .transaction_data
+                        .parents
+                        .len()
+                        == 0
+                    {
+                        // Check no parents
+                        self.nodes[*index].state_entry =
+                            Some(self.nodes[*index].transaction.execute(None)); // Set state entry
+
+                        parent_entries
+                            .push(self.clone().nodes[*index].state_entry.clone().unwrap()); // Add state entry to parent entries vec
+                    }
+
+                    if let Ok(prev_state_entry) = self.execute_parent_nodes(*index) {
+                        // Execute parent nodes
+                        self.nodes[*index].state_entry = Some(
+                            self.nodes[*index]
+                                .transaction
+                                .execute(Some(prev_state_entry)),
+                        ); // Set state entry
+
+                        parent_entries.push(self.nodes[*index].state_entry.clone().unwrap()); // Add state entry to parent entries vec
+                    }
                 }
             }
 
-            Ok(merged_parent_entries) // Return merged entries
+            Ok(state::merge_entries(parent_entries)) // Return merged entries
         } else {
             Err(sled::Error::CollectionNotFound(vec![child_index as u8])) // Return error
         }

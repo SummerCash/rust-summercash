@@ -49,8 +49,8 @@ impl Entry {
 }
 
 /// Merge multiple state entires into one batch state entry.
-pub fn merge_entries(last_merged_entry: Entry, entries: Vec<Entry>) -> Entry {
-    let mut balances: collections::HashMap<String, BigUint> = last_merged_entry.data.balances.clone(); // Initialize balances map
+pub fn merge_entries(entries: Vec<Entry>) -> Entry {
+    let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balances map
 
     for entry in entries {
         // Iterate through entries

@@ -206,7 +206,7 @@ impl Transaction {
     /// let recipient = address::Address::from_key_pair(&recipient_keypair); // Derive recipient from recipient key pair
     ///
     /// let tx = &mut transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
-    /// let resulting_state_entry = tx.execute(None); // Must specify a previous state entry if this is not the genesis transaction (if this transaction has multiple parents, use state::merge_entries)
+    /// let resulting_state_entry = tx.execute(None); // Must specify a previous state entry if this is not the genesis transaction
     /// ```
     pub fn execute(&self, prev_entry: Option<state::Entry>) -> state::Entry {
         match prev_entry {
