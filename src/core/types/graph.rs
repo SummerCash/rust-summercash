@@ -644,22 +644,24 @@ impl Graph {
     }
 
     /// Resolve states for all parent nodes, direct or indirect.
-    pub fn execute_parent_nodes(&self, index: usize) -> Result<state::Entry, sled::Error> {
+    pub fn execute_parent_nodes(&self, child_index: usize) -> Result<state::Entry, sled::Error> {
         // Get node
-        if let Some(node) = self.get(index)? {
+        if let Some(node) = self.get(child_index)? {
+            let merged_pervious_entry: state::Entry; // Declare merged parent of parent entry buffer
             let merged_parent_entries: state::Entry; // Declare merged parent entry buffer
 
-                 for parent in node.transaction.transaction_data.parents { // Iterate through node parents
-                if let Some(index) = self.hash_routes.get(&parent) { // Get route to parent
-                    self.nodes[*index].state_entry = Some(self.nodes[*index].transaction.execute()); // Set state entry
-                } else {
-                    continue; // Continue
+            for parent in node.transaction.transaction_data.parents { // Iterate through node parents
+                if let Some(index) = self.hash_routes.get(&parent) { // Get index of parent                    
+                    if self.nodes[*index].state_entry.is_some() { // Check already has state entry
+                        
+                    }
+                    if let Some(prev_state_entry) = self.nodes[*index].transaction.execute()
                 }
             }
 
             Ok(merged_parent_entries) // Return merged entries
         } else {
-            Err(sled::Error::CollectionNotFound(vec![index as u8])) // Return error
+            Err(sled::Error::CollectionNotFound(vec![child_index as u8])) // Return error
         }
     }
 }

@@ -128,20 +128,8 @@ impl System {
 
                             self.ledger.push(tx, None); // Add tx to ledger
 
-                            if tx.transaction_data.parent_state_hash.is_some() { // Check parent state hash cleared
-                                for parent in tx.transaction_data.parents { // Iterate through parents
-                                    let parent_node_result = self.ledger.get_with_hash(parent); // Get parent node
-                                    if parent_node_result.is_err() { // Check for errors
-                                        Err(ExecutionError::Miscellaneous{error: parent_node_result.unwrap_err().to_string()}) // Return error
-                                    } else {
-                                        let parent_nodes: Vec<graph::Node>; // Init parent nodes vec
-                                        for parent_of_parent in parent_node_result.unwrap().transaction.transaction_data.parents { // Iterate through parents
-                                            self.ledger.update(self.ledger.hash_routes.get(&parent).unwrap(), parent_node_result.unwrap().transaction.execute())
-                                        }
-
-                                        Ok(()) // Mhm
-                                    }
-                                }
+                            if let Ok(prev_state_entry) = self.ledger.execute_parent_nodes(self.ledger.nodes.len() - 1) { // Get previous state entry
+                                self.ledger.nodes[self.ledger.nodes.len() - 1].state_entry = tx.execute(Some(prev_state_entry)); // Set node state entry
                             }
 
                             let write_result = self.ledger.write_to_disk(); // Write ledger to disk
