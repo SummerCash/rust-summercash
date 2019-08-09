@@ -60,7 +60,8 @@ impl System {
     pub fn register_proposal(&mut self, proposal: proposal::Proposal) {
         // Check proposal not already registered
         if !self.pending_proposals.contains_key(&proposal.proposal_id) {
-            self.pending_proposals.insert(proposal.proposal_id, proposal); // Add proposal
+            self.pending_proposals
+                .insert(proposal.proposal_id, proposal); // Add proposal
         }
     }
 
@@ -99,8 +100,8 @@ impl System {
                     }
 
                     let operation_result = self.config.write_to_disk(); // Write config to disk
+                                                                        // Check for errors
                     if operation_result.is_err() {
-                        // Check for errors
                         Err(ExecutionError::Miscellaneous {
                             error: operation_result.unwrap_err().to_string(),
                         })
