@@ -20,15 +20,23 @@ pub struct Vote {
 /// Implement a set of voting helper methods.
 impl Vote {
     /// Initialize and sign a new vote instance.
-    pub fn new(proposal_id: hash::Hash, in_favor: bool, signature_keypair: ed25519_dalek::Keypair) -> Vote {
+    pub fn new(
+        proposal_id: hash::Hash,
+        in_favor: bool,
+        signature_keypair: ed25519_dalek::Keypair,
+    ) -> Vote {
         let mut vote: Vote = Vote {
             target_proposal: proposal_id, // Set proposal ID
-            in_favor: in_favor, // Set in favor of proposal
-            signature: None, // No signature yet
+            in_favor: in_favor,           // Set in favor of proposal
+            signature: None,              // No signature yet
         }; // Initialize vote
 
-        if let Ok(serialized_vote) = bincode::serialize(&vote) { // Serialize vote
-            vote.signature = Some(signature::Signature{public_key: signature_keypair.public, signature: signature_keypair.sign(serialized_vote.as_slice())}); // Set signature
+        if let Ok(serialized_vote) = bincode::serialize(&vote) {
+            // Serialize vote
+            vote.signature = Some(signature::Signature {
+                public_key: signature_keypair.public,
+                signature: signature_keypair.sign(serialized_vote.as_slice()),
+            }); // Set signature
         }
 
         vote // Return initialized vote
