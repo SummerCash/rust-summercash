@@ -56,6 +56,14 @@ impl System {
         } // Return initialized system
     }
 
+    /// Add a given proposal to the system's pending proposals list.
+    pub fn register_proposal(&mut self, proposal: proposal::Proposal) {
+        // Check proposal not already registered
+        if !self.pending_proposals.contains_key(&proposal.proposal_id) {
+            self.pending_proposals.insert(proposal.proposal_id, proposal); // Add proposal
+        }
+    }
+
     /// Execute a proposal in the pending proposals set with the given hash.
     pub fn execute_proposal(mut self, proposal_id: hash::Hash) -> Result<(), ExecutionError> {
         // Check proposal doesn't exist
