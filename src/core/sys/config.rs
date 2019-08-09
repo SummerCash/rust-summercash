@@ -1,8 +1,6 @@
 use num::bigint::BigUint; // Add support for large unsigned integers
 
-use std::fs; // Import the filesystem library
-use std::io; // Import the io library
-use std::io::Write; // Allow overriding of the write_all attr
+use std::{fs, io, io::Write}; // Import the filesystem library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 

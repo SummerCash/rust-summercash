@@ -30,3 +30,16 @@ pub fn config_dir() -> String {
 pub fn format_config_dir(s: &str) -> String {
     path_clean::clean(&format!("{}/{}", config_dir(), s)) // Return dir
 }
+
+/// Get the path in which account files are stored.
+pub fn keystore_dir() -> String {
+    let mut raw_data_dir = data_dir().clone(); // Set raw data dir
+    raw_data_dir.push_str("/keystore"); // Add /keystore to path
+
+    path_clean::clean(&raw_data_dir) // Return keystore dir
+}
+
+/// Append a given string to the keystore dir.
+pub fn format_keystore_dir(s: &str) -> String {
+    path_clean::clean(&format!("{}/{}", keystore_dir(), s)) // Return dir
+}
