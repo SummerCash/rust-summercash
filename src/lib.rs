@@ -1,6 +1,7 @@
 pub mod common; // Export the common module
 pub mod core; // Export the core module
 pub mod crypto; // Export the crypto module
+pub mod p2p; // Export the p2p module
 
 #[macro_use]
 extern crate failure; // Link failure crate
