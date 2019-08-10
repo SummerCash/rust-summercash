@@ -12,6 +12,7 @@ extern crate blake2; // Link blake2 hashing library
 extern crate chrono; // Link chrono library
 extern crate ed25519_dalek; // Link edwards25519 library
 extern crate hex; // Link hex encoding library
+extern crate libp2p; // Link libp2p library
 extern crate num; // Link num library
 extern crate path_clean; // Link path clean crate
 extern crate rand; // Link rand library

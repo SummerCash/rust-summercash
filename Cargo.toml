@@ -18,6 +18,7 @@ failure = "0.1.5"
 sled = "0.24.1"
 path-clean = "0.1.0"
 bincode = "1.1.4"
+libp2p = "0.11.0"
 
 [dependencies.ed25519-dalek]
 version = "1.0.0-pre.1"

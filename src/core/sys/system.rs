@@ -8,7 +8,7 @@ use super::super::types::{graph, transaction}; // Import transaction types
 
 use super::{config, proposal}; // Import parent module types
 
-/// An error encountered while executing a proposal
+/// An error encountered while executing a proposal.
 #[derive(Debug, Fail)]
 pub enum ExecutionError {
     #[fail(display = "proposal with id {} does not exist", proposal_id)]
