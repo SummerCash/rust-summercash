@@ -161,7 +161,7 @@ impl Node {
     ///
     /// let node = graph::Node::new(tx, None); // Initialize node
     ///
-    /// let is_valid = node.perform_validity_checks(); // False, since state entry is None TODO: Add more checks
+    /// let is_valid = node.perform_validity_checks(); // False, since state entry is None
     /// ```
     pub fn perform_validity_checks(&self) -> bool {
         let contents_valid = self.verify_contents(); // Verify contents of self
