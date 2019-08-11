@@ -26,7 +26,7 @@ impl Account {
 
         Account {
             keypair: ed25519_dalek::Keypair::generate(&mut csprng), // Generate keypair
-            p2p_keypair: Keypair::generate().encode().to_vec(), // Generate p2p keypair
+            p2p_keypair: Keypair::generate().encode().to_vec(),     // Generate p2p keypair
         } // Return account
     }
 
@@ -37,7 +37,7 @@ impl Account {
 
     /// Get the p2p keypair of a particular account.
     pub fn p2p_keypair(&self) -> Result<Keypair, error::DecodingError> {
-        Keypair::decode(self.p2p_keypair.as_mut_slice()) // Return decoded keypair
+        Keypair::decode(self.p2p_keypair.clone().as_mut_slice()) // Return decoded keypair
     }
 
     /// Persist the account to the disk.
