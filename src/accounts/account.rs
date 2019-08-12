@@ -66,8 +66,8 @@ impl Account {
 }
 
 /// Get a list of unlocked, localized accounts.
-pub fn get_all_unlocked_accounts() -> Vec<address::Address> {
-    let mut account_addresses: Vec<address::Address> = vec![]; // Initialize empty account addresses vec
+pub fn get_all_unlocked_accounts() -> Vec<Account> {
+    let mut accounts: Vec<Account> = vec![]; // Initialize empty account addresses vec
 
     // Walk keystore directory
     for entry_result in WalkDir::new(common::io::keystore_dir()) {
@@ -81,7 +81,7 @@ pub fn get_all_unlocked_accounts() -> Vec<address::Address> {
                     if let Ok(file) = fs::File::open(path_str) {
                         // Read account from file
                         if let Ok(account) = serde_json::from_reader(file) {
-                            account_addresses.push(account); // Add account to account addresses vec
+                            accounts.push(account); // Add account to account addresses vec
                         }
                     }
                 }
@@ -89,7 +89,7 @@ pub fn get_all_unlocked_accounts() -> Vec<address::Address> {
         }
     }
 
-    account_addresses // Return account addresses
+    accounts // Return accounts
 }
 
 #[cfg(test)]
