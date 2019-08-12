@@ -3,6 +3,8 @@ use libp2p::identity::{ed25519::Keypair, error}; // Import the libp2p library
 use ed25519_dalek; // Import the edwards25519 digital signature library
 use rand::rngs::OsRng; // Import the os's rng
 
+use walkdir::WalkDir; // Import the walkdir utility
+
 use std::{fs, io, io::Write}; // Import the io library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
@@ -60,5 +62,45 @@ impl Account {
         )))?; // Open account file
 
         Ok(serde_json::from_reader(file)?) // Return read account
+    }
+}
+
+/// Get a list of unlocked, localized accounts.
+pub fn get_all_unlocked_accounts() -> Vec<address::Address> {
+    let mut account_addresses: Vec<address::Address> = vec![]; // Initialize empty account addresses vec
+
+    // Walk keystore directory
+    for entry_result in WalkDir::new(common::io::keystore_dir()) {
+        // Check entry exists
+        if let Ok(entry) = entry_result {
+            // Convert path to string
+            if let Some(path_str) = entry.path().to_str() {
+                // Check is keystore file, not directory
+                if String::from(path_str).contains(".json") {
+                    // Open account file
+                    if let Ok(file) = fs::File::open(path_str) {
+                        // Read account from file
+                        if let Ok(account) = serde_json::from_reader(file) {
+                            account_addresses.push(account); // Add account to account addresses vec
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    account_addresses // Return account addresses
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Import names from parent module
+
+    #[test]
+    fn test_get_all_accounts() {
+        let test_account = Account::new(); // Generate a new account
+        test_account.write_to_disk().unwrap(); // Write test account to disk
+
+        assert_ne!(get_all_unlocked_accounts().len(), 0); // Ensure has local accounts
     }
 }
