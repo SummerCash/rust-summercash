@@ -15,7 +15,7 @@ use super::super::{common, common::address}; // Import the address module
 #[derive(Serialize, Deserialize)]
 pub struct Account {
     /// The account's private and public keys
-    pub keypair: ed25519_dalek::Keypair,
+    keypair: Vec<u8>,
     /// The account's p2p identity
     p2p_keypair: Vec<u8>,
 }
@@ -27,14 +27,18 @@ impl Account {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
 
         Account {
-            keypair: ed25519_dalek::Keypair::generate(&mut csprng), // Generate keypair
+            keypair: ed25519_dalek::Keypair::generate(&mut csprng).to_bytes().to_vec(), // Generate keypair
             p2p_keypair: Keypair::generate().encode().to_vec(),     // Generate p2p keypair
         } // Return account
     }
 
     /// Get the address of a particular account.
-    pub fn address(&self) -> address::Address {
-        address::Address::from_public_key(&self.keypair.public) // Return address
+    pub fn address(&self) -> Result<address::Address, ed25519_dalek::SignatureError> {
+        Ok(address::Address::from_public_key(&self.keypair()?.public)) // Return address
+    }
+
+    pub fn keypair(&self) -> Result<ed25519_dalek::Keypair, ed25519_dalek::SignatureError> {
+        ed25519_dalek::Keypair::from_bytes(self.keypair.as_slice()) // Return decoded keypair
     }
 
     /// Get the p2p keypair of a particular account.
@@ -46,12 +50,25 @@ impl Account {
     pub fn write_to_disk(&self) -> io::Result<()> {
         fs::create_dir_all(common::io::keystore_dir())?; // Make keystore directory
 
-        let mut file = fs::File::create(common::io::format_keystore_dir(&format!(
-            "{}.json",
-            self.address().to_str()
-        )))?; // Initialize file
-        file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
-        Ok(()) // All good!
+        // Check could get address
+        if let Ok(address) = self.address() {
+            let mut file = fs::File::create(common::io::format_keystore_dir(&format!(
+                "{}.json",
+                address.to_str()
+            )))?; // Initialize file
+            file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
+            Ok(()) // All good!
+        } else {
+            Err(io::Error::from(io::ErrorKind::InvalidData)) // Return error
+        }
+    }
+
+    pub fn write_to_disk_with_name(&self, s: &str) -> io::Result<()> {
+        fs::create_dir_all(common::io::keystore_dir())?; // Make keystore directory
+
+        let mut file = fs::File::create(s)?; // Initialize file
+            file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
+            Ok(()) // All good!
     }
 
     /// Read an account from the disk.
@@ -70,13 +87,15 @@ pub fn get_all_unlocked_accounts() -> Vec<Account> {
     let mut accounts: Vec<Account> = vec![]; // Initialize empty account addresses vec
 
     // Walk keystore directory
-    for entry_result in WalkDir::new(common::io::keystore_dir()) {
-        // Check entry exists
-        if let Ok(entry) = entry_result {
-            // Convert path to string
-            if let Some(path_str) = entry.path().to_str() {
-                // Check is keystore file, not directory
-                if String::from(path_str).contains(".json") {
+    for e in WalkDir::new(common::io::keystore_dir())
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if let Ok(metadata) = e.metadata() {
+            // Check is file
+            if metadata.is_file() {
+                // Convert path to string
+                if let Some(path_str) = e.path().to_str() {
                     // Open account file
                     if let Ok(file) = fs::File::open(path_str) {
                         // Read account from file
@@ -102,5 +121,15 @@ mod tests {
         test_account.write_to_disk().unwrap(); // Write test account to disk
 
         assert_ne!(get_all_unlocked_accounts().len(), 0); // Ensure has local accounts
+    }
+
+    #[test]
+    fn test_read_from_disk() {
+        let test_account = Account::new(); // Generate a anew account
+        test_account.write_to_disk().unwrap(); // Write test account to disk
+
+        let read_account = Account::read_from_disk(test_account.address().unwrap()).unwrap(); // Read account from disk
+
+        assert_eq!(test_account.address(), read_account.address()); // Ensure accounts have same address
     }
 }

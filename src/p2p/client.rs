@@ -8,12 +8,9 @@ use libp2p::{identity, PeerId}; // Import the libp2p library
 #[derive(Debug, Fail)]
 pub enum ConstructionError {
     #[fail(
-        display = "invalid p2p identity for account with address: {}",
-        identity_hex
+        display = "invalid p2p identity",
     )]
-    InvalidPeerIdentity {
-        identity_hex: String, // The hex encoded public key
-    },
+    InvalidPeerIdentity,
     #[fail(display = "an IO operation for the account {} failed", address_hex)]
     AccountIOFailed {
         address_hex: String, // The hex encoded public key
@@ -44,9 +41,7 @@ impl Client {
                     PeerId::from_public_key(identity::PublicKey::Ed25519(p2p_keypair.public())),
                 ) // Return initialized client
             } else {
-                Err(ConstructionError::InvalidPeerIdentity {
-                    identity_hex: p2p_account.address().to_str(),
-                }) // Return error
+                Err(ConstructionError::InvalidPeerIdentity) // Return error
             }
         } else {
             let p2p_account = account::Account::new(); // Generate p2p account
@@ -62,14 +57,19 @@ impl Client {
                             )),
                         ) // Return initialized client
                     } else {
-                        Err(ConstructionError::InvalidPeerIdentity {
-                            identity_hex: p2p_account.address().to_str(),
-                        }) // Return error
+                        Err(ConstructionError::InvalidPeerIdentity) // Return error
                     }
                 }
-                _ => Err(ConstructionError::AccountIOFailed {
-                    address_hex: p2p_account.address().to_str(),
-                }),
+                _ => {
+                    // Check could get account address
+                    if let Ok(address) = p2p_account.address() {
+                        Err(ConstructionError::AccountIOFailed {
+                            address_hex: address.to_str(),
+                        }) // Return error
+                    } else {
+                        Err(ConstructionError::InvalidPeerIdentity) // Return error
+                    }
+                },
             }
         }
     }
@@ -82,15 +82,13 @@ impl Client {
         } else {
             // TODO: Download config
 
-            Err(ConstructionError::InvalidPeerIdentity {
-                identity_hex: "test".to_owned(),
-            }) // Return error
+            Err(ConstructionError::InvalidPeerIdentity) // Return error
         }
     }
 
     /// Initialize a new client with the given network_name, peer_id, and config.
     pub fn with_config(peer_id: PeerId, cfg: config::Config) -> Result<Client, ConstructionError> {
-        let voting_accounts: Vec<account::Account> = vec![]; // Initialize voters list TODO: Add voters to list
+        let voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
 
         Ok(Client::with_voting_accounts(peer_id, cfg, voting_accounts)) // Return initialized client
     }
@@ -106,5 +104,27 @@ impl Client {
             voting_accounts: voting_accounts,  // Set voters
             peer_id: peer_id,                  // Set peer id
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use num::bigint::BigUint; // Add support for large unsigned integers
+
+    use std::str::FromStr; // Allow overriding of from_str() helper method.
+
+    use super::*; // Import names from parent module
+
+    #[test]
+    fn test_new() {
+        let config = config::Config {
+            reward_per_gas: BigUint::from_str("10000000000000000000000000000000000000000").unwrap(), // Venezuela style
+            network_name: "olympic".to_owned(),
+        }; // Initialize config
+
+        config.write_to_disk().unwrap(); // Write config to disk
+
+        let client = Client::new("olympic").unwrap(); // Initialize client
+        assert_eq!(client.runtime.config.network_name, "olympic"); // Ensure client has correct net
     }
 }
