@@ -27,7 +27,7 @@ pub fn num_finks_per_smc() -> BigUint {
 /// # Example
 ///
 /// ```
-/// use summercash::common::fink; // Import the fink unit conversion utility
+/// use summercash::common::fink; // Import the fink -> SMC conversion utility
 /// use num::bigint::{BigInt, BigUint, Sign}; // Add support for large unsigned integers
 ///
 /// use std::str::FromStr; // Let the bigint library implement from_str
