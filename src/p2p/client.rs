@@ -7,9 +7,7 @@ use libp2p::{identity, PeerId}; // Import the libp2p library
 /// An error encountered while constructing a p2p client.
 #[derive(Debug, Fail)]
 pub enum ConstructionError {
-    #[fail(
-        display = "invalid p2p identity",
-    )]
+    #[fail(display = "invalid p2p identity")]
     InvalidPeerIdentity,
     #[fail(display = "an IO operation for the account {} failed", address_hex)]
     AccountIOFailed {
@@ -69,7 +67,7 @@ impl Client {
                     } else {
                         Err(ConstructionError::InvalidPeerIdentity) // Return error
                     }
-                },
+                }
             }
         }
     }

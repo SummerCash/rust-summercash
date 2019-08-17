@@ -27,8 +27,10 @@ impl Account {
         let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
 
         Account {
-            keypair: ed25519_dalek::Keypair::generate(&mut csprng).to_bytes().to_vec(), // Generate keypair
-            p2p_keypair: Keypair::generate().encode().to_vec(),     // Generate p2p keypair
+            keypair: ed25519_dalek::Keypair::generate(&mut csprng)
+                .to_bytes()
+                .to_vec(), // Generate keypair
+            p2p_keypair: Keypair::generate().encode().to_vec(), // Generate p2p keypair
         } // Return account
     }
 
@@ -67,8 +69,8 @@ impl Account {
         fs::create_dir_all(common::io::keystore_dir())?; // Make keystore directory
 
         let mut file = fs::File::create(s)?; // Initialize file
-            file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
-            Ok(()) // All good!
+        file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
+        Ok(()) // All good!
     }
 
     /// Read an account from the disk.
