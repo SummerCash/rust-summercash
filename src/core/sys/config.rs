@@ -53,7 +53,7 @@ mod tests {
     fn test_write_to_disk() {
         let config = Config {
             reward_per_gas: BigUint::from_str("10000000000000000000000000000000000000000").unwrap(), // Venezuela style
-            network_name: "olympic".to_owned(),
+            network_name: "olympia".to_owned(),
         }; // Initialize network config
 
         config.write_to_disk().unwrap(); // Panic if not Ok()
@@ -63,12 +63,12 @@ mod tests {
     fn test_read_from_disk() {
         let config = Config {
             reward_per_gas: BigUint::from_str("10000000000000000000000000000000000000000").unwrap(), // Venezuela style
-            network_name: "olympic".to_owned(),
+            network_name: "olympia".to_owned(),
         }; // Initialize network config
 
         config.write_to_disk().unwrap(); // Panic if not Ok()
 
-        let read_config = Config::read_from_disk("olympic").unwrap(); // Read config
+        let read_config = Config::read_from_disk("olympia").unwrap(); // Read config
         assert_eq!(read_config.reward_per_gas, config.reward_per_gas); // Ensure deserialized correctly
         assert_eq!(read_config.network_name, config.network_name); // Ensure deserialized correctly
     }

@@ -213,7 +213,7 @@ impl Graph {
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     ///
-    /// let dag = graph::Graph::new(tx, "olympic"); // Initialize graph
+    /// let dag = graph::Graph::new(tx, "olympia"); // Initialize graph
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn new(root_transaction: transaction::Transaction, network_name: &str) -> Graph {
@@ -302,7 +302,7 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
-    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympia"); // Initialize graph
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     ///
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
@@ -366,7 +366,7 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
-    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympia"); // Initialize graph
     /// dag.update(0, tx2, None); // Update transaction in DAG
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
@@ -408,7 +408,7 @@ impl Graph {
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     ///
-    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympia"); // Initialize graph
     ///
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get(index_of_transaction); // Get a reference to the corresponding node
@@ -479,7 +479,7 @@ impl Graph {
     /// let tx2 = transaction::Transaction::new(1, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize second transaction
     /// let tx2_hash = tx2.hash.clone(); // Clone transaction 2 hash
     ///
-    /// let mut dag = graph::Graph::new(tx, "olympic"); // Initialize graph
+    /// let mut dag = graph::Graph::new(tx, "olympia"); // Initialize graph
     ///
     /// let index_of_transaction = dag.push(tx2, None); // Add transaction to DAG
     /// let node = dag.get_with_hash(tx2_hash); // Get a reference to the corresponding node
@@ -608,7 +608,7 @@ impl Graph {
     ///
     /// let tx = transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     ///
-    /// let dag: graph::Graph = graph::Graph::new(tx, "olympic"); // Initialize graph
+    /// let dag: graph::Graph = graph::Graph::new(tx, "olympia"); // Initialize graph
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn write_to_disk(&self) -> Result<(), sled::Error> {

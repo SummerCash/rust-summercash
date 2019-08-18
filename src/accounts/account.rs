@@ -9,7 +9,7 @@ use std::{fs, io, io::Write}; // Import the io library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::{common, common::address}; // Import the address module
+use super::super::{common, common::address, crypto::blake2}; // Import the address module
 
 /// A SummerCash account.
 #[derive(Serialize, Deserialize)]
@@ -68,7 +68,7 @@ impl Account {
     pub fn write_to_disk_with_name(&self, s: &str) -> io::Result<()> {
         fs::create_dir_all(common::io::keystore_dir())?; // Make keystore directory
 
-        let mut file = fs::File::create(s)?; // Initialize file
+        let mut file = fs::File::create(format!("{}.json", blake2::hash_slice(s.as_bytes()).to_str()))?; // Initialize file
         file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
         Ok(()) // All good!
     }

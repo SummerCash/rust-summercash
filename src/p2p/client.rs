@@ -1,6 +1,6 @@
 use super::super::accounts::account; // Import the account module
-use super::super::core::sys::{config, system};
-use super::super::crypto::blake2; // Import the blake2 hashing module // Import the system module
+use super::super::core::sys::{config, system}; // Import the system module
+use super::super::crypto::blake2; // Import the blake2 hashing module
 
 use libp2p::{identity, PeerId}; // Import the libp2p library
 
@@ -44,7 +44,7 @@ impl Client {
         } else {
             let p2p_account = account::Account::new(); // Generate p2p account
                                                        // Write p2p account to disk
-            match p2p_account.write_to_disk() {
+            match p2p_account.write_to_disk_with_name("p2p_identity") {
                 Ok(_) => {
                     // Check has valid p2p keypair
                     if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
@@ -117,12 +117,12 @@ mod tests {
     fn test_new() {
         let config = config::Config {
             reward_per_gas: BigUint::from_str("10000000000000000000000000000000000000000").unwrap(), // Venezuela style
-            network_name: "olympic".to_owned(),
+            network_name: "olympia".to_owned(),
         }; // Initialize config
 
         config.write_to_disk().unwrap(); // Write config to disk
 
-        let client = Client::new("olympic").unwrap(); // Initialize client
-        assert_eq!(client.runtime.config.network_name, "olympic"); // Ensure client has correct net
+        let client = Client::new("olympia").unwrap(); // Initialize client
+        assert_eq!(client.runtime.config.network_name, "olympia"); // Ensure client has correct net
     }
 }
