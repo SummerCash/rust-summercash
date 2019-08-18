@@ -10,6 +10,6 @@ pub fn synchronize_for_network(network_name: &str) -> Option<config::Config> {
     if bootstrap_peers.len() == 0 {
         None // Nothing to synchronize
     } else {
-        
+        None // TODO: Sync config
     }
 }
