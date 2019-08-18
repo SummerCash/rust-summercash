@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_new_peer_identity() {
-        let peer_identity = Account::new(); // Generate a new accounot
+        let peer_identity = Account::new(); // Generate a new account
         peer_identity
             .write_to_disk_with_name("peer_identity")
             .unwrap(); // Write peer identity to the disk
