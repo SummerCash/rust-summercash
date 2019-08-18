@@ -121,6 +121,14 @@ mod tests {
     use super::*; // Import names from parent module
 
     #[test]
+    fn test_new_peer_identity() {
+        let peer_identity = Account::new(); // Generate a new accounot
+        peer_identity
+            .write_to_disk_with_name("peer_identity")
+            .unwrap(); // Write peer identity to the disk
+    }
+
+    #[test]
     fn test_get_all_accounts() {
         let test_account = Account::new(); // Generate a new account
         test_account.write_to_disk().unwrap(); // Write test account to disk
