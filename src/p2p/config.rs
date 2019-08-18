@@ -1,4 +1,4 @@
-use libp2p::{Multiaddr}; // Import the libp2p library
+use libp2p::Multiaddr; // Import the libp2p library
 
 use super::super::core::sys::config; // Import the config module
 

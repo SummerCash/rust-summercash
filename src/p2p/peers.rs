@@ -1,4 +1,4 @@
-use libp2p::{Multiaddr}; // Import the libp2p library
+use libp2p::Multiaddr; // Import the libp2p library
 
 /// The main SummerCash network name.
 pub static MAIN_NETWORK_NAME: &str = "andromeda";

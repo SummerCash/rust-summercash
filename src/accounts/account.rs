@@ -68,7 +68,10 @@ impl Account {
     pub fn write_to_disk_with_name(&self, s: &str) -> io::Result<()> {
         fs::create_dir_all(common::io::keystore_dir())?; // Make keystore directory
 
-        let mut file = fs::File::create(format!("{}.json", blake2::hash_slice(s.as_bytes()).to_str()))?; // Initialize file
+        let mut file = fs::File::create(format!(
+            "{}.json",
+            blake2::hash_slice(s.as_bytes()).to_str()
+        ))?; // Initialize file
         file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
         Ok(()) // All good!
     }
