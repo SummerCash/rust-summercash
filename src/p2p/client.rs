@@ -1,10 +1,12 @@
-#![feature(async_await)]
-
 use super::super::accounts::account; // Import the account module
 use super::super::core::sys::{config, system}; // Import the system module
 use super::super::crypto::blake2; // Import the blake2 hashing module
 
-use libp2p::{identity, PeerId, Multiaddr, tcp::TcpConfig, websocket::WsConfig, Transport, secio::SecioConfig, identity::Keypair}; // Import the libp2p library
+use std::{io, io::Write}; // Allow libp2p to implement the write() helper method.
+
+use libp2p::{
+    futures::Future, identity, tcp::TcpConfig, Multiaddr, PeerId, Transport,
+}; // Import the libp2p library
 
 /// An error encountered while constructing a p2p client.
 #[derive(Debug, Fail)]
@@ -107,25 +109,21 @@ impl Client {
     }
 }
 
-/// Broadcast a given message to a set of peers.
-pub fn broadcast_message_raw(p2p_keypair: Keypair, message: Vec<u8>, peers: Vec<Multiaddr>) {
-    let secio_upgrade = SecioConfig::new(p2p_keypair); // Initialize secio config
+/// Broadcast a given message to a set of peers. TODO: WebSocket support, secio support
+pub fn broadcast_message_raw(message: Vec<u8>, peers: Vec<Multiaddr>) {
+    // let raw_tcp = TcpConfig::new(); // Initialize tpc config
+    // let secio_upgrade = SecioConfig::new(p2p_keypair); // Initialize secio config
+    // let tcp = raw_tcp.with_upgrade(secio_upgrade); // Use secio
 
-    let raw_tcp = TcpConfig::new(); // Initialize TCP config
-    let tcp = raw_tcp.with_upgrade(secio_upgrade); // Upgrade to secio
+    let tcp = TcpConfig::new(); // Initialize TCP config
 
-    let ws = WsConfig::new(tcp); // Initialize WebSocket transport
-
-    let transport = tcp.or_transport(ws); // Allow for WebSocket fallback
-
-
+    let mut err: Option<io::Error> = None; // Declare error string buffer
 
     // Iterate through peers
     for peer in peers {
-        // Dial peer
-        if let Ok(future_conn) = tcp.dial(peer) {
-            
-        }
+        if let Ok(future_conn) = tcp.clone().dial(peer) {
+            future_conn.and_then(|mut conn| conn.write(message.as_slice()).map(|_| ())).map_err(|e| {err = Some(e);}); // Send message
+        } // Dial peer
     }
 }
 
