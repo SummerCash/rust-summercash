@@ -2,11 +2,12 @@ use super::super::accounts::account; // Import the account module
 use super::super::core::sys::{config, system}; // Import the system module
 use super::super::crypto::blake2; // Import the blake2 hashing module
 
-use std::{io, io::Write}; // Allow libp2p to implement the write() helper method.
+use std::{io::Write, str}; // Allow libp2p to implement the write() helper method.
 
-use libp2p::{
-    futures::Future, identity, tcp::TcpConfig, Multiaddr, PeerId, Transport,
-}; // Import the libp2p library
+use log::warn; // Import logging library
+
+use libp2p::{futures::Future, identity, tcp::TcpConfig, Multiaddr, PeerId, Transport}; // Import the libp2p library
+use tokio::runtime::current_thread::Runtime;
 
 /// An error encountered while constructing a p2p client.
 #[derive(Debug, Fail)]
@@ -110,20 +111,34 @@ impl Client {
 }
 
 /// Broadcast a given message to a set of peers. TODO: WebSocket support, secio support
-pub fn broadcast_message_raw(message: Vec<u8>, peers: Vec<Multiaddr>) {
+pub fn broadcast_message_raw(runtime: Option<Runtime>, message: Vec<u8>, peers: Vec<Multiaddr>) {
     // let raw_tcp = TcpConfig::new(); // Initialize tpc config
     // let secio_upgrade = SecioConfig::new(p2p_keypair); // Initialize secio config
     // let tcp = raw_tcp.with_upgrade(secio_upgrade); // Use secio
 
     let tcp = TcpConfig::new(); // Initialize TCP config
 
-    let mut err: Option<io::Error> = None; // Declare error string buffer
+    let mut dial_futures = vec![]; // Possible errors while dialing
 
-    // Iterate through peers
-    for peer in peers {
-        if let Ok(future_conn) = tcp.clone().dial(peer) {
-            future_conn.and_then(|mut conn| conn.write(message.as_slice()).map(|_| ())).map_err(|e| {err = Some(e);}); // Send message
-        } // Dial peer
+    // Check has provided runtime
+    if let Some(rt) = runtime {
+        // Iterate through peers
+        for peer in peers {
+            if let Ok(future_conn) = tcp.clone().dial(peer.clone()) {
+                dial_futures.push(
+                    future_conn
+                        .and_then(|mut conn| conn.write(message.as_slice()).map(|_| ()))
+                        .map_err(|e| {
+                            warn!("Couldn't dial peer ({})", e); // Log warning
+                        }),
+                ); // Send message
+            } // Dial peer
+        }
+    } else {
+        // Initialize a new runtime
+        if let Ok(rt) = Runtime::new() {
+            broadcast_message_raw(Some(rt), message, peers); // Broadcast message
+        }
     }
 }
 
