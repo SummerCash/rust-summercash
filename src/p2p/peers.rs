@@ -1,17 +1,5 @@
 use libp2p::Multiaddr; // Import the libp2p library
 
-/// The main SummerCash network name.
-pub static MAIN_NETWORK_NAME: &str = "andromeda";
-
-/// The stable public SummerCash test network name.
-pub static PUBLIC_TEST_NETWORK_NAME: &str = "vela";
-
-/// The bleeding-edge SummerCash network name.
-pub static DEV_TEST_NETWORK_NAME: &str = "virgo";
-
-/// The local SummerCash test network name.
-pub static LOCAL_TEST_NETWORK_NAME: &str = "olympia";
-
 /// Get a list of bootstrap peers for a particular network.
 pub fn get_network_bootstrap_peers(network_name: &str) -> Vec<Multiaddr> {
     match network_name {
@@ -44,10 +32,12 @@ fn get_multiaddr(addr_str: &str) -> Multiaddr {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::network;
+
     #[test]
     fn test_get_network_bootstrap_nodes() {
         let main_network_boot_nodes: Vec<Multiaddr> =
-            get_network_bootstrap_peers(MAIN_NETWORK_NAME); // Get main network peers
+            get_network_bootstrap_peers(network::MAIN_NETWORK_NAME); // Get main network peers
         assert_eq!(
             *main_network_boot_nodes.get(0).unwrap(),
             get_multiaddr("/ip4/108.41.124.60/tcp/2048")
