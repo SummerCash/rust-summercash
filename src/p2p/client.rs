@@ -6,8 +6,9 @@ use std::{io::Write, str}; // Allow libp2p to implement the write() helper metho
 
 use log::warn; // Import logging library
 
+use futures::future::lazy;
 use libp2p::{futures::Future, identity, tcp::TcpConfig, Multiaddr, PeerId, Transport}; // Import the libp2p library
-use tokio::runtime::current_thread::Runtime;
+use tokio;
 
 /// An error encountered while constructing a p2p client.
 #[derive(Debug, Fail)]
@@ -111,35 +112,30 @@ impl Client {
 }
 
 /// Broadcast a given message to a set of peers. TODO: WebSocket support, secio support
-pub fn broadcast_message_raw(runtime: Option<Runtime>, message: Vec<u8>, peers: Vec<Multiaddr>) {
+pub fn broadcast_message_raw(message: Vec<u8>, peers: Vec<Multiaddr>) {
     // let raw_tcp = TcpConfig::new(); // Initialize tpc config
     // let secio_upgrade = SecioConfig::new(p2p_keypair); // Initialize secio config
     // let tcp = raw_tcp.with_upgrade(secio_upgrade); // Use secio
 
-    let tcp = TcpConfig::new(); // Initialize TCP config
-
-    let mut dial_futures = vec![]; // Possible errors while dialing
-
-    // Check has provided runtime
-    if let Some(rt) = runtime {
-        // Iterate through peers
+    tokio::run(lazy(move || {
+        let tcp = TcpConfig::new(); // Initialize TCP config
+                                    // Iterate through peers
         for peer in peers {
+            let msg = message.clone(); // Clone message temporarily
+
             if let Ok(future_conn) = tcp.clone().dial(peer.clone()) {
-                dial_futures.push(
+                tokio::spawn(
                     future_conn
-                        .and_then(|mut conn| conn.write(message.as_slice()).map(|_| ()))
-                        .map_err(|e| {
-                            warn!("Couldn't dial peer ({})", e); // Log warning
+                        .and_then(move |mut conn| conn.write(msg.as_slice()).map(|_| ()))
+                        .map_err(move |e| {
+                            warn!("Couldn't dial peer {} ({})", peer, e); // Log warning
                         }),
                 ); // Send message
             } // Dial peer
         }
-    } else {
-        // Initialize a new runtime
-        if let Ok(rt) = Runtime::new() {
-            broadcast_message_raw(Some(rt), message, peers); // Broadcast message
-        }
-    }
+
+        Ok(()) // Everything's good!
+    })); // Run message broadcast
 }
 
 #[cfg(test)]
