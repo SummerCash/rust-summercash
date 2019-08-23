@@ -31,8 +31,8 @@ fn get_multiaddr(addr_str: &str) -> Multiaddr {
 
 #[cfg(test)]
 mod tests {
+    use super::super::network;
     use super::*;
-    use super::network;
 
     #[test]
     fn test_get_network_bootstrap_nodes() {

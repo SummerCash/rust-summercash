@@ -1,14 +1,16 @@
 use super::super::accounts::account; // Import the account module
 use super::super::core::sys::{config, system}; // Import the system module
-use super::super::crypto::blake2; // Import the blake2 hashing module
+use super::super::crypto::blake2;
+use super::network; // Import the network module // Import the blake2 hashing module
 
-use std::{io::Write, str}; // Allow libp2p to implement the write() helper method.
+use std::str; // Allow libp2p to implement the write() helper method.
 
 use log::warn; // Import logging library
 
 use futures::future::lazy;
-use libp2p::{futures::Future, identity, tcp::TcpConfig, Multiaddr, PeerId, Transport}; // Import the libp2p library
-use tokio;
+use libp2p::{futures::{Future, Sink}, identity, tcp::TcpConfig, websocket::WsConfig, yamux::Config, Multiaddr, PeerId, Transport, simple::SimpleProtocol}; // Import the libp2p library
+
+use {tokio, tokio::codec::{Framed, BytesCodec}}; // Import tokio
 
 /// An error encountered while constructing a p2p client.
 #[derive(Debug, Fail)]
@@ -105,33 +107,42 @@ impl Client {
     ) -> Client {
         Client {
             runtime: system::System::new(cfg), // Set runtime
-            voting_accounts: voting_accounts,  // Set voters
-            peer_id: peer_id,                  // Set peer id
+            voting_accounts,  // Set voters
+            peer_id,                  // Set peer id
         }
     }
 }
 
 /// Broadcast a given message to a set of peers. TODO: WebSocket support, secio support
-pub fn broadcast_message_raw(message: Vec<u8>, peers: Vec<Multiaddr>) {
+pub fn broadcast_message_raw(
+    message: Vec<u8>,
+    message_protocol: &str,
+    network: network::Network,
+    peers: Vec<Multiaddr>,
+) {
     // let raw_tcp = TcpConfig::new(); // Initialize tpc config
     // let secio_upgrade = SecioConfig::new(p2p_keypair); // Initialize secio config
     // let tcp = raw_tcp.with_upgrade(secio_upgrade); // Use secio
 
     tokio::run(lazy(move || {
-        let tcp = TcpConfig::new(); // Initialize TCP config
-                                    // Iterate through peers
-        for peer in peers {
-            let msg = message.clone(); // Clone message temporarily
+        let tcp = TcpConfig::new().or_transport(WsConfig::new(TcpConfig::new())).with_upgrade(Config::default()); // Initialize TCP/WS config
+        // let tcp = raw_tcp.with_upgrade(SimpleProtocol::new(network.derive_p2p_protocol_path(message_protocol), |socket| {
+        //     Ok(Framed::new(socket, BytesCodec::new())) // Return delimited
+        // })); // Use network protocol
 
-            if let Ok(future_conn) = tcp.clone().dial(peer.clone()) {
-                tokio::spawn(
-                    future_conn
-                        .and_then(move |mut conn| conn.write(msg.as_slice()).map(|_| ()))
-                        .map_err(move |e| {
-                            warn!("Couldn't dial peer {} ({})", peer, e); // Log warning
-                        }),
-                ); // Send message
-            } // Dial peer
+        // Iterate through peers
+        for peer in peers { 
+            tokio::spawn(lazy(move || {
+                let msg = message.clone(); // Clone message temporarily
+
+                if let Ok(future_conn) = tcp.clone().dial(peer.clone()) {
+                    let message_send_future = future_conn.and_then(move |mut conn| conn.send(msg.as_slice().into()).map(|_| ())); // We're going to send a message, but not yet
+
+                    let _ = tokio::run(message_send_future); // Send message
+                } // Dial peer
+
+                Ok(()) // Yup
+            }));
         }
 
         Ok(()) // Everything's good!
