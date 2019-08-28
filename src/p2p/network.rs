@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize}; // Import serde serialization
+
 /// The main SummerCash network name.
 pub static MAIN_NETWORK_NAME: &str = "andromeda";
 
@@ -11,6 +13,7 @@ pub static DEV_TEST_NETWORK_NAME: &str = "virgo";
 pub static LOCAL_TEST_NETWORK_NAME: &str = "olympia";
 
 /// A SummerCash network.
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Network {
     /// The main SummerCash network.
     MainNetwork,
