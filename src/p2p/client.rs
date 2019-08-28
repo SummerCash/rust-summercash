@@ -1,16 +1,28 @@
 use super::super::accounts::account; // Import the account module
 use super::super::core::sys::{config, system}; // Import the system module
-use super::super::crypto::blake2;
-use super::{network, message}; // Import the network module // Import the blake2 hashing module
+use super::super::crypto::blake2; // Import the blake2 hashing module
+use super::{message, network}; // Import the network module
 
-use std::str; // Allow libp2p to implement the write() helper method.
+use std::{io, str}; // Allow libp2p to implement the write() helper method.
 
-use futures::future::lazy;
-use libp2p::{futures::{Future}, identity, tcp::TcpConfig, websocket::WsConfig, secio::{SecioConfig, SecioOutput}, Multiaddr, PeerId, Transport}; // Import the libp2p library
+use libp2p::{
+    core::{either, transport::upgrade::TransportUpgradeError},
+    futures::Future,
+    identity,
+    secio::{SecioConfig, SecioError, SecioOutput},
+    tcp::TcpConfig,
+    websocket::{error, WsConfig},
+    Multiaddr, PeerId, Transport,
+}; // Import the libp2p library
 
 use tokio; // Import tokio
 
 use bincode; // Import bincode
+
+use log::warn; // Import logging
+
+/// The global string representation for an invalid peer id.
+pub static INVALID_PEER_ID_STRING: &str = "INVALID_PEER_ID";
 
 /// An error encountered while constructing a p2p client.
 #[derive(Debug, Fail)]
@@ -107,8 +119,8 @@ impl Client {
     ) -> Client {
         Client {
             runtime: system::System::new(cfg), // Set runtime
-            voting_accounts,  // Set voters
-            peer_id,                  // Set peer id
+            voting_accounts,                   // Set voters
+            peer_id,                           // Set peer id
         }
     }
 }
@@ -122,27 +134,77 @@ pub fn broadcast_message_raw(
 ) {
     // Serialize message
     if let Ok(serialized_message) = bincode::serialize(&message) {
-        tokio::run(lazy(move || {
-            let tcp = TcpConfig::new().or_transport(WsConfig::new(TcpConfig::new())).with_upgrade(SecioConfig::new(keypair))
+        let tcp = TcpConfig::new()
+            .or_transport(WsConfig::new(TcpConfig::new()))
+            .with_upgrade(SecioConfig::new(keypair))
             .map(|out: SecioOutput<_>, _| out.stream); // Initialize TCP/WS config
 
-            // Iterate through peers
-            for peer in peers { 
-                tokio::spawn(lazy(move || {
-                    let msg = message.clone(); // Clone message temporarily
+        let dial_errors: Vec<
+            TransportUpgradeError<
+                either::EitherError<io::Error, error::Error<std::io::Error>>,
+                SecioError,
+            >,
+        > = vec![]; // Empty vec of errors
 
-                    if let Ok(future_conn) = tcp.clone().dial(peer.clone()) {
-                        let message_send_future = future_conn.and_then(move |mut conn| tokio::io::write_all(conn, serialized_message.as_slice().into())); // We're going to send a message, but not yet
+        let mut pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
 
-                        let _ = tokio::run(message_send_future); // Send message
-                    } // Dial peer
+        // Iterate through peers
+        for peer in peers {
+            let msg = message.clone(); // Clone message temporarily
 
-                    Ok(()) // Yup
-                }));
-            }
+            if let Ok(future_conn) = tcp.clone().dial(peer.clone()) {
+                let message_send_future = future_conn
+                    .map_err(|e| {
+                        warn!(
+                            "Encountered error while dialing peer {}: {}",
+                            peer.to_string(),
+                            e
+                        ); // Log error
 
-            Ok(()) // Everything's good!
-        })); // Run message broadcast
+                        dial_errors.push(e); // Append error to function-scoped errors buffer
+
+                        // Handle different errors
+                        match e {
+                            TransportUpgradeError::Transport(e) => match e {
+                                either::EitherError::A(a) => a,
+                                either::EitherError::B(b) => match b {
+                                    error::Error::Transport(e) => e,
+                                    error::Error::Tls(e) => io::Error::from(io::ErrorKind::Other),
+                                    error::Error::Handshake(e) => {
+                                        io::Error::from(io::ErrorKind::ConnectionAborted)
+                                    }
+                                    error::Error::TooManyRedirects => {
+                                        io::Error::from(io::ErrorKind::TimedOut)
+                                    }
+                                    error::Error::InvalidMultiaddr(addr) => {
+                                        io::Error::from(io::ErrorKind::AddrNotAvailable)
+                                    }
+                                    error::Error::InvalidRedirectLocation => {
+                                        io::Error::from(io::ErrorKind::NotFound)
+                                    }
+                                    error::Error::Base(e) => io::Error::from(io::ErrorKind::Other),
+                                },
+                            },
+                            TransportUpgradeError::Upgrade(e) => match e {
+                                _ => io::Error::from(io::ErrorKind::InvalidData),
+                            },
+                        }
+                    })
+                    .and_then(move |mut conn| {
+                        tokio::io::write_all(conn, serialized_message.as_slice().into()) // Write to connection
+                    })
+                    .map_err(|e| {
+                        warn!(
+                            "Encountered error while sending message '{}' to peer {}: {}",
+                            String::from_utf8_lossy(msg.data.as_slice()),
+                            peer.to_string(),
+                            e
+                        )
+                    }); // We're going to send a message, but not yet
+
+                pool.spawn(message_send_future); // Run in pool
+            } // Dial peer
+        }
     }
 }
 
