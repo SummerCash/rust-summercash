@@ -5,10 +5,14 @@ use super::message; // Import the network module
 
 use futures::lazy; // Allow for lazy futures
 
-use std::{{io, io::Write}, str}; // Allow libp2p to implement the write() helper method.
+use std::{
+    str,
+    {io, io::Write},
+}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    futures::Future, identity, tcp::TcpConfig, websocket::WsConfig, Multiaddr, PeerId, Transport, TransportError,
+    futures::Future, identity, tcp::TcpConfig, websocket::WsConfig, Multiaddr, PeerId, Transport,
+    TransportError,
 }; // Import the libp2p library
 
 use tokio; // Import tokio
@@ -188,11 +192,25 @@ pub fn broadcast_message_raw(
         }
     }
 
+    let num_ws_peers = ws_peers.len(); // Get number of WebSockets peers
+    let num_tcp_peers = tcp_peers.len(); // Get number of TCP peers
+
+    let mut ws_err: Result<(), CommunicationError> = Ok(()); // Declare a buffer for ws errors
+    let mut tcp_err: Result<(), CommunicationError> = Ok(()); // Declare a buffer for tcp errors
+
+    // Check has any ws peers
+    if ws_peers.len() > 0 {
+        ws_err = broadcast_message_raw_ws(message.clone(), ws_peers); // Broadcast over WS
+    }
     // Check any tcp peers
     if tcp_peers.len() > 0 {
-        broadcast_message_raw_tcp(message, peers) // Broadcast over TCP
+        tcp_err = broadcast_message_raw_tcp(message, tcp_peers); // Broadcast over TCP
+    }
+
+    if num_ws_peers > num_tcp_peers {
+        ws_err // Return WebSockets error
     } else {
-        broadcast_message_raw_ws(message, peers) // Broadcast over WS
+        tcp_err // Return TCP error
     }
 }
 
