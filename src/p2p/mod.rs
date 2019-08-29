@@ -1,5 +1,5 @@
 pub mod client; // Export the client module
 pub mod config; // Export the config sync module
-pub mod message;
+pub mod message; // Export the message module
 pub mod network; // Export the network module
-pub mod peers; // Export the peer discovery module // Export the message module
+pub mod peers; // Export the peer discovery module

@@ -13,7 +13,7 @@ pub static DEV_TEST_NETWORK_NAME: &str = "virgo";
 pub static LOCAL_TEST_NETWORK_NAME: &str = "olympia";
 
 /// A SummerCash network.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum Network {
     /// The main SummerCash network.
     MainNetwork,
@@ -31,9 +31,29 @@ impl Network {
     pub fn to_str(&self) -> &str {
         match *self {
             Network::MainNetwork => MAIN_NETWORK_NAME,
-            Network::PublicTestNetwork => "vela",
-            Network::DevTestNetwork => "virgo",
-            Network::LocalTestNetwork => "olympia",
+            Network::PublicTestNetwork => PUBLIC_TEST_NETWORK_NAME,
+            Network::DevTestNetwork => DEV_TEST_NETWORK_NAME,
+            Network::LocalTestNetwork => LOCAL_TEST_NETWORK_NAME,
         } // Handle different networks
+    }
+}
+
+/// Implement string to network conversion.
+impl From<&str> for Network {
+    /// Convert a given string to a network.
+    fn from(s: &str) -> Network {
+        // Handle different network names
+        match s {
+            // The main net
+            "andromeda" => Network::MainNetwork,
+            // The public test net
+            "vela" => Network::PublicTestNetwork,
+            // The dev test net
+            "virgo" => Network::DevTestNetwork,
+            // A local test net
+            "olympia" => Network::LocalTestNetwork,
+            // Let's assume this is a local test net, since it doesn't have a proper name
+            _ => Network::LocalTestNetwork,
+        }
     }
 }

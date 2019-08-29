@@ -7,7 +7,7 @@ use futures::lazy; // Allow for lazy futures
 
 use std::{
     str,
-    {io, io::Write},
+    {io, io::{Write, Read}},
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
@@ -171,6 +171,179 @@ impl Client {
             voting_accounts,                   // Set voters
             peer_id,                           // Set peer id
         }
+    }
+}
+
+/// Broadcast a given message to a set of peers, and return the response.
+pub fn broadcast_message_raw_with_response(
+    message: message::Message,
+    peers: Vec<Multiaddr>,
+) -> Result<Vec<u8>, CommunicationError> {
+    let mut ws_peers: Vec<Multiaddr> = vec![]; // Init WebSocket peers list
+    let mut tcp_peers: Vec<Multiaddr> = vec![]; // Init TCP peers list
+
+    // Iterate through peers
+    for peer in peers.clone() {
+        // Check is WebSockets peer
+        if peer.to_string().contains("/ws") {
+            ws_peers.push(peer); // Append peer
+        } else {
+            tcp_peers.push(peer); // Append peer
+        }
+    }
+
+    let num_ws_peers = ws_peers.len(); // Get number of WebSockets peers
+    let num_tcp_peers = tcp_peers.len(); // Get number of TCP peers
+
+    let mut ws_resp: Result<Vec<u8>, CommunicationError> = Ok(vec![]); // Declare a buffer for ws errors
+    let mut tcp_resp: Result<Vec<u8>, CommunicationError> = Ok(vec![]); // Declare a buffer for tcp errors
+
+    // Check has any ws peers
+    if ws_peers.len() > 0 {
+        ws_resp = broadcast_message_raw_ws_with_response(message.clone(), ws_peers); // Broadcast over WS
+    }
+    // Check any tcp peers
+    if tcp_peers.len() > 0 {
+        tcp_resp = broadcast_message_raw_tcp_with_response(message, tcp_peers); // Broadcast over TCP
+    }
+
+    if num_ws_peers > num_tcp_peers {
+        ws_resp // Return WebSockets response
+    } else {
+        tcp_resp // Return TCP error
+    }
+}
+
+/// Broadcast a particular message over tcp.
+fn broadcast_message_raw_tcp_with_response(
+    message: message::Message,
+    peers: Vec<Multiaddr>,
+) -> Result<Vec<u8>, CommunicationError> {
+    let serialized_message = bincode::serialize(&message)?; // Serialize message
+
+    let tcp = TcpConfig::new(); // Initialize TCP config
+
+    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
+    let mut dial_errors: i32 = 0; // Initialize num communication errors list
+
+    let mut responses: Vec<Vec<u8>> = vec![]; // All responses
+
+    let num_peers = peers.len(); // Get number of peers for later
+
+    // Iterate through peers
+    for peer in peers {
+        // Dial peer
+        if let Ok(conn_future) = tcp.clone().dial(peer.clone()) {
+            let msg = serialized_message.clone(); // Clone message
+
+            let mut did_connect = false; // We'll set this later if we can connect to the peer
+            let mut response = vec![]; // We'll set this later if we can get a response from the peer
+
+            let message_send_future = conn_future
+                .map_err(|e| {
+                    e // Return error
+                })
+                .and_then(|conn| {
+                    did_connect = true; // We've successfully connected to a peer!
+
+                    tokio::io::write_all(conn, msg.as_slice().into()) // Write to connection
+                })
+                .and_then(|(conn, _)| {
+                    conn.read_to_end(&mut response) // Read into response buffer
+                })
+                .map_err(move |e| {
+                    e // Return error
+                });
+
+            let _ = pool.spawn(lazy(move || {
+                // Initialize runtime
+                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
+                    let _ = rt.block_on(message_send_future); // Send it!
+                }
+
+                // Check for any errors at all
+                if !did_connect {
+                    dial_errors += 1; // One more comm error to worry about
+                }
+
+                responses.push(response); // Add response to set of all responses
+
+                Ok(()) // Done!
+            })); // Actually send the message
+        }
+    }
+
+    pool.shutdown().wait()?; // Shutdown pool
+
+    // Check failed to dial more than half of peers
+    if dial_errors as f32 >= 0.5 * num_peers as f32 {
+        Err(CommunicationError::MajorityDidNotReceive) // Return some error
+    } else {
+        Ok(()) // Done!
+    }
+}
+
+/// Broadcast a particular message over WebSockets.
+fn broadcast_message_raw_ws_with_response(
+    message: message::Message,
+    peers: Vec<Multiaddr>,
+) -> Result<Vec<u8>, CommunicationError> {
+    let serialized_message = bincode::serialize(&message)?; // Serialize message
+
+    let ws = WsConfig::new(TcpConfig::new()); // Initialize WS config
+
+    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
+    let mut dial_errors: i32 = 0; // Initialize num communication errors list
+
+    let num_peers = peers.len(); // Get number of peers for later
+
+    // Iterate through peers
+    for peer in peers {
+        // Dial peer
+        if let Ok(conn_future) = ws.clone().dial(peer.clone()) {
+            let msg = serialized_message.clone(); // Clone message
+
+            let mut did_send = true; // We'll set this later if we encounter an error sending a message
+            let mut did_connect = false; // We'll set this later if we can connect to the peer
+
+            let message_send_future = conn_future
+                .map_err(|_e| {
+                    io::Error::from(io::ErrorKind::BrokenPipe) // Return error lol
+                })
+                .and_then(move |mut conn| {
+                    did_connect = true; // We've successfully connected to a peer!
+
+                    conn.write_all(msg.as_slice().into()).map(|_| ()) // Write to connection
+                })
+                .map_err(move |e| {
+                    did_send = false; // Set send error
+
+                    e // Return error
+                });
+
+            let _ = pool.spawn(lazy(move || {
+                // Initialize runtime
+                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
+                    let _ = rt.block_on(message_send_future); // Send it!
+                }
+
+                // Check for any errors at all
+                if !did_connect || !did_send {
+                    dial_errors += 1; // One more comm error to worry about
+                }
+
+                Ok(()) // Done!
+            })); // Actually send the message
+        }
+    }
+
+    pool.shutdown().wait()?; // Shutdown pool
+
+    // Check failed to dial more than half of peers
+    if dial_errors as f32 >= 0.5 * num_peers as f32 {
+        Err(CommunicationError::MajorityDidNotReceive) // Return some error
+    } else {
+        Ok(()) // Done!
     }
 }
 
