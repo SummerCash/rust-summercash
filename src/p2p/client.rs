@@ -6,14 +6,20 @@ use super::message; // Import the network module
 use futures::lazy; // Allow for lazy futures
 
 use std::{
-    str,
-    {io, io::{Write, Read}},
-    collections,
+    collections, str,
+    sync::{Arc, Mutex},
+    {
+        io,
+        io::{Read, Write},
+    },
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    futures::Future, identity, tcp::{TcpConfig, TcpTransStream}, websocket::WsConfig, Multiaddr, PeerId, Transport,
-    TransportError,
+    futures::Future,
+    identity,
+    tcp::{TcpConfig, TcpTransStream},
+    websocket::WsConfig,
+    Multiaddr, PeerId, Transport, TransportError,
 }; // Import the libp2p library
 
 use tokio; // Import tokio
@@ -52,6 +58,8 @@ pub enum CommunicationError {
     MajorityDidNotReceive,
     #[fail(display = "an unknown, unexpected error occurred")]
     Unknown,
+    #[fail(display = "an operation on some mutex failed")]
+    MutexFailure,
 }
 
 /// Implement conversions from a bincode error for the CommunicationError enum.
@@ -227,7 +235,7 @@ fn broadcast_message_raw_tcp_with_response(
     let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
     let mut dial_errors: i32 = 0; // Initialize num communication errors list
 
-    let mut responses: Vec<Vec<u8>> = vec![]; // All responses
+    let responses = Arc::new(Mutex::new(Vec::new())); // All responses
 
     let num_peers = peers.len(); // Get number of peers for later
 
@@ -238,7 +246,8 @@ fn broadcast_message_raw_tcp_with_response(
             let msg = serialized_message.clone(); // Clone message
 
             let mut did_connect = false; // We'll set this later if we can connect to the peer
-            let mut response: &[u8] = &[0;0]; // We'll set this later if we can get a response from the peer
+
+            let responses_clone = responses.clone(); // Clone responses
 
             let message_send_future = conn_future
                 .map_err(|e| {
@@ -250,11 +259,18 @@ fn broadcast_message_raw_tcp_with_response(
                     tokio::io::write_all(conn, msg) // Write to connection
                 })
                 .and_then(move |(mut conn, _)| {
-                    let mut buffer = vec![]; // Allocate a temporary buffer
+                    let mut buf: Vec<u8> = vec![]; // Initialize empty buffer
 
-                    conn.read_to_end(&mut buffer); // Read into response buffer
+                    // Read into response buffer
+                    match conn.read_to_end(&mut buf) {
+                        Err(_e) => did_connect = false,
+                        _ => (),
+                    };
 
-                    response = buffer.as_slice(); // Set response
+                    // Lock responses
+                    if let Ok(mut_responses) = responses_clone.lock() {
+                        mut_responses.clone().push(buf); // Add to all responses
+                    }
 
                     Ok(()) // Done!
                 })
@@ -273,8 +289,6 @@ fn broadcast_message_raw_tcp_with_response(
                     dial_errors += 1; // One more comm error to worry about
                 }
 
-                responses.push(Vec::from(response)); // Add response to set of all responses
-
                 Ok(()) // Done!
             })); // Actually send the message
         }
@@ -286,31 +300,39 @@ fn broadcast_message_raw_tcp_with_response(
     if dial_errors as f32 >= 0.5 * num_peers as f32 {
         Err(CommunicationError::MajorityDidNotReceive) // Return some error
     } else {
-        let response_frequencies: collections::HashMap<Vec<u8>, i16> = collections::HashMap::new(); // Initialize response frequencies map
-        let most_common_response = responses[0]; // We'll set this later when we determine that a particular response is more common
+        let mut response_frequencies: collections::HashMap<Vec<u8>, i16> =
+            collections::HashMap::new(); // Initialize response frequencies map
 
-        // Iterate through responses
-        for response in responses {
-            // Check response is already in frequencies map
-            if response_frequencies.contains_key(&response) {
-                // Get frequency of response so we can increment it
-                if let Some(frequency) = response_frequencies.get_mut(&response) {
+        // Do some mutex stuff first
+        if let Ok(responses) = responses.lock() {
+            // Get first item
+            if let Some(most_common_response_ref) = responses.get(0) {
+                let mut most_common_response = (*most_common_response_ref).clone(); // Clone most common response
+                let mut most_common_response_frequency = 0; // Frequency of most common response
+                                                            // Iterate through responses
+                for response in responses.iter() {
+                    let frequency = response_frequencies.entry(response.clone()).or_insert(0); // Get frequency entry
                     *frequency += 1; // Increment frequency
 
-                    // Get frequency of most common response
-                    if let Some(most_common_response_frequency) = response_frequencies.get(&most_common_response) {
-                        // Check is more common than most common
-                        if *frequency > *most_common_response_frequency {
-                            most_common_response = response; // Set most common response
+                    // Check is most common response
+                    if *response == most_common_response {
+                        most_common_response_frequency += 1; // Increment frequency
+                    } else {
+                        // Check has highest frequency
+                        if *frequency > most_common_response_frequency {
+                            most_common_response = response.clone(); // Set most common response
+                            most_common_response_frequency = *frequency; // Set most common response frequency
                         }
                     }
                 }
+
+                Ok(most_common_response) // Done!
             } else {
-                response_frequencies.insert(response, 1); // Frequency of 1, since this is our first encounter
+                Err(CommunicationError::Unknown) // Idk
             }
+        } else {
+            Err(CommunicationError::MutexFailure) // Let the caller know we're bad at asynchronous rust
         }
-        
-        Ok(most_common_response) // Done!
     }
 }
 
@@ -326,7 +348,7 @@ fn broadcast_message_raw_ws_with_response(
     let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
     let mut dial_errors: i32 = 0; // Initialize num communication errors list
 
-    let mut responses: Vec<Vec<u8>> = vec![]; // All responses
+    let responses = Arc::new(Mutex::new(Vec::new())); // All responses
 
     let num_peers = peers.len(); // Get number of peers for later
 
@@ -337,19 +359,31 @@ fn broadcast_message_raw_ws_with_response(
             let msg = serialized_message.clone(); // Clone message
 
             let mut did_connect = false; // We'll set this later if we can connect to the peer
-            let mut response = vec![]; // We'll set this later if we can get a response from the peer
+
+            let responses_clone = responses.clone(); // Clone responses
 
             let message_send_future = conn_future
                 .map_err(|_e| {
-                    io::Error::from(io::ErrorKind::BrokenPipe) // Return error lol
+                    io::Error::from(io::ErrorKind::BrokenPipe) // Lol
                 })
-                .and_then(|conn| {
+                .and_then(move |conn| {
                     did_connect = true; // We've successfully connected to a peer!
 
-                    tokio::io::write_all(conn, msg.as_slice()) // Write to connection
+                    tokio::io::write_all(conn, msg) // Write to connection
                 })
-                .and_then(|(conn, _)| {
-                    conn.read_to_end(&mut response); // Read into response buffer
+                .and_then(move |(mut conn, _)| {
+                    let mut buf: Vec<u8> = vec![]; // Initialize empty buffer
+
+                    // Read into response buffer
+                    match conn.read_to_end(&mut buf) {
+                        Err(_e) => did_connect = false,
+                        _ => (),
+                    };
+
+                    // Lock responses
+                    if let Ok(mut_responses) = responses_clone.lock() {
+                        mut_responses.clone().push(buf); // Add to all responses
+                    }
 
                     Ok(()) // Done!
                 })
@@ -368,8 +402,6 @@ fn broadcast_message_raw_ws_with_response(
                     dial_errors += 1; // One more comm error to worry about
                 }
 
-                responses.push(response); // Add response to set of all responses
-
                 Ok(()) // Done!
             })); // Actually send the message
         }
@@ -381,31 +413,39 @@ fn broadcast_message_raw_ws_with_response(
     if dial_errors as f32 >= 0.5 * num_peers as f32 {
         Err(CommunicationError::MajorityDidNotReceive) // Return some error
     } else {
-        let response_frequencies: collections::HashMap<Vec<u8>, i16> = collections::HashMap::new(); // Initialize response frequencies map
-        let most_common_response = responses[0]; // We'll set this later when we determine that a particular response is more common
+        let mut response_frequencies: collections::HashMap<Vec<u8>, i16> =
+            collections::HashMap::new(); // Initialize response frequencies map
 
-        // Iterate through responses
-        for response in responses {
-            // Check response is already in frequencies map
-            if response_frequencies.contains_key(&response) {
-                // Get frequency of response so we can increment it
-                if let Some(frequency) = response_frequencies.get_mut(&response) {
+        // Do some mutex stuff first
+        if let Ok(responses) = responses.lock() {
+            // Get first item
+            if let Some(most_common_response_ref) = responses.get(0) {
+                let mut most_common_response = (*most_common_response_ref).clone(); // Clone most common response
+                let mut most_common_response_frequency = 0; // Frequency of most common response
+                                                            // Iterate through responses
+                for response in responses.iter() {
+                    let frequency = response_frequencies.entry(response.clone()).or_insert(0); // Get frequency entry
                     *frequency += 1; // Increment frequency
 
-                    // Get frequency of most common response
-                    if let Some(most_common_response_frequency) = response_frequencies.get(&most_common_response) {
-                        // Check is more common than most common
-                        if *frequency > *most_common_response_frequency {
-                            most_common_response = response; // Set most common response
+                    // Check is most common response
+                    if *response == most_common_response {
+                        most_common_response_frequency += 1; // Increment frequency
+                    } else {
+                        // Check has highest frequency
+                        if *frequency > most_common_response_frequency {
+                            most_common_response = response.clone(); // Set most common response
+                            most_common_response_frequency = *frequency; // Set most common response frequency
                         }
                     }
                 }
+
+                Ok(most_common_response) // Done!
             } else {
-                response_frequencies.insert(response, 1); // Frequency of 1, since this is our first encounter
+                Err(CommunicationError::Unknown) // Idk
             }
+        } else {
+            Err(CommunicationError::MutexFailure) // Let the caller know we're bad at asynchronous rust
         }
-        
-        Ok(most_common_response) // Done!
     }
 }
 

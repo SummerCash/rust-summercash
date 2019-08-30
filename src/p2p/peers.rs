@@ -13,8 +13,6 @@ pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<Multiaddr> 
         network::Network::DevTestNetwork => vec![get_multiaddr("/ip4/108.41.124.60/tcp/8192")],
         // This should be a completely local test network
         network::Network::LocalTestNetwork => vec![],
-        // Some custom network
-        _ => vec![],
     }
 }
 
