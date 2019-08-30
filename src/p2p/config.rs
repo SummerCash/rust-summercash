@@ -2,7 +2,7 @@ use libp2p::Multiaddr; // Import the libp2p library
 
 use bincode; // Import the bincode serialization library
 
-use super::{super::core::sys::config, message, network, client}; // Import the config, message modules
+use super::{super::core::sys::config, client, message, network}; // Import the config, message modules
 
 /// Download a copy of the configuration file for the corresponding network.
 pub fn synchronize_for_network(network: network::Network) -> Option<config::Config> {
@@ -14,7 +14,9 @@ pub fn synchronize_for_network(network: network::Network) -> Option<config::Conf
         let message = message::Message::new(header, vec![]); // Initialize message
 
         // Let's request a serialized network config from the above bootstrap peers
-        if let Ok(config_bytes) = client::broadcast_message_raw_with_response(message, bootstrap_peers) {
+        if let Ok(config_bytes) =
+            client::broadcast_message_raw_with_response(message, bootstrap_peers)
+        {
             // Deserialize the config
             if let Ok(config) = bincode::deserialize(config_bytes.as_slice()) {
                 Some(config) // Return the config

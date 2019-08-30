@@ -37,9 +37,9 @@ impl Header {
     /// Initialize a new header with the given parameters.
     pub fn new(param_name: &str, method: Method, networks: Vec<network::Network>) -> Header {
         Header {
-            method: method,         // Set method
+            method: method,                    // Set method
             param_name: param_name.to_owned(), // Set parameter name
-            networks: networks,     // Set networks
+            networks: networks,                // Set networks
         } // Return initialized header
     }
 }
