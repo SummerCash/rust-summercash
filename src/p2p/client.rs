@@ -8,10 +8,11 @@ use futures::lazy; // Allow for lazy futures
 use std::{
     str,
     {io, io::{Write, Read}},
+    collections,
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    futures::Future, identity, tcp::TcpConfig, websocket::WsConfig, Multiaddr, PeerId, Transport,
+    futures::Future, identity, tcp::{TcpConfig, TcpTransStream}, websocket::WsConfig, Multiaddr, PeerId, Transport,
     TransportError,
 }; // Import the libp2p library
 
@@ -237,19 +238,120 @@ fn broadcast_message_raw_tcp_with_response(
             let msg = serialized_message.clone(); // Clone message
 
             let mut did_connect = false; // We'll set this later if we can connect to the peer
-            let mut response = vec![]; // We'll set this later if we can get a response from the peer
+            let mut response: &[u8] = &[0;0]; // We'll set this later if we can get a response from the peer
 
             let message_send_future = conn_future
                 .map_err(|e| {
                     e // Return error
                 })
+                .and_then(move |conn: TcpTransStream| {
+                    did_connect = true; // We've successfully connected to a peer!
+
+                    tokio::io::write_all(conn, msg) // Write to connection
+                })
+                .and_then(move |(mut conn, _)| {
+                    let mut buffer = vec![]; // Allocate a temporary buffer
+
+                    conn.read_to_end(&mut buffer); // Read into response buffer
+
+                    response = buffer.as_slice(); // Set response
+
+                    Ok(()) // Done!
+                })
+                .map_err(move |e| {
+                    e // Return error
+                });
+
+            let _ = pool.spawn(lazy(move || {
+                // Initialize runtime
+                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
+                    let _ = rt.block_on(message_send_future); // Send it!
+                }
+
+                // Check for any errors at all
+                if !did_connect {
+                    dial_errors += 1; // One more comm error to worry about
+                }
+
+                responses.push(Vec::from(response)); // Add response to set of all responses
+
+                Ok(()) // Done!
+            })); // Actually send the message
+        }
+    }
+
+    pool.shutdown().wait()?; // Shutdown pool
+
+    // Check failed to dial more than half of peers
+    if dial_errors as f32 >= 0.5 * num_peers as f32 {
+        Err(CommunicationError::MajorityDidNotReceive) // Return some error
+    } else {
+        let response_frequencies: collections::HashMap<Vec<u8>, i16> = collections::HashMap::new(); // Initialize response frequencies map
+        let most_common_response = responses[0]; // We'll set this later when we determine that a particular response is more common
+
+        // Iterate through responses
+        for response in responses {
+            // Check response is already in frequencies map
+            if response_frequencies.contains_key(&response) {
+                // Get frequency of response so we can increment it
+                if let Some(frequency) = response_frequencies.get_mut(&response) {
+                    *frequency += 1; // Increment frequency
+
+                    // Get frequency of most common response
+                    if let Some(most_common_response_frequency) = response_frequencies.get(&most_common_response) {
+                        // Check is more common than most common
+                        if *frequency > *most_common_response_frequency {
+                            most_common_response = response; // Set most common response
+                        }
+                    }
+                }
+            } else {
+                response_frequencies.insert(response, 1); // Frequency of 1, since this is our first encounter
+            }
+        }
+        
+        Ok(most_common_response) // Done!
+    }
+}
+
+/// Broadcast a particular message over WebSockets.
+fn broadcast_message_raw_ws_with_response(
+    message: message::Message,
+    peers: Vec<Multiaddr>,
+) -> Result<Vec<u8>, CommunicationError> {
+    let serialized_message = bincode::serialize(&message)?; // Serialize message
+
+    let ws = WsConfig::new(TcpConfig::new()); // Initialize WS config
+
+    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
+    let mut dial_errors: i32 = 0; // Initialize num communication errors list
+
+    let mut responses: Vec<Vec<u8>> = vec![]; // All responses
+
+    let num_peers = peers.len(); // Get number of peers for later
+
+    // Iterate through peers
+    for peer in peers {
+        // Dial peer
+        if let Ok(conn_future) = ws.clone().dial(peer.clone()) {
+            let msg = serialized_message.clone(); // Clone message
+
+            let mut did_connect = false; // We'll set this later if we can connect to the peer
+            let mut response = vec![]; // We'll set this later if we can get a response from the peer
+
+            let message_send_future = conn_future
+                .map_err(|_e| {
+                    io::Error::from(io::ErrorKind::BrokenPipe) // Return error lol
+                })
                 .and_then(|conn| {
                     did_connect = true; // We've successfully connected to a peer!
 
-                    tokio::io::write_all(conn, msg.as_slice().into()) // Write to connection
+                    tokio::io::write_all(conn, msg.as_slice()) // Write to connection
                 })
                 .and_then(|(conn, _)| {
-                    conn.read_to_end(&mut response) // Read into response buffer
+                    conn.read_to_end(&mut response); // Read into response buffer
+
+                    Ok(()) // Done!
                 })
                 .map_err(move |e| {
                     e // Return error
@@ -279,71 +381,31 @@ fn broadcast_message_raw_tcp_with_response(
     if dial_errors as f32 >= 0.5 * num_peers as f32 {
         Err(CommunicationError::MajorityDidNotReceive) // Return some error
     } else {
-        Ok(()) // Done!
-    }
-}
+        let response_frequencies: collections::HashMap<Vec<u8>, i16> = collections::HashMap::new(); // Initialize response frequencies map
+        let most_common_response = responses[0]; // We'll set this later when we determine that a particular response is more common
 
-/// Broadcast a particular message over WebSockets.
-fn broadcast_message_raw_ws_with_response(
-    message: message::Message,
-    peers: Vec<Multiaddr>,
-) -> Result<Vec<u8>, CommunicationError> {
-    let serialized_message = bincode::serialize(&message)?; // Serialize message
+        // Iterate through responses
+        for response in responses {
+            // Check response is already in frequencies map
+            if response_frequencies.contains_key(&response) {
+                // Get frequency of response so we can increment it
+                if let Some(frequency) = response_frequencies.get_mut(&response) {
+                    *frequency += 1; // Increment frequency
 
-    let ws = WsConfig::new(TcpConfig::new()); // Initialize WS config
-
-    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
-    let mut dial_errors: i32 = 0; // Initialize num communication errors list
-
-    let num_peers = peers.len(); // Get number of peers for later
-
-    // Iterate through peers
-    for peer in peers {
-        // Dial peer
-        if let Ok(conn_future) = ws.clone().dial(peer.clone()) {
-            let msg = serialized_message.clone(); // Clone message
-
-            let mut did_send = true; // We'll set this later if we encounter an error sending a message
-            let mut did_connect = false; // We'll set this later if we can connect to the peer
-
-            let message_send_future = conn_future
-                .map_err(|_e| {
-                    io::Error::from(io::ErrorKind::BrokenPipe) // Return error lol
-                })
-                .and_then(move |mut conn| {
-                    did_connect = true; // We've successfully connected to a peer!
-
-                    conn.write_all(msg.as_slice().into()).map(|_| ()) // Write to connection
-                })
-                .map_err(move |e| {
-                    did_send = false; // Set send error
-
-                    e // Return error
-                });
-
-            let _ = pool.spawn(lazy(move || {
-                // Initialize runtime
-                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
-                    let _ = rt.block_on(message_send_future); // Send it!
+                    // Get frequency of most common response
+                    if let Some(most_common_response_frequency) = response_frequencies.get(&most_common_response) {
+                        // Check is more common than most common
+                        if *frequency > *most_common_response_frequency {
+                            most_common_response = response; // Set most common response
+                        }
+                    }
                 }
-
-                // Check for any errors at all
-                if !did_connect || !did_send {
-                    dial_errors += 1; // One more comm error to worry about
-                }
-
-                Ok(()) // Done!
-            })); // Actually send the message
+            } else {
+                response_frequencies.insert(response, 1); // Frequency of 1, since this is our first encounter
+            }
         }
-    }
-
-    pool.shutdown().wait()?; // Shutdown pool
-
-    // Check failed to dial more than half of peers
-    if dial_errors as f32 >= 0.5 * num_peers as f32 {
-        Err(CommunicationError::MajorityDidNotReceive) // Return some error
-    } else {
-        Ok(()) // Done!
+        
+        Ok(most_common_response) // Done!
     }
 }
 
