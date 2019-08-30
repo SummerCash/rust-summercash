@@ -12,7 +12,7 @@ use super::{
 pub fn synchronize_for_network_against_existing(
     existing_config: config::Config,
     network: network::Network,
-) -> Option<config::Config> {
+) -> Result<config::Config, client::CommunicationError> {
     let bootstrap_peers: Vec<Multiaddr> = super::peers::get_network_bootstrap_peers(network); // Get bootstrap peers
 
     // Check actually has bootstrap peers
@@ -30,23 +30,23 @@ pub fn synchronize_for_network_against_existing(
 
                 // Check local config is up to date
                 if hash.to_vec() == config_bytes_hash {
-                    Some(existing_config) // Return local config
+                    Ok(existing_config) // Return local config
                 } else {
                     synchronize_for_network(network) // Sync
                 }
             } else {
-                Some(existing_config) // Return the local config
+                Err(client::CommunicationError::MessageSerializationFailure) // Return a serialization error (though this isn't necessarily related to communications)
             }
         } else {
-            Some(existing_config) // Nothing to return since we couldn't retrieve a config
+            Err(client::CommunicationError::MajorityDidNotRespond) // Nothing to return since we couldn't retrieve a config
         }
     } else {
-        Some(existing_config) // Return the local config since we can't sync it anyway
+        Err(client::CommunicationError::NoAvailablePeers) // Return an error since there are no available peers
     }
 }
 
 /// Download a copy of the configuration file for the corresponding network.
-pub fn synchronize_for_network(network: network::Network) -> Option<config::Config> {
+pub fn synchronize_for_network(network: network::Network) -> Result<config::Config, client::CommunicationError> {
     let bootstrap_peers: Vec<Multiaddr> = super::peers::get_network_bootstrap_peers(network); // Get bootstrap peers
 
     // Check actually has bootstrap peers
@@ -60,14 +60,14 @@ pub fn synchronize_for_network(network: network::Network) -> Option<config::Conf
         {
             // Deserialize the config
             if let Ok(config) = bincode::deserialize(config_bytes.as_slice()) {
-                Some(config) // Return the config
+                Ok(config) // Return the config
             } else {
-                None // Nothing to return since we couldn't deserialize it
+                Err(client::CommunicationError::MessageSerializationFailure) // Return a serialization error (though this isn't necessarily related to communications)
             }
         } else {
-            None // Nothing to return since we couldn't retrieve a config
+            Err(client::CommunicationError::MajorityDidNotRespond) // Nothing to return since we couldn't retrieve a config
         }
     } else {
-        None
+        Err(client::CommunicationError::NoAvailablePeers) // Return an error since there are no available peers
     }
 }

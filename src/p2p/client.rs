@@ -60,6 +60,10 @@ pub enum CommunicationError {
     Unknown,
     #[fail(display = "an operation on some mutex failed")]
     MutexFailure,
+    #[fail(display = "no response was received from a majority of specified peers")]
+    MajorityDidNotRespond,
+    #[fail(display = "no friendly peers found")]
+    NoAvailablePeers,
 }
 
 /// Implement conversions from a bincode error for the CommunicationError enum.
