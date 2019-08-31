@@ -2,7 +2,7 @@ use libp2p::Multiaddr; // Import libp2p
 
 use bincode; // Import bincode
 
-use super::{
+use super::super::{
     super::{core::sys::proposal, crypto::hash},
     client, message, network,
 }; // Import the network, hash, proposal modules

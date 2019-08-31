@@ -2,7 +2,7 @@ use libp2p::Multiaddr; // Import the libp2p library
 
 use bincode; // Import the bincode serialization library
 
-use super::{
+use super::super::{
     super::{core::sys::config, crypto::blake2},
     client, message, network,
 }; // Import the config, message modules
