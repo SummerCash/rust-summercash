@@ -12,17 +12,16 @@ use super::{
 pub fn synchronize_for_network_against_existing(
     existing_config: config::Config,
     network: network::Network,
+    peers: Vec<Multiaddr>,
 ) -> Result<config::Config, client::CommunicationError> {
-    let bootstrap_peers: Vec<Multiaddr> = super::peers::get_network_bootstrap_peers(network); // Get bootstrap peers
-
     // Check actually has bootstrap peers
-    if bootstrap_peers.len() != 0 {
+    if peers.len() != 0 {
         let header = message::Header::new("config", message::Method::Summarize, vec![network]); // Initialize header
         let message = message::Message::new(header, vec![]); // Initialize message
 
         // Let's request a serialized network config from the above bootstrap peers
         if let Ok(config_bytes_hash) =
-            client::broadcast_message_raw_with_response(message, bootstrap_peers)
+            client::broadcast_message_raw_with_response(message, peers.clone())
         {
             // Serialize existing configuration
             if let Ok(config_bytes) = bincode::serialize(&existing_config) {
@@ -32,7 +31,7 @@ pub fn synchronize_for_network_against_existing(
                 if hash.to_vec() == config_bytes_hash {
                     Ok(existing_config) // Return local config
                 } else {
-                    synchronize_for_network(network) // Sync
+                    synchronize_for_network(network, peers) // Sync
                 }
             } else {
                 Err(client::CommunicationError::MessageSerializationFailure) // Return a serialization error (though this isn't necessarily related to communications)
@@ -46,17 +45,18 @@ pub fn synchronize_for_network_against_existing(
 }
 
 /// Download a copy of the configuration file for the corresponding network.
-pub fn synchronize_for_network(network: network::Network) -> Result<config::Config, client::CommunicationError> {
-    let bootstrap_peers: Vec<Multiaddr> = super::peers::get_network_bootstrap_peers(network); // Get bootstrap peers
-
+pub fn synchronize_for_network(
+    network: network::Network,
+    peers: Vec<Multiaddr>,
+) -> Result<config::Config, client::CommunicationError> {
     // Check actually has bootstrap peers
-    if bootstrap_peers.len() != 0 {
+    if peers.len() != 0 {
         let header = message::Header::new("config", message::Method::Get, vec![network]); // Initialize header
         let message = message::Message::new(header, vec![]); // Initialize message
 
         // Let's request a serialized network config from the above bootstrap peers
         if let Ok(config_bytes) =
-            client::broadcast_message_raw_with_response(message, bootstrap_peers)
+            client::broadcast_message_raw_with_response(message, peers)
         {
             // Deserialize the config
             if let Ok(config) = bincode::deserialize(config_bytes.as_slice()) {

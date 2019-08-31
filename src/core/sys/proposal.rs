@@ -33,6 +33,13 @@ pub enum Operation {
     Append { value_to_append: Vec<u8> },
 }
 
+/// A vector of proposals.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ProposalList {
+    /// The proposals
+    pub proposals: Vec<Proposal>,
+}
+
 /// Implement a set of proposal helper methods.
 impl Proposal {
     /// Initialize a new Proposal instance with the given parameters.
@@ -94,5 +101,13 @@ impl ProposalData {
             param_name: param_name, // Set param name
             operation: operation,   // Set operation
         } // Return initialized proposal data
+    }
+}
+
+/// Implement a serialization for the proposal list type.
+impl ProposalList {
+    /// Encode the list of proposals to a vector of bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec_pretty(self).unwrap() // Return serialized
     }
 }
