@@ -49,6 +49,8 @@ impl Header {
 pub enum Method {
     /// Request a hash of the specified field
     Summarize,
+    /// Request the next element in a particular field
+    Next,
     /// Request the entire contents of the specified field
     Get,
     /// Does exactly what you think it does
