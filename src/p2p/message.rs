@@ -47,12 +47,14 @@ impl Header {
 /// A set of available message methods.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Method {
-    /// Request a hash of the specified field
-    Summarize,
     /// Request the next element in a particular field
-    Next,
+    Next{summarize: bool},
+    /// Request the last element in a particular field
+    Last{summarize: bool},
+    /// Request the first element in a particular field
+    First{summarize: bool},
     /// Request the entire contents of the specified field
-    Get,
+    Get{summarize: bool},
     /// Does exactly what you think it does
     Post,
 }

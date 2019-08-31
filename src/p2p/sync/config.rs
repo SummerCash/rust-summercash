@@ -16,7 +16,7 @@ pub fn synchronize_for_network_against_existing(
 ) -> Result<config::Config, client::CommunicationError> {
     // Check actually has bootstrap peers
     if peers.len() != 0 {
-        let header = message::Header::new("config", message::Method::Summarize, vec![network]); // Initialize header
+        let header = message::Header::new("config", message::Method::Get{summarize: true}, vec![network]); // Initialize header
         let message = message::Message::new(header, vec![]); // Initialize message
 
         // Let's request a serialized network config from the above bootstrap peers
@@ -51,7 +51,7 @@ pub fn synchronize_for_network(
 ) -> Result<config::Config, client::CommunicationError> {
     // Check actually has bootstrap peers
     if peers.len() != 0 {
-        let header = message::Header::new("config", message::Method::Get, vec![network]); // Initialize header
+        let header = message::Header::new("config", message::Method::Get{summarize: false}, vec![network]); // Initialize header
         let message = message::Message::new(header, vec![]); // Initialize message
 
         // Let's request a serialized network config from the above bootstrap peers
