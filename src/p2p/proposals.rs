@@ -4,7 +4,7 @@ use bincode; // Import bincode
 
 use super::{
     super::{core::sys::proposal, crypto::hash},
-    client, network, message
+    client, message, network,
 }; // Import the network, hash, proposal modules
 
 use std::collections::HashMap; // Import the hashmap type
@@ -23,8 +23,9 @@ pub fn synchronize_for_network(
 
         // Check for errors
         if let Ok(proposal_bytes) = resp_result {
-            let proposal_list_result: Result<proposal::ProposalList, Box<bincode::ErrorKind>> = bincode::deserialize(&proposal_bytes); // Deserialize proposal list
-            
+            let proposal_list_result: Result<proposal::ProposalList, Box<bincode::ErrorKind>> =
+                bincode::deserialize(&proposal_bytes); // Deserialize proposal list
+
             // Deserialize proposal list
             if let Ok(proposal_list) = proposal_list_result {
                 let mut proposals: HashMap<hash::Hash, proposal::Proposal> = HashMap::new(); // Initialize proposals hash map

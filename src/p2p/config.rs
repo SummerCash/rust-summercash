@@ -55,9 +55,7 @@ pub fn synchronize_for_network(
         let message = message::Message::new(header, vec![]); // Initialize message
 
         // Let's request a serialized network config from the above bootstrap peers
-        if let Ok(config_bytes) =
-            client::broadcast_message_raw_with_response(message, peers)
-        {
+        if let Ok(config_bytes) = client::broadcast_message_raw_with_response(message, peers) {
             // Deserialize the config
             if let Ok(config) = bincode::deserialize(config_bytes.as_slice()) {
                 Ok(config) // Return the config
