@@ -2,6 +2,9 @@ use super::super::accounts::account; // Import the account module
 use super::super::core::sys::{config, system}; // Import the system module
 use super::super::crypto::blake2; // Import the blake2 hashing module
 use super::message; // Import the network module
+use super::network; // Import the network module
+use super::peers;
+use super::sync; // Import the sync module // Import the peers module
 
 use futures::lazy; // Allow for lazy futures
 
@@ -20,6 +23,7 @@ use libp2p::{
     tcp::{TcpConfig, TcpTransStream},
     websocket::WsConfig,
     Multiaddr, PeerId, Transport, TransportError,
+    Swarm
 }; // Import the libp2p library
 
 use tokio; // Import tokio
@@ -38,6 +42,15 @@ pub enum ConstructionError {
     AccountIOFailure {
         address_hex: String, // The hex encoded public key
     },
+    #[fail(display = "{}", error)]
+    CommunicationsFailure { error: CommunicationError },
+}
+
+/// Implement conversion from a communication error for the ConstructionError enum.
+impl From<CommunicationError> for ConstructionError {
+    fn from(e: CommunicationError) -> ConstructionError {
+        ConstructionError::CommunicationsFailure { error: e } // Return construction error
+    }
 }
 
 /// An error encountered while communicating with another peer.
@@ -109,17 +122,14 @@ pub struct Client {
 
 /// Implement a set of client helper methods.
 impl Client {
-    pub fn new(network_name: &str) -> Result<Client, ConstructionError> {
+    pub fn new(network: network::Network) -> Result<Client, ConstructionError> {
         // Check peer identity exists locally
         if let Ok(p2p_account) =
             account::Account::read_from_disk(blake2::hash_slice(b"p2p_identity"))
         {
             // Check has valid p2p keypair
             if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
-                Client::with_peer_id(
-                    network_name,
-                    PeerId::from_public_key(identity::PublicKey::Ed25519(p2p_keypair.public())),
-                ) // Return initialized client
+                Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair)) // Return initialized client
             } else {
                 Err(ConstructionError::InvalidPeerIdentity) // Return error
             }
@@ -130,12 +140,7 @@ impl Client {
                 Ok(_) => {
                     // Check has valid p2p keypair
                     if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
-                        Client::with_peer_id(
-                            network_name,
-                            PeerId::from_public_key(identity::PublicKey::Ed25519(
-                                p2p_keypair.public(),
-                            )),
-                        ) // Return initialized client
+                        Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair)) // Return initialized client
                     } else {
                         Err(ConstructionError::InvalidPeerIdentity) // Return error
                     }
@@ -155,30 +160,47 @@ impl Client {
     }
 
     /// Initialize a new client with the given network_name and peer_id.
-    pub fn with_peer_id(network_name: &str, peer_id: PeerId) -> Result<Client, ConstructionError> {
+    pub fn with_peer_id(
+        network: network::Network,
+        keypair: identity::Keypair,
+    ) -> Result<Client, ConstructionError> {
         // Check for errors while reading config
-        if let Ok(read_config) = config::Config::read_from_disk(network_name) {
-            Client::with_config(peer_id, read_config) // Return initialized client
+        if let Ok(read_config) = config::Config::read_from_disk(network.to_str()) {
+            Client::with_config(keypair, read_config) // Return initialized client
         } else {
-            // TODO: Download config
+            let config = sync::config::synchronize_for_network(
+                network,
+                peers::get_network_bootstrap_peers(network),
+            )?; // Get the network config file
 
-            Err(ConstructionError::InvalidPeerIdentity) // Return error
+            Client::with_config(keypair, config) // Return initialized client
         }
     }
 
     /// Initialize a new client with the given network_name, peer_id, and config.
-    pub fn with_config(peer_id: PeerId, cfg: config::Config) -> Result<Client, ConstructionError> {
+    pub fn with_config(
+        keypair: identity::Keypair,
+        cfg: config::Config,
+    ) -> Result<Client, ConstructionError> {
         let voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
 
-        Ok(Client::with_voting_accounts(peer_id, cfg, voting_accounts)) // Return initialized client
+        Ok(Client::with_voting_accounts(keypair, cfg, voting_accounts)) // Return initialized client
     }
 
     // Initialize a new client with the given network_name, peer_id, config, and voting_accounts list.
     pub fn with_voting_accounts(
-        peer_id: PeerId,
+        keypair: identity::Keypair,
         cfg: config::Config,
         voting_accounts: Vec<account::Account>,
-    ) -> Client {
+    ) -> Client { 
+        let peer_id = PeerId::from_public_key(keypair.public()); // Get peer id
+
+        let transport = libp2p::build_development_transport(keypair); // Build a transport
+
+        let (swarm_controller, swarm_future) = Swarm::new(transport, move |socket, remote_addr| {
+            //TODO: Handle connection
+        }, peer_id); // Initialize swarm
+
         Client {
             runtime: system::System::new(cfg), // Set runtime
             voting_accounts,                   // Set voters
@@ -638,7 +660,7 @@ mod tests {
 
         config.write_to_disk().unwrap(); // Write config to disk
 
-        let client = Client::new("olympia").unwrap(); // Initialize client
+        let client = Client::new(network::Network::LocalTestNetwork).unwrap(); // Initialize client
         assert_eq!(client.runtime.config.network_name, "olympia"); // Ensure client has correct net
     }
 }
