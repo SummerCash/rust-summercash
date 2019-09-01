@@ -13,18 +13,27 @@ pub fn synchronize_for_network_against_head(
         // Set head to last node in graph
         if let Ok(some_head) = dag.get(dag.nodes.len()-1) {
             // Ensure a head exists
-            if let Some(head) = some_head {
+            if let Some(raw_head) = some_head {
+                let mut head = raw_head.hash; // Get head hash
+
                 let target = synchronize_target_for_network(network, peers)?; // Synchronize target node
 
                 // Keep synchronizing until the head is the target
-                while head.hash != target {
-                    
+                while head != target {
+                    // Sync the next node
+                    if let Ok(new_head) = synchronize_next_for_network(head, network, peers) {
+                        dag.push(new_head.transaction, new_head.state_entry); // Add node to dag
+
+                        head = new_head.hash; // Set head
+                    }
                 }
+
+                Ok(()) // Done!
             } else {
-                client::CommunicationError::Unknown // Idk
+                Err(client::CommunicationError::Unknown) // Idk
             }
         } else {
-            client::CommunicationError::Unknown // Idk
+            Err(client::CommunicationError::Unknown) // Idk
         }
     } else {
         // Synchronize root node
@@ -36,7 +45,7 @@ pub fn synchronize_for_network_against_head(
                 synchronize_for_network_against_head(dag, network, peers) // Return synchronized dag
             },
             // An error was encountered while synchronizing the root node
-            Err(e) => e,
+            e => e,
         }
     }
 }

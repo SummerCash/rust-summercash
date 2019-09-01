@@ -16,7 +16,7 @@ pub fn synchronize_for_network(
 ) -> Result<HashMap<hash::Hash, proposal::Proposal>, client::CommunicationError> {
     // Check has peers to bootstrap from
     if peers.len() != 0 {
-        let header = message::Header::new("proposals", message::Method::Get, vec![network]); // Initialize header
+        let header = message::Header::new("proposals", message::Method::Get{summarize: false}, vec![network]); // Initialize header
         let message = message::Message::new(header, vec![]); // Initialize message
 
         let resp_result = client::broadcast_message_raw_with_response(message, peers); // Request the list of network proposals
