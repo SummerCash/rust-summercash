@@ -48,13 +48,13 @@ impl Header {
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Method {
     /// Request the next element in a particular field
-    Next{summarize: bool},
+    Next { summarize: bool },
     /// Request the last element in a particular field
-    Last{summarize: bool},
+    Last { summarize: bool },
     /// Request the first element in a particular field
-    First{summarize: bool},
+    First { summarize: bool },
     /// Request the entire contents of the specified field
-    Get{summarize: bool},
+    Get { summarize: bool },
     /// Does exactly what you think it does
     Post,
 }
