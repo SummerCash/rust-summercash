@@ -1,16 +1,16 @@
 use super::network; // Import the network module
 
-use libp2p::Multiaddr; // Import the libp2p library
+use libp2p::{Multiaddr, PeerId}; // Import the libp2p library
 
 /// Get a list of bootstrap peers for a particular network.
-pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<Multiaddr> {
+pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<(Multiaddr, PeerId)> {
     match network {
         // We're trying to sync to the main SummerCash network
-        network::Network::MainNetwork => vec![get_multiaddr("/ip4/108.41.124.60/tcp/2048")],
+        network::Network::MainNetwork => vec![(get_multiaddr("/ip4/108.41.124.60/tcp/2048"), get_peer_id("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"))],
         // This time to the public test network
-        network::Network::PublicTestNetwork => vec![get_multiaddr("/ip4/108.41.124.60/tcp/4096")],
+        network::Network::PublicTestNetwork => vec![(get_multiaddr("/ip4/108.41.124.60/tcp/4096"), get_peer_id("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"))],
         // This time to the public, but bleeding-edge dev test network
-        network::Network::DevTestNetwork => vec![get_multiaddr("/ip4/108.41.124.60/tcp/8192")],
+        network::Network::DevTestNetwork => vec![(get_multiaddr("/ip4/108.41.124.60/tcp/8192"), get_peer_id("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"))],
         // This should be a completely local test network
         network::Network::LocalTestNetwork => vec![],
     }
@@ -24,6 +24,15 @@ fn get_multiaddr(addr_str: &str) -> Multiaddr {
         addr // Return address
     } else {
         Multiaddr::empty() // Nil multiaddr
+    }
+}
+
+fn get_peer_id(peer_id: &str) -> PeerId { 
+    // Parse multiaddr
+    if let Ok(peer_id) = peer_id.parse() {
+        peer_id // Return peer id
+    } else {
+        PeerId::random() // Random peer ID
     }
 }
 
