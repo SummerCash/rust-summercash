@@ -23,7 +23,8 @@ use libp2p::{
     tcp::{TcpConfig, TcpTransStream},
     websocket::WsConfig,
     Multiaddr, PeerId, Transport, TransportError,
-    Swarm
+    Swarm,
+    kad
 }; // Import the libp2p library
 
 use tokio; // Import tokio
@@ -196,6 +197,18 @@ impl Client {
         let peer_id = PeerId::from_public_key(keypair.public()); // Get peer id
 
         let transport = libp2p::build_development_transport(keypair); // Build a transport
+
+        let mut kadCfg = kad::KademliaConfig::default(); // Get the default kad dht config
+
+        let store = kad::record::store::MemoryStore::new(peer_id.clone()); // Initialize a memory store to store peer information in
+        let mut behavior = kad::Kademlia::with_config(peer_id.clone(), store, kadCfg); // Initialize a behavior from the store and kad config
+
+        let bootstrapAddresses = peers::get_network_bootstrap_peers(network::Network::from(cfg.network_name.as_ref())); // Get a list of network bootstrap peers
+
+        // Iterate through bootstrap addresses
+        for bootstrapPeer in bootstrapAddresses {
+            behavior.add_address(&bootstrapPeer.0, bootstrapPeer.1); // Add the bootstrap peer to the DHT
+        }
 
         let (swarm_controller, swarm_future) = Swarm::new(transport, move |socket, remote_addr| {
             //TODO: Handle connection
