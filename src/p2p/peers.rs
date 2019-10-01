@@ -60,7 +60,7 @@ mod tests {
     #[test]
     fn test_get_network_bootstrap_nodes() {
         let main_network_boot_nodes: Vec<Multiaddr> =
-            get_network_bootstrap_peers(network::Network::MainNetwork); // Get main network peers
+            get_network_bootstrap_peer_addresses(network::Network::MainNetwork); // Get main network peers
         assert_eq!(
             *main_network_boot_nodes.get(0).unwrap(),
             get_multiaddr("/ip4/108.41.124.60/tcp/2048")
