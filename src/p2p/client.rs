@@ -171,7 +171,7 @@ impl Client {
         } else {
             let config = sync::config::synchronize_for_network(
                 network,
-                peers::get_network_bootstrap_peers(network),
+                peers::get_network_bootstrap_peer_addresses(network),
             )?; // Get the network config file
 
             Client::with_config(keypair, config) // Return initialized client
@@ -207,7 +207,7 @@ impl Client {
 
         // Iterate through bootstrap addresses
         for bootstrapPeer in bootstrapAddresses {
-            behavior.add_address(&bootstrapPeer.0, bootstrapPeer.1); // Add the bootstrap peer to the DHT
+            behavior.add_address(&bootstrapPeer.1, bootstrapPeer.0); // Add the bootstrap peer to the DHT
         }
 
         let (swarm_controller, swarm_future) = Swarm::new(transport, move |socket, remote_addr| {
