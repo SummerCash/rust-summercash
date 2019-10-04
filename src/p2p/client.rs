@@ -19,12 +19,10 @@ use std::{
 
 use libp2p::{
     futures::Future,
-    identity,
+    identity, kad,
     tcp::{TcpConfig, TcpTransStream},
     websocket::WsConfig,
-    Multiaddr, PeerId, Transport, TransportError,
-    Swarm,
-    kad
+    Multiaddr, PeerId, Swarm, Transport, TransportError,
 }; // Import the libp2p library
 
 use tokio; // Import tokio
@@ -130,7 +128,8 @@ impl Client {
         {
             // Check has valid p2p keypair
             if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
-                Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair)) // Return initialized client
+                Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair))
+            // Return initialized client
             } else {
                 Err(ConstructionError::InvalidPeerIdentity) // Return error
             }
@@ -141,7 +140,8 @@ impl Client {
                 Ok(_) => {
                     // Check has valid p2p keypair
                     if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
-                        Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair)) // Return initialized client
+                        Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair))
+                    // Return initialized client
                     } else {
                         Err(ConstructionError::InvalidPeerIdentity) // Return error
                     }
@@ -171,7 +171,7 @@ impl Client {
         } else {
             let config = sync::config::synchronize_for_network(
                 network,
-                peers::get_network_bootstrap_peers(network),
+                peers::get_network_bootstrap_peer_addresses(network),
             )?; // Get the network config file
 
             Client::with_config(keypair, config) // Return initialized client
@@ -193,26 +193,25 @@ impl Client {
         keypair: identity::Keypair,
         cfg: config::Config,
         voting_accounts: Vec<account::Account>,
-    ) -> Client { 
+    ) -> Client {
         let peer_id = PeerId::from_public_key(keypair.public()); // Get peer id
 
         let transport = libp2p::build_development_transport(keypair); // Build a transport
 
-        let mut kadCfg = kad::KademliaConfig::default(); // Get the default kad dht config
+        let kad_cfg = kad::KademliaConfig::default(); // Get the default kad dht config
 
         let store = kad::record::store::MemoryStore::new(peer_id.clone()); // Initialize a memory store to store peer information in
-        let mut behavior = kad::Kademlia::with_config(peer_id.clone(), store, kadCfg); // Initialize a behavior from the store and kad config
+        let mut behavior = kad::Kademlia::with_config(peer_id.clone(), store, kad_cfg); // Initialize a behavior from the store and kad config
 
-        let bootstrapAddresses = peers::get_network_bootstrap_peers(network::Network::from(cfg.network_name.as_ref())); // Get a list of network bootstrap peers
+        let bootstrap_addresses =
+            peers::get_network_bootstrap_peers(network::Network::from(cfg.network_name.as_ref())); // Get a list of network bootstrap peers
 
         // Iterate through bootstrap addresses
-        for bootstrapPeer in bootstrapAddresses {
-            behavior.add_address(&bootstrapPeer.0, bootstrapPeer.1); // Add the bootstrap peer to the DHT
+        for bootstrap_peer in bootstrap_addresses {
+            behavior.add_address(&bootstrap_peer.0, bootstrap_peer.1); // Add the bootstrap peer to the DHT
         }
 
-        let (swarm_controller, swarm_future) = Swarm::new(transport, move |socket, remote_addr| {
-            //TODO: Handle connection
-        }, peer_id); // Initialize swarm
+        let swarm = Swarm::new(transport, behavior, peer_id.clone()); // Initialize a swarm
 
         Client {
             runtime: system::System::new(cfg), // Set runtime
@@ -248,7 +247,8 @@ pub fn broadcast_message_raw_with_response(
 
     // Check has any ws peers
     if ws_peers.len() > 0 {
-        ws_resp = broadcast_message_raw_ws_with_response(message.clone(), ws_peers); // Broadcast over WS
+        ws_resp = broadcast_message_raw_ws_with_response(message.clone(), ws_peers);
+        // Broadcast over WS
     }
     // Check any tcp peers
     if tcp_peers.len() > 0 {
