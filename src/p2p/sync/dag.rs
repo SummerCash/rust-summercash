@@ -1,4 +1,4 @@
-use libp2p::Multiaddr; // Import libp2p
+use libp2p::{Multiaddr, identity::Keypair}; // Import libp2p
 
 use super::super::{
     super::{core::types::graph, crypto::hash},
@@ -10,6 +10,7 @@ pub fn synchronize_for_network_against_head(
     dag: &mut graph::Graph,
     network: network::Network,
     peers: Vec<Multiaddr>,
+    keypair: Keypair,
 ) -> Result<(), client::CommunicationError> {
     // Check must have head
     if dag.nodes.len() > 0 {
@@ -19,11 +20,11 @@ pub fn synchronize_for_network_against_head(
             if let Some(raw_head) = some_head {
                 let mut head = raw_head.hash; // Get head hash
 
-                let target = synchronize_target_for_network(network, peers.clone())?; // Synchronize target node
+                let target = synchronize_target_for_network(network, peers.clone(), keypair.clone())?; // Synchronize target node
 
                 // Keep synchronizing until the head is the target
                 while head != target {
-                    let new_head = synchronize_next_for_network(head, network, peers.clone())?; // Synchronize next node
+                    let new_head = synchronize_next_for_network(head, network, peers.clone(), keypair.clone())?; // Synchronize next node
 
                     dag.push(new_head.transaction, new_head.state_entry); // Add node to dag
 
@@ -38,11 +39,11 @@ pub fn synchronize_for_network_against_head(
             Err(client::CommunicationError::Unknown) // Idk
         }
     } else {
-        let root = synchronize_root_for_network(network, peers.clone())?; // Synchronize root node
+        let root = synchronize_root_for_network(network, peers.clone(), keypair.clone())?; // Synchronize root node
 
         *dag = graph::Graph::new(root.transaction, network.to_str()); // Construct a new graph
 
-        synchronize_for_network_against_head(dag, network, peers) // Return synchronized dag
+        synchronize_for_network_against_head(dag, network, peers, keypair) // Return synchronized dag
     }
 }
 
@@ -50,6 +51,7 @@ pub fn synchronize_for_network_against_head(
 fn synchronize_target_for_network(
     network: network::Network,
     peers: Vec<Multiaddr>,
+    keypair: Keypair,
 ) -> Result<hash::Hash, client::CommunicationError> {
     let header = message::Header::new(
         "ledger::transactions",
@@ -59,7 +61,7 @@ fn synchronize_target_for_network(
     let message = message::Message::new(header, vec![]); // Initialize message
 
     // Request the last node hash from our target peers
-    match client::broadcast_message_raw_with_response(message, peers) {
+    match client::broadcast_message_raw_with_response(message, peers, keypair) {
         // Yay! We've got the head hash!
         Ok(raw_hash) => Ok(hash::Hash::new(raw_hash)),
         // An error occurred, return it
@@ -71,6 +73,7 @@ fn synchronize_target_for_network(
 fn synchronize_root_for_network(
     network: network::Network,
     peers: Vec<Multiaddr>,
+    keypair: Keypair,
 ) -> Result<graph::Node, client::CommunicationError> {
     let header = message::Header::new(
         "ledger::transactions",
@@ -79,8 +82,8 @@ fn synchronize_root_for_network(
     ); // Initialize a message header declaring we want to download the
     let message = message::Message::new(header, vec![]); // Initialize message
 
-    // Request the first node from our targe tpeers
-    match client::broadcast_message_raw_with_response(message, peers) {
+    // Request the first node from our target peers
+    match client::broadcast_message_raw_with_response(message, peers, keypair) {
         // All targeted peers responded
         Ok(node_bytes) => {
             if let Ok(node) = bincode::deserialize(node_bytes.as_slice()) {
@@ -99,6 +102,7 @@ fn synchronize_next_for_network(
     current_node_hash: hash::Hash,
     network: network::Network,
     peers: Vec<Multiaddr>,
+    keypair: Keypair,
 ) -> Result<graph::Node, client::CommunicationError> {
     let header = message::Header::new(
         "ledger::transactions",
@@ -108,7 +112,7 @@ fn synchronize_next_for_network(
     let message = message::Message::new(header, current_node_hash.to_vec()); // Initialize message
 
     // Request the next node from our target peers
-    match client::broadcast_message_raw_with_response(message, peers) {
+    match client::broadcast_message_raw_with_response(message, peers, keypair) {
         // All targeted peers responded
         Ok(node_bytes) => {
             if let Ok(node) = bincode::deserialize(node_bytes.as_slice()) {

@@ -1,4 +1,4 @@
-use libp2p::Multiaddr; // Import the libp2p library
+use libp2p::{Multiaddr, identity::Keypair}; // Import the libp2p library
 
 use bincode; // Import the bincode serialization library
 
@@ -13,6 +13,7 @@ pub fn synchronize_for_network_against_existing(
     existing_config: config::Config,
     network: network::Network,
     peers: Vec<Multiaddr>,
+    keypair: Keypair,
 ) -> Result<config::Config, client::CommunicationError> {
     // Check actually has bootstrap peers
     if peers.len() != 0 {
@@ -25,7 +26,7 @@ pub fn synchronize_for_network_against_existing(
 
         // Let's request a serialized network config from the above bootstrap peers
         if let Ok(config_bytes_hash) =
-            client::broadcast_message_raw_with_response(message, peers.clone())
+            client::broadcast_message_raw_with_response(message, peers.clone(), keypair.clone())
         {
             // Serialize existing configuration
             if let Ok(config_bytes) = bincode::serialize(&existing_config) {
@@ -35,7 +36,7 @@ pub fn synchronize_for_network_against_existing(
                 if hash.to_vec() == config_bytes_hash {
                     Ok(existing_config) // Return local config
                 } else {
-                    synchronize_for_network(network, peers) // Sync
+                    synchronize_for_network(network, peers, keypair) // Sync
                 }
             } else {
                 Err(client::CommunicationError::MessageSerializationFailure) // Return a serialization error (though this isn't necessarily related to communications)
@@ -52,6 +53,7 @@ pub fn synchronize_for_network_against_existing(
 pub fn synchronize_for_network(
     network: network::Network,
     peers: Vec<Multiaddr>,
+    keypair: Keypair,
 ) -> Result<config::Config, client::CommunicationError> {
     // Check actually has bootstrap peers
     if peers.len() != 0 {
@@ -63,7 +65,7 @@ pub fn synchronize_for_network(
         let message = message::Message::new(header, vec![]); // Initialize message
 
         // Let's request a serialized network config from the above bootstrap peers
-        if let Ok(config_bytes) = client::broadcast_message_raw_with_response(message, peers) {
+        if let Ok(config_bytes) = client::broadcast_message_raw_with_response(message, peers, keypair) {
             // Deserialize the config
             if let Ok(config) = bincode::deserialize(config_bytes.as_slice()) {
                 Ok(config) // Return the config

@@ -172,6 +172,7 @@ impl Client {
             let config = sync::config::synchronize_for_network(
                 network,
                 peers::get_network_bootstrap_peer_addresses(network),
+                keypair.clone()
             )?; // Get the network config file
 
             Client::with_config(keypair, config) // Return initialized client
@@ -196,7 +197,7 @@ impl Client {
     ) -> Client {
         let peer_id = PeerId::from_public_key(keypair.public()); // Get peer id
 
-        let transport = libp2p::build_development_transport(keypair); // Build a transport
+        let transport = libp2p::build_tcp_ws_secio_mplex_yamux(keypair); // Build a transport
 
         let kad_cfg = kad::KademliaConfig::default(); // Get the default kad dht config
 
@@ -225,6 +226,7 @@ impl Client {
 pub fn broadcast_message_raw_with_response(
     message: message::Message,
     peers: Vec<Multiaddr>,
+    keypair: identity::Keypair,
 ) -> Result<Vec<u8>, CommunicationError> {
     let mut ws_peers: Vec<Multiaddr> = vec![]; // Init WebSocket peers list
     let mut tcp_peers: Vec<Multiaddr> = vec![]; // Init TCP peers list

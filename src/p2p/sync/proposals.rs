@@ -1,4 +1,4 @@
-use libp2p::Multiaddr; // Import libp2p
+use libp2p::{Multiaddr, identity::Keypair}; // Import libp2p
 
 use bincode; // Import bincode
 
@@ -13,6 +13,7 @@ use std::collections::HashMap; // Import the hashmap type
 pub fn synchronize_for_network(
     network: network::Network,
     peers: Vec<Multiaddr>,
+    keypair: Keypair,
 ) -> Result<HashMap<hash::Hash, proposal::Proposal>, client::CommunicationError> {
     // Check has peers to bootstrap from
     if peers.len() != 0 {
@@ -23,7 +24,7 @@ pub fn synchronize_for_network(
         ); // Initialize header
         let message = message::Message::new(header, vec![]); // Initialize message
 
-        let resp_result = client::broadcast_message_raw_with_response(message, peers); // Request the list of network proposals
+        let resp_result = client::broadcast_message_raw_with_response(message, peers, keypair); // Request the list of network proposals
 
         // Check for errors
         if let Ok(proposal_bytes) = resp_result {
