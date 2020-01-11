@@ -337,7 +337,7 @@ async fn broadcast_message_raw_tcp_with_response(
                     e // Return error
                 });
 
-            let _ = pool.spawn(lazy(move || {
+            let _ = pool.spawn(lazy(move |_| {
                 // Initialize runtime
                 if let Ok(mut rt) = tokio::runtime::Runtime::new() {
                     let _ = rt.block_on(message_send_future); // Send it!
@@ -450,7 +450,7 @@ fn broadcast_message_raw_ws_with_response(
                     e // Return error
                 });
 
-            let _ = pool.spawn(lazy(move || {
+            let _ = pool.spawn(lazy(move |_| {
                 // Initialize runtime
                 if let Ok(mut rt) = tokio::runtime::Runtime::new() {
                     let _ = rt.block_on(message_send_future); // Send it!
