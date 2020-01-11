@@ -3,7 +3,7 @@ use libp2p::{Multiaddr, identity::Keypair}; // Import the libp2p library
 use bincode; // Import the bincode serialization library
 
 use super::super::{
-    super::{core::sys::config, crypto::blake2},
+    super::{core::sys::config, crypto::blake3},
     client, message, network,
 }; // Import the config, message modules
 
@@ -30,7 +30,7 @@ pub fn synchronize_for_network_against_existing(
         {
             // Serialize existing configuration
             if let Ok(config_bytes) = bincode::serialize(&existing_config) {
-                let hash = blake2::hash_slice(config_bytes.as_slice()); // Hash config bytes
+                let hash = blake3::hash_slice(config_bytes.as_slice()); // Hash config bytes
 
                 // Check local config is up to date
                 if hash.to_vec() == config_bytes_hash {

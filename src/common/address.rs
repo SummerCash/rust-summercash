@@ -1,12 +1,12 @@
 use ed25519_dalek::{Keypair, PublicKey}; // Import the edwards25519 digital signature library
 
-use super::super::crypto::blake2;
-use super::super::crypto::hash; // Import the hash library // Import the blake2 hashing library
+use super::super::crypto::blake3;
+use super::super::crypto::hash; // Import the hash library // Import the blake3 hashing library
 
 /// The length of a standard address (32 bytes).
 pub const ADDRESS_SIZE: usize = 32;
 
-/// A standard 32-byte blake2 hash of an account's public key.
+/// A standard 32-byte blake3 hash of an account's public key.
 pub type Address = hash::Hash;
 
 /* BEGIN EXPORTED METHODS */
@@ -21,10 +21,7 @@ impl Address {
     ///
     /// let default_address = address::Address::default(); // Get default address
     pub fn default() -> Address {
-        Address::new(vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ]) // Return zero value
+        Address::new(vec![0; 32]) // Return zero value
     }
 
     /// Derive an address from a given edwards25519 public key.
@@ -40,13 +37,13 @@ impl Address {
     ///
     /// use summercash::common::address; // Import the address utility
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     /// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
     ///
     /// let address = address::Address::from_public_key(&keypair.public); // Derive address
     /// ```
     pub fn from_public_key(public_key: &PublicKey) -> Address {
-        blake2::hash_slice(&public_key.to_bytes()) // Hash public key
+        blake3::hash_slice(&public_key.to_bytes()) // Hash public key
     }
 
     /// Derive an address from a given edwards25519 keypair.
@@ -62,13 +59,13 @@ impl Address {
     ///
     /// use summercash::common::address; // Import the address utility
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     /// let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
     ///
     /// let address = address::Address::from_key_pair(&keypair); // Derive address
     /// ```
     pub fn from_key_pair(key_pair: &Keypair) -> Address {
-        blake2::hash_slice(&key_pair.public.to_bytes()) // Return hashed public key
+        blake3::hash_slice(&key_pair.public.to_bytes()) // Return hashed public key
     }
 }
 
@@ -121,27 +118,27 @@ mod tests {
 
     #[test]
     fn test_from_public_key() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
         let address = Address::from_public_key(&keypair.public); // Derive address from public key
 
         assert_eq!(
             address.to_str(),
-            blake2::hash_slice(&keypair.public.to_bytes()).to_str()
+            blake3::hash_slice(&keypair.public.to_bytes()).to_str()
         ); // Ensure address properly derived
     }
 
     #[test]
     fn test_from_key_pair() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
         let address = Address::from_key_pair(&keypair); // Derive address from pair
 
         assert_eq!(
             address.to_str(),
-            blake2::hash_slice(&keypair.public.to_bytes()).to_str()
+            blake3::hash_slice(&keypair.public.to_bytes()).to_str()
         ); // Ensure address properly derived
     }
 }

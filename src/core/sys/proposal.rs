@@ -1,4 +1,4 @@
-use super::super::super::crypto::{blake2, hash}; // Import the blake2 hashing module
+use super::super::super::crypto::{blake3, hash}; // Import the blake3 hashing module
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
@@ -64,7 +64,7 @@ impl Proposal {
             proposal_id: hash::Hash::new(vec![0; hash::HASH_SIZE]), // Set id to empty hash
         }; // Initialize proposal
 
-        proposal.proposal_id = blake2::hash_slice(
+        proposal.proposal_id = blake3::hash_slice(
             serde_json::to_vec_pretty(&proposal.proposal_data.clone())
                 .unwrap()
                 .as_slice(),

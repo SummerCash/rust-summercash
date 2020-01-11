@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
 // The length of a standard hash (32 bytes).
 pub const HASH_SIZE: usize = 32;
 
-// A standard 32-byte blake2 hash.
+// A standard 32-byte blake3 hash.
 #[derive(Serialize, Deserialize, Clone, Copy, Eq, Hash, Debug)]
 pub struct Hash([u8; HASH_SIZE]);
 
@@ -90,9 +90,9 @@ impl Hash {
     /// # Example
     ///
     /// ```
-    /// use summercash::crypto::blake2; // Import the blake2 hashing utility
+    /// use summercash::crypto::blake3; // Import the blake3 hashing utility
     ///
-    /// let hash = blake2::hash_slice(b"hello world"); // Some hash vector
+    /// let hash = blake3::hash_slice(b"hello world"); // Some hash vector
     ///
     /// let hex_encoded = hash.to_str(); // 9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b
     /// ```
@@ -105,9 +105,9 @@ impl Hash {
     /// # Example
     ///
     /// ```
-    /// use summercash::crypto::blake2; // Import the blake2 hashing utility
+    /// use summercash::crypto::blake3; // Import the blake3 hashing utility
     ///
-    /// let hash = blake2::hash_slice(b"hello world!"); // Some hash vector
+    /// let hash = blake3::hash_slice(b"hello world!"); // Some hash vector
     ///
     /// let hash2 = hash.clone(); // Copy value from first hash instance
     /// ```
@@ -117,6 +117,14 @@ impl Hash {
         hash.copy_from_slice(&**self); // Copy into buffer
 
         return hash; // Return cloned hash
+    }
+}
+
+impl From<blake3::Hash> for Hash {
+    /// Initializes a new hash from the given blake3 hash.
+    fn from(hash: blake3::Hash) -> Self {
+        // Return the hash
+        Self(*hash.as_bytes())
     }
 }
 

@@ -8,7 +8,7 @@ pub mod p2p; // Export the p2p module
 extern crate failure; // Link failure crate
 
 extern crate bincode; // Link bincode crate
-extern crate blake2; // Link blake2 hashing library
+extern crate blake3; // Link blake3 hashing library
 extern crate chrono; // Link chrono library
 extern crate ed25519_dalek; // Link edwards25519 library
 extern crate hex; // Link hex encoding library

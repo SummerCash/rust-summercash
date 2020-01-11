@@ -1,7 +1,7 @@
 use super::state; // Import state module
 use super::transaction; // Import transaction types
 
-use sled; // Import sled database
+use sled::{self, IVec}; // Import sled database
 
 use std::collections; // Import collections, io modules
 
@@ -74,7 +74,7 @@ impl Node {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
     ///
@@ -113,7 +113,7 @@ impl Node {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -149,7 +149,7 @@ impl Node {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -203,7 +203,7 @@ impl Graph {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -241,7 +241,7 @@ impl Graph {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::{address, io}, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -269,7 +269,7 @@ impl Graph {
             }], // Set nodes
             hash_routes: hash_routes,                   // Set address routes
             node_children: collections::HashMap::new(), // Set node children
-            db: Some(sled::Db::start_default(db_path).unwrap()), // Set db
+            db: Some(sled::open(db_path).unwrap()), // Set db
         } // Return initialized dag
     }
 
@@ -291,7 +291,7 @@ impl Graph {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -355,7 +355,7 @@ impl Graph {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -397,7 +397,7 @@ impl Graph {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -466,7 +466,7 @@ impl Graph {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -500,7 +500,7 @@ impl Graph {
 
     /// Read the entirety of a persisted graph, or just state entry headers.
     fn read_some_from_disk(read_all: bool, network_name: &str) -> Graph {
-        let db = sled::Db::start_default(io::format_db_dir(network_name)).unwrap(); // Open database
+        let db = sled::open(io::format_db_dir(network_name)).unwrap(); // Open database
 
         let mut nodes: Vec<Node> = vec![]; // Empty vector
         let mut hash_routes: collections::hash_map::HashMap<hash::Hash, usize> =
@@ -508,7 +508,7 @@ impl Graph {
         let mut node_children: collections::hash_map::HashMap<hash::Hash, Vec<hash::Hash>> =
             collections::hash_map::HashMap::new(); // Initialize child routes map buffer
 
-        let iter = db.scan(b"0"); // Get iterator (start at genesis transaction)
+        let iter = db.iter(); // Get iterator (start at genesis transaction)
 
         iter.for_each(|key_val_pair| {
             match key_val_pair {
@@ -598,7 +598,7 @@ impl Graph {
     /// use summercash::core::types::{transaction, graph}; // Import the transaction, graph libraries
     /// use summercash::{common::address, crypto::hash}; // Import the address, hash libraries
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -693,7 +693,7 @@ impl Graph {
 
             Ok(state::merge_entries(parent_entries)) // Return merged entries
         } else {
-            Err(sled::Error::CollectionNotFound(vec![child_index as u8])) // Return error
+            Err(sled::Error::CollectionNotFound((&[child_index as u8]).into())) // Return error
         }
     }
 }
@@ -715,7 +715,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn test_push() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -792,7 +792,7 @@ mod tests {
 
     #[test]
     fn test_update() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -842,7 +842,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -879,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_get_with_hash() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number

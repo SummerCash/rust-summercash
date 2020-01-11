@@ -9,7 +9,7 @@ use std::{fs, io, io::Write}; // Import the io library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::{common, common::address, crypto::blake2}; // Import the address module
+use super::super::{common, common::address, crypto::blake3}; // Import the address module
 
 /// A SummerCash account.
 #[derive(Serialize, Deserialize)]
@@ -24,7 +24,7 @@ pub struct Account {
 impl Account {
     /// Initialize a new account from a generated keypair.
     pub fn new() -> Account {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{};
 
         Account {
             keypair: ed25519_dalek::Keypair::generate(&mut csprng)
@@ -70,7 +70,7 @@ impl Account {
 
         let mut file = fs::File::create(common::io::format_keystore_dir(&format!(
             "{}.json",
-            blake2::hash_slice(s.as_bytes()).to_str()
+            blake3::hash_slice(s.as_bytes()).to_str()
         )))?; // Initialize file
         file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
         Ok(()) // All good!

@@ -14,7 +14,7 @@ use super::receipt; // Import receipt types
 use super::signature; // Import signature type
 use super::state; // Import the state entry types
 
-use super::super::super::{common::address, crypto::blake2, crypto::hash}; // Import the hash & address modules
+use super::super::super::{common::address, crypto::blake3, crypto::hash}; // Import the hash & address modules
 
 /// An error encountered while signing a tx.
 #[derive(Debug, Fail)]
@@ -97,7 +97,7 @@ impl Transaction {
     /// use summercash::core::types::transaction; // Import the transaction library
     /// use summercash::{common::address, crypto::hash}; // Import the address library
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -133,7 +133,7 @@ impl Transaction {
 
         Transaction {
             transaction_data: transaction_data, // Set transaction data
-            hash: blake2::hash_slice(transaction_data_bytes.as_slice()),
+            hash: blake3::hash_slice(transaction_data_bytes.as_slice()),
             signature: None, // Set signature
             deployed_contract_address: None,
             contract_creation: false, // Set does create contract
@@ -159,7 +159,7 @@ impl Transaction {
     /// use summercash::core::types::transaction; // Import the transaction library
     /// use summercash::{common::address, crypto::hash}; // Import the address library
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -197,7 +197,7 @@ impl Transaction {
     /// use summercash::core::types::transaction; // Import the transaction library
     /// use summercash::{common::address, crypto::hash}; // Import the address library
     ///
-    /// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+    /// let mut csprng = OsRng{}; // Generate source of randomness
     ///
     /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
     /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -265,7 +265,7 @@ impl Transaction {
 /// use summercash::core::types::transaction; // Import the transaction library
 /// use summercash::{common::address, crypto::hash}; // Import the address library
 ///
-/// let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+/// let mut csprng = OsRng{}; // Generate source of randomness
 ///
 /// let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
 /// let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_sign_transaction() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_verify_transaction_signature() {
-        let mut csprng: OsRng = OsRng::new().unwrap(); // Generate source of randomness
+        let mut csprng = OsRng{}; // Generate source of randomness
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair

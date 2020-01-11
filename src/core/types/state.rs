@@ -2,7 +2,7 @@ use std::collections; // Import the stdlib collections library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::{crypto::blake2, crypto::hash}; // Import the hash modules
+use super::super::super::{crypto::blake3, crypto::hash}; // Import the hash modules
 
 use num::bigint::BigUint; // Add support for large unsigned integers
 
@@ -43,7 +43,7 @@ impl Entry {
 
         Entry {
             data: entry_data,                                      // Set data
-            hash: blake2::hash_slice(entry_data_bytes.as_slice()), // Set hash
+            hash: blake3::hash_slice(entry_data_bytes.as_slice()), // Set hash
         }
     }
 }
@@ -86,7 +86,7 @@ mod tests {
         let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balances hash map
 
         balances.insert(
-            blake2::hash_slice(b"test").to_str(),
+            blake3::hash_slice(b"test").to_str(),
             BigUint::from_i64(1).unwrap(),
         ); // Balance of 1 fink
 
@@ -96,7 +96,7 @@ mod tests {
             *entry
                 .data
                 .balances
-                .get(&address::Address::new(blake2::hash_slice(b"test").to_vec()).to_str())
+                .get(&address::Address::new(blake3::hash_slice(b"test").to_vec()).to_str())
                 .unwrap(),
             BigUint::from_i64(1).unwrap()
         ); // Ensure balance entry correctly written to state entry

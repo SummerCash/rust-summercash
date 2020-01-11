@@ -1,22 +1,22 @@
 use super::super::accounts::account; // Import the account module
 use super::super::core::sys::{config, system}; // Import the system module
-use super::super::crypto::blake2; // Import the blake2 hashing module
+use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::message; // Import the network module
 use super::network; // Import the network module
 use super::peers;
 use super::sync; // Import the sync module // Import the peers module
 
 use std::{
-    collections, str,
+    collections,
+    error::Error,
+    io::{self, Write},
+    str,
     sync::{Arc, Mutex},
-    {
-        io,
-        io::{Read, Write},
-    },
 }; // Allow libp2p to implement the write() helper method.
 
+use futures::future::lazy;
+
 use libp2p::{
-    futures::Future,
     identity, kad,
     tcp::{TcpConfig, TcpTransStream},
     websocket::WsConfig,
@@ -74,7 +74,10 @@ pub enum CommunicationError {
     MajorityDidNotRespond,
     #[fail(display = "no friendly peers found")]
     NoAvailablePeers,
-    #[fail(display = "an error occurred while attempting a communication operation: {}", error)]
+    #[fail(
+        display = "an error occurred while attempting a communication operation: {}",
+        error
+    )]
     Custom {
         error: String, // The actual error
     },
@@ -112,10 +115,11 @@ impl From<()> for CommunicationError {
 }
 
 /// Implement conversions from a custom error for the CommunicationError enum.
-impl From<T> for CommunicationError where T: Error {
+impl<E: Error + 'static> From<E> for CommunicationError
+{
     /// Convert the error into a CommunicationError.
-    fn from(e: T) -> Self {
-        CommunicationError::Custom{error: e} // Return the error
+    fn from(e: E) -> Self {
+        CommunicationError::Custom { error: e.to_string() } // Return the error
     }
 }
 
@@ -136,7 +140,7 @@ impl Client {
     pub fn new(network: network::Network) -> Result<Client, ConstructionError> {
         // Check peer identity exists locally
         if let Ok(p2p_account) =
-            account::Account::read_from_disk(blake2::hash_slice(b"p2p_identity"))
+            account::Account::read_from_disk(blake3::hash_slice(b"p2p_identity"))
         {
             // Check has valid p2p keypair
             if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
@@ -184,7 +188,7 @@ impl Client {
             let config = sync::config::synchronize_for_network(
                 network,
                 peers::get_network_bootstrap_peer_addresses(network),
-                keypair.clone()
+                keypair.clone(),
             )?; // Get the network config file
 
             Client::with_config(keypair, config) // Return initialized client
@@ -277,7 +281,7 @@ pub fn broadcast_message_raw_with_response(
 }
 
 /// Broadcast a particular message over tcp.
-fn broadcast_message_raw_tcp_with_response(
+async fn broadcast_message_raw_tcp_with_response(
     message: message::Message,
     peers: Vec<Multiaddr>,
 ) -> Result<Vec<u8>, CommunicationError> {
@@ -285,7 +289,6 @@ fn broadcast_message_raw_tcp_with_response(
 
     let tcp = TcpConfig::new(); // Initialize TCP config
 
-    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
     let mut dial_errors: i32 = 0; // Initialize num communication errors list
 
     let responses = Arc::new(Mutex::new(Vec::new())); // All responses
@@ -294,6 +297,9 @@ fn broadcast_message_raw_tcp_with_response(
 
     // Iterate through peers
     for peer in peers {
+        // Connect to the peer
+        let conn: TcpTransStream = tcp.dial(peer)?.await;
+
         // Dial peer
         if let Ok(conn_future) = tcp.clone().dial(peer.clone()) {
             let msg = serialized_message.clone(); // Clone message

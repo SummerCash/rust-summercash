@@ -1,24 +1,23 @@
-use blake2::{Blake2b, Digest}; // Use blake2b
+use blake3::Hasher; // Use blake3
 
 use super::hash; // Import the hash type module
 
 /* BEGIN EXPORTED METHODS */
 
-/// Hash a given slice input, b via blake2b.
+/// Hash a given slice input, b via blake3b.
 ///
 /// # Example
 ///
 /// ```
-/// use summercash::crypto::blake2; // Import the blake2 hashing utility
+/// use summercash::crypto::blake3; // Import the blake3 hashing utility
 ///
-/// let hash = blake2::hash_slice(&[1, 2, 3, 4]);
+/// let hash = blake3::hash_slice(&[1, 2, 3, 4]);
 /// ```
 pub fn hash_slice(b: &[u8]) -> hash::Hash {
-    let mut hasher = Blake2b::new(); // Init hasher
+    let mut hasher = Hasher::new(); // Init hasher
+    hasher.update(b); // Put the slice that the user gave us into the hasher
 
-    hasher.input(b); // Set input
-
-    hash::Hash::new(hasher.result()[..].to_vec()) // Hash input
+    hash::Hash::new(hasher.finalize().as_bytes()[..].to_vec()) // Hash and return it!
 }
 
 /* END EXPORTED METHODS */
