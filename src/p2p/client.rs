@@ -6,8 +6,6 @@ use super::network; // Import the network module
 use super::peers;
 use super::sync; // Import the sync module // Import the peers module
 
-use futures::lazy; // Allow for lazy futures
-
 use std::{
     collections, str,
     sync::{Arc, Mutex},
@@ -76,6 +74,10 @@ pub enum CommunicationError {
     MajorityDidNotRespond,
     #[fail(display = "no friendly peers found")]
     NoAvailablePeers,
+    #[fail(display = "an error occurred while attempting a communication operation: {}", error)]
+    Custom {
+        error: String, // The actual error
+    },
 }
 
 /// Implement conversions from a bincode error for the CommunicationError enum.
@@ -109,12 +111,22 @@ impl From<()> for CommunicationError {
     }
 }
 
+/// Implement conversions from a custom error for the CommunicationError enum.
+impl From<T> for CommunicationError where T: Error {
+    /// Convert the error into a CommunicationError.
+    fn from(e: T) -> Self {
+        CommunicationError::Custom{error: e} // Return the error
+    }
+}
+
 /// A network client.
 pub struct Client {
     /// The active SummerCash runtime environment
     pub runtime: system::System,
+
     /// The list of accounts used to vote on proposals
     pub voting_accounts: Vec<account::Account>,
+
     /// The client's libp2p peer identity
     pub peer_id: PeerId,
 }

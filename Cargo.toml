@@ -1,31 +1,31 @@
 [package]
 name = "summercash"
 version = "0.1.0"
-authors = ["Dowland Aiello <mitsukomegumii@gmail.com>"]
+authors = ["Dowland Aiello <dowlandaiello@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
 
 [dependencies]
-num = { version = "0.2.0", features = ["serde"] }
-hex = "0.3.2"
-blake2 = "0.8.0"
-rand = "0.6.0"
+num = { version = "0.2.1", features = ["serde"] }
+hex = "0.4.0"
+blake2 = "0.8.1"
+rand = "0.7.3"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_bytes = "0.11.1"
-serde_json = "1.0.40"
-failure = "0.1.5"
-sled = "0.24.1"
+serde_bytes = "0.11.3"
+serde_json = "1.0.44"
+failure = "0.1.6"
+sled = "0.30.3"
 path-clean = "0.1.0"
-bincode = "1.1.4"
-libp2p = "0.11.0"
+bincode = "1.2.1"
+libp2p = "0.13.2"
 walkdir = "2"
-futures = "0.1.28"
-tokio = "0.1.22"
+futures = "0.3.1"
+tokio = "0.2.9"
 log = "0.4"
 
 [dependencies.ed25519-dalek]
-version = "1.0.0-pre.1"
+version = "0.9.1"
 features = ["serde"]
 
 [lib]
