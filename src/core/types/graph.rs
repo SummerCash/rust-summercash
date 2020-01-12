@@ -1,11 +1,8 @@
 use super::state; // Import state module
 use super::transaction; // Import transaction types
 
-use sled::{self, IVec}; // Import sled database
-
 use std::collections; // Import collections, io modules
 
-use bincode; // Import serde bincode
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
 use super::super::super::{common::io, crypto::hash}; // Import address, hash types
@@ -620,7 +617,7 @@ impl Graph {
             for node in &self.nodes {
                 // Check not already in db
                 if !db.contains_key(i.to_string().as_bytes()).unwrap() {
-                    let set_result = db.set(i.to_string().as_bytes(), node.to_bytes()); // Insert node bytes
+                    let set_result = db.insert(i.to_string().as_bytes(), node.to_bytes()); // Insert node bytes
 
                     match set_result {
                         // Returned error

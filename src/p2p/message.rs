@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 pub struct Message {
     /// The message header
     pub header: Header,
+
     /// Data sent in message
     pub data: Vec<u8>,
 }
@@ -26,8 +27,10 @@ impl Message {
 pub struct Header {
     /// The pseudo-HTTP method associated with the message
     pub method: Method,
+
     /// The target runtime field
     pub param_name: String,
+
     /// The networks to broadcast the message to
     pub networks: Vec<network::Network>,
 }
