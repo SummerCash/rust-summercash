@@ -17,15 +17,17 @@ use std::{
 use futures::future::lazy;
 
 use libp2p::{
+    floodsub::{Floodsub, FloodsubEvent},
+    futures::Future,
     identity, kad,
-    tcp::{TcpConfig, TcpTransStream},
+    kad::{record::store::MemoryStore, Kademlia, KademliaEvent, Record},
+    mdns::{Mdns, MdnsEvent},
+    swarm::NetworkBehaviourEventProcess,
+    tcp::{TcpConfig, TcpDialFut, TcpTransStream},
+    tokio_io::{AsyncRead, AsyncWrite},
     websocket::WsConfig,
-    Multiaddr, PeerId, Swarm, Transport, TransportError,
+    Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport, TransportError,
 }; // Import the libp2p library
-
-use tokio; // Import tokio
-
-use bincode; // Import bincode
 
 /// The global string representation for an invalid peer id.
 pub static INVALID_PEER_ID_STRING: &str = "INVALID_PEER_ID";
@@ -47,6 +49,15 @@ pub enum ConstructionError {
 impl From<CommunicationError> for ConstructionError {
     fn from(e: CommunicationError) -> ConstructionError {
         ConstructionError::CommunicationsFailure { error: e } // Return construction error
+    }
+}
+
+/// Implement conversion from an IO error for the ConstructionError enum.
+impl From<io::Error> for ConstructionError {
+    /// Converts the given IO error into a ConstructionError.
+    fn from(e: io::Error) -> Self {
+        // Return the error
+        Self::CommunicationsFailure { error: e.into() }
     }
 }
 
@@ -83,14 +94,7 @@ pub enum CommunicationError {
     },
 }
 
-/// Implement conversions from a bincode error for the CommunicationError enum.
-impl From<std::boxed::Box<bincode::ErrorKind>> for CommunicationError {
-    fn from(_e: std::boxed::Box<bincode::ErrorKind>) -> CommunicationError {
-        CommunicationError::MessageSerializationFailure // Return error
-    }
-}
-
-/// Implement conversions from a libp2p transport error for the CommunicationError enum.
+// Implement conversions from a libp2p transport error for the CommunicationError enum.
 impl From<TransportError<std::io::Error>> for CommunicationError {
     fn from(e: TransportError<std::io::Error>) -> CommunicationError {
         // Handle different error types
@@ -107,24 +111,115 @@ impl From<TransportError<std::io::Error>> for CommunicationError {
     }
 }
 
-/// Implement conversions from a miscellaneous error for the CommunicationError enum.
-impl From<()> for CommunicationError {
-    fn from(_e: ()) -> CommunicationError {
-        CommunicationError::Unknown // Just return an unknown error
+impl From<io::Error> for CommunicationError {
+    /// Converts the given IO error to a CommunicationError.
+    fn from(e: io::Error) -> Self {
+        // Return the IO error as a CommunicationError
+        Self::IOFailure {
+            error: e.description().to_owned(),
+        }
     }
 }
 
-/// Implement conversions from a custom error for the CommunicationError enum.
-impl<E: Error + 'static> From<E> for CommunicationError
+/// A network behavior describing a client connected to a pub-sub compatible,
+/// optionally mDNS-compatible network. Such a "behavior" may be implemented for
+/// any libp2p transport, but any transport used with this behavior must implement
+/// asynchronous reading & writing capabilities.
+#[derive(NetworkBehaviour)]
+pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+    /// Some pubsub mechanism bound to the above transport
+    pub floodsub: Floodsub<TSubstream>,
+
+    /// Some mDNS service bound to the above transport
+    pub mdns: Mdns<TSubstream>,
+
+    /// Allow for the client to do some external discovery on the global network through a KAD DHT
+    pub kad_dht: Kademlia<TSubstream, MemoryStore>,
+}
+
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
+    /// Adds the given peer with a particular ID & multi address to the behavior.
+    pub fn add_address(&self, id: &PeerId, multi_address: Multiaddr) {
+        // Add the peer to the KAD DHT
+        self.kad_dht.add_address(id, multi_address);
+        
+        // Add the peer to the list of floodsub peers to message
+        self.floodsub.add_node_to_partial_view(*id);
+    }
+}
+
+/*
+    BEGIN IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
+*/
+
+/// Discovery via mDNS events.
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviourEventProcess<MdnsEvent>
+    for ClientBehavior<TSubstream>
 {
-    /// Convert the error into a CommunicationError.
-    fn from(e: E) -> Self {
-        CommunicationError::Custom { error: e.to_string() } // Return the error
+    /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
+    fn inject_event(&mut self, event: MdnsEvent) {
+        // Check what kind of packet the peer has sent us, and, from there, decide what we want to do with it.
+        match event {
+            MdnsEvent::Discovered(list) =>
+            // Go through each of the peers we were able to connect to, and add them to the localized node registry
+            {
+                for (peer, _) in list {
+                    // Register the discovered peer in the localized pubsub service instance
+                    self.floodsub.add_node_to_partial_view(peer)
+                }
+            }
+            MdnsEvent::Expired(list) =>
+            // Go through each of the peers we were able to connect to, and remove them from the localized node registry
+            {
+                for (peer, _) in list {
+                    if !self.mdns.has_node(&peer) {
+                        // Oops, rent is up, and the bourgeoisie haven't given up their power. I guess it's time to die, poor person. Sad proletariat.
+                        self.floodsub.remove_node_from_partial_view(&peer);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Network synchronization via KAD DHT events.
+/// Synchronization of network proposals, for example, is done in this manner.
+/// TODO: Not implemented
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviourEventProcess<KademliaEvent>
+    for ClientBehavior<TSubstream>
+{
+    // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
+    fn inject_event(&mut self, event: KademliaEvent) {
+        match event {
+            // The record was found successfully; print it
+            KademliaEvent::GetRecordResult(Ok(result)) => {
+                for Record { key, value, .. } in result.records {
+                    // Print out the record
+                    info!("Found key: {:?}", key);
+                }
+            }
+            // An error occurred while fetching the record; print it
+            KademliaEvent::GetRecordResult(Err(e)) => warn!("Failed to load record: {:?}", e),
+            _ => {}
+        }
+    }
+}
+
+/*
+    END IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
+*/
+
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviourEventProcess<FloodsubEvent>
+    for ClientBehavior<TSubstream>
+{
+    /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
+    fn inject_event(&mut self, message: FloodsubEvent) {
+        // TODO: Unimplemented
     }
 }
 
 /// A network client.
-pub struct Client {
+pub struct Client<TTransport: Clone + Transport, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// The active SummerCash runtime environment
     pub runtime: system::System,
 
@@ -136,8 +231,8 @@ pub struct Client {
 }
 
 /// Implement a set of client helper methods.
-impl Client {
-    pub fn new(network: network::Network) -> Result<Client, ConstructionError> {
+impl<TTransport: Transport + std::clone::Clone, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> Client<TTransport, TSubstream> where TTransport::Error: Send + 'static{
+    pub fn new(network: network::Network) -> Result<Client<TTransport, TSubstream>, ConstructionError> {
         // Check peer identity exists locally
         if let Ok(p2p_account) =
             account::Account::read_from_disk(blake3::hash_slice(b"p2p_identity"))
@@ -180,7 +275,7 @@ impl Client {
     pub fn with_peer_id(
         network: network::Network,
         keypair: identity::Keypair,
-    ) -> Result<Client, ConstructionError> {
+    ) -> Result<Client<TTransport, TSubstream>, ConstructionError> {
         // Check for errors while reading config
         if let Ok(read_config) = config::Config::read_from_disk(network.to_str()) {
             Client::with_config(keypair, read_config) // Return initialized client
@@ -199,10 +294,14 @@ impl Client {
     pub fn with_config(
         keypair: identity::Keypair,
         cfg: config::Config,
-    ) -> Result<Client, ConstructionError> {
+    ) -> Result<Client<TTransport, TSubstream>, ConstructionError> {
         let voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
 
-        Ok(Client::with_voting_accounts(keypair, cfg, voting_accounts)) // Return initialized client
+        // Return the initialized client
+        match Client::with_voting_accounts(keypair, cfg, voting_accounts) {
+            Ok(c) => Ok(c),
+            Err(e) => Err(e.into()),
+        }
     }
 
     // Initialize a new client with the given network_name, peer_id, config, and voting_accounts list.
@@ -210,15 +309,21 @@ impl Client {
         keypair: identity::Keypair,
         cfg: config::Config,
         voting_accounts: Vec<account::Account>,
-    ) -> Client {
+    ) -> io::Result<Client<TTransport, TSubstream>> {
         let peer_id = PeerId::from_public_key(keypair.public()); // Get peer id
 
         let transport = libp2p::build_tcp_ws_secio_mplex_yamux(keypair); // Build a transport
 
         let kad_cfg = kad::KademliaConfig::default(); // Get the default kad dht config
-
         let store = kad::record::store::MemoryStore::new(peer_id.clone()); // Initialize a memory store to store peer information in
-        let mut behavior = kad::Kademlia::with_config(peer_id.clone(), store, kad_cfg); // Initialize a behavior from the store and kad config
+
+        // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
+        // an mDNS service handler as well as a floodsub instance targeted at the given peer
+        let mut behavior: ClientBehavior<TSubstream> = ClientBehavior {
+            floodsub: Floodsub::new(peer_id.clone()),
+            mdns: Mdns::new()?,
+            kad_dht: Kademlia::new(peer_id.clone(), store),
+        };
 
         let bootstrap_addresses =
             peers::get_network_bootstrap_peers(network::Network::from(cfg.network_name.as_ref())); // Get a list of network bootstrap peers
@@ -230,449 +335,13 @@ impl Client {
 
         let swarm = Swarm::new(transport, behavior, peer_id.clone()); // Initialize a swarm
 
-        Client {
+        // Return the initialized client inside a result
+        Ok(Client {
             runtime: system::System::new(cfg), // Set runtime
             voting_accounts,                   // Set voters
             peer_id,                           // Set peer id
-        }
-    }
-}
-
-/// Broadcast a given message to a set of peers, and return the response.
-pub fn broadcast_message_raw_with_response(
-    message: message::Message,
-    peers: Vec<Multiaddr>,
-    keypair: identity::Keypair,
-) -> Result<Vec<u8>, CommunicationError> {
-    let mut ws_peers: Vec<Multiaddr> = vec![]; // Init WebSocket peers list
-    let mut tcp_peers: Vec<Multiaddr> = vec![]; // Init TCP peers list
-
-    // Iterate through peers
-    for peer in peers.clone() {
-        // Check is WebSockets peer
-        if peer.to_string().contains("/ws") {
-            ws_peers.push(peer); // Append peer
-        } else {
-            tcp_peers.push(peer); // Append peer
-        }
-    }
-
-    let num_ws_peers = ws_peers.len(); // Get number of WebSockets peers
-    let num_tcp_peers = tcp_peers.len(); // Get number of TCP peers
-
-    let mut ws_resp: Result<Vec<u8>, CommunicationError> = Ok(vec![]); // Declare a buffer for ws errors
-    let mut tcp_resp: Result<Vec<u8>, CommunicationError> = Ok(vec![]); // Declare a buffer for tcp errors
-
-    // Check has any ws peers
-    if ws_peers.len() > 0 {
-        ws_resp = broadcast_message_raw_ws_with_response(message.clone(), ws_peers);
-        // Broadcast over WS
-    }
-    // Check any tcp peers
-    if tcp_peers.len() > 0 {
-        tcp_resp = broadcast_message_raw_tcp_with_response(message, tcp_peers); // Broadcast over TCP
-    }
-
-    if num_ws_peers > num_tcp_peers {
-        ws_resp // Return WebSockets response
-    } else {
-        tcp_resp // Return TCP error
-    }
-}
-
-/// Broadcast a particular message over tcp.
-async fn broadcast_message_raw_tcp_with_response(
-    message: message::Message,
-    peers: Vec<Multiaddr>,
-) -> Result<Vec<u8>, CommunicationError> {
-    let serialized_message = bincode::serialize(&message)?; // Serialize message
-
-    let tcp = TcpConfig::new(); // Initialize TCP config
-
-    let mut dial_errors: i32 = 0; // Initialize num communication errors list
-
-    let responses = Arc::new(Mutex::new(Vec::new())); // All responses
-
-    let num_peers = peers.len(); // Get number of peers for later
-
-    // Iterate through peers
-    for peer in peers {
-        // Connect to the peer
-        let conn: TcpTransStream = tcp.dial(peer)?.await;
-
-        // Dial peer
-        if let Ok(conn_future) = tcp.clone().dial(peer.clone()) {
-            let msg = serialized_message.clone(); // Clone message
-
-            let mut did_connect = false; // We'll set this later if we can connect to the peer
-
-            let responses_clone = responses.clone(); // Clone responses
-
-            let message_send_future = conn_future
-                .map_err(|e| {
-                    e // Return error
-                })
-                .and_then(move |conn: TcpTransStream| {
-                    did_connect = true; // We've successfully connected to a peer!
-
-                    tokio::io::write_all(conn, msg) // Write to connection
-                })
-                .and_then(move |(mut conn, _)| {
-                    let mut buf: Vec<u8> = vec![]; // Initialize empty buffer
-
-                    // Read into response buffer
-                    match conn.read_to_end(&mut buf) {
-                        Err(_e) => did_connect = false,
-                        _ => (),
-                    };
-
-                    // Lock responses
-                    if let Ok(mut_responses) = responses_clone.lock() {
-                        mut_responses.clone().push(buf); // Add to all responses
-                    }
-
-                    Ok(()) // Done!
-                })
-                .map_err(move |e| {
-                    e // Return error
-                });
-
-            let _ = pool.spawn(lazy(move |_| {
-                // Initialize runtime
-                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
-                    let _ = rt.block_on(message_send_future); // Send it!
-                }
-
-                // Check for any errors at all
-                if !did_connect {
-                    dial_errors += 1; // One more comm error to worry about
-                }
-
-                Ok(()) // Done!
-            })); // Actually send the message
-        }
-    }
-
-    pool.shutdown().wait()?; // Shutdown pool
-
-    // Check failed to dial more than half of peers
-    if dial_errors as f32 >= 0.5 * num_peers as f32 {
-        Err(CommunicationError::MajorityDidNotReceive) // Return some error
-    } else {
-        let mut response_frequencies: collections::HashMap<Vec<u8>, i16> =
-            collections::HashMap::new(); // Initialize response frequencies map
-
-        // Do some mutex stuff first
-        if let Ok(responses) = responses.lock() {
-            // Get first item
-            if let Some(most_common_response_ref) = responses.get(0) {
-                let mut most_common_response = (*most_common_response_ref).clone(); // Clone most common response
-                let mut most_common_response_frequency = 0; // Frequency of most common response
-                                                            // Iterate through responses
-                for response in responses.iter() {
-                    let frequency = response_frequencies.entry(response.clone()).or_insert(0); // Get frequency entry
-                    *frequency += 1; // Increment frequency
-
-                    // Check is most common response
-                    if *response == most_common_response {
-                        most_common_response_frequency += 1; // Increment frequency
-                    } else {
-                        // Check has highest frequency
-                        if *frequency > most_common_response_frequency {
-                            most_common_response = response.clone(); // Set most common response
-                            most_common_response_frequency = *frequency; // Set most common response frequency
-                        }
-                    }
-                }
-
-                Ok(most_common_response) // Done!
-            } else {
-                Err(CommunicationError::Unknown) // Idk
-            }
-        } else {
-            Err(CommunicationError::MutexFailure) // Let the caller know we're bad at asynchronous rust
-        }
-    }
-}
-
-/// Broadcast a particular message over WebSockets.
-fn broadcast_message_raw_ws_with_response(
-    message: message::Message,
-    peers: Vec<Multiaddr>,
-) -> Result<Vec<u8>, CommunicationError> {
-    let serialized_message = bincode::serialize(&message)?; // Serialize message
-
-    let ws = WsConfig::new(TcpConfig::new()); // Initialize WS config
-
-    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
-    let mut dial_errors: i32 = 0; // Initialize num communication errors list
-
-    let responses = Arc::new(Mutex::new(Vec::new())); // All responses
-
-    let num_peers = peers.len(); // Get number of peers for later
-
-    // Iterate through peers
-    for peer in peers {
-        // Dial peer
-        if let Ok(conn_future) = ws.clone().dial(peer.clone()) {
-            let msg = serialized_message.clone(); // Clone message
-
-            let mut did_connect = false; // We'll set this later if we can connect to the peer
-
-            let responses_clone = responses.clone(); // Clone responses
-
-            let message_send_future = conn_future
-                .map_err(|_e| {
-                    io::Error::from(io::ErrorKind::BrokenPipe) // Lol
-                })
-                .and_then(move |conn| {
-                    did_connect = true; // We've successfully connected to a peer!
-
-                    tokio::io::write_all(conn, msg) // Write to connection
-                })
-                .and_then(move |(mut conn, _)| {
-                    let mut buf: Vec<u8> = vec![]; // Initialize empty buffer
-
-                    // Read into response buffer
-                    match conn.read_to_end(&mut buf) {
-                        Err(_e) => did_connect = false,
-                        _ => (),
-                    };
-
-                    // Lock responses
-                    if let Ok(mut_responses) = responses_clone.lock() {
-                        mut_responses.clone().push(buf); // Add to all responses
-                    }
-
-                    Ok(()) // Done!
-                })
-                .map_err(move |e| {
-                    e // Return error
-                });
-
-            let _ = pool.spawn(lazy(move |_| {
-                // Initialize runtime
-                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
-                    let _ = rt.block_on(message_send_future); // Send it!
-                }
-
-                // Check for any errors at all
-                if !did_connect {
-                    dial_errors += 1; // One more comm error to worry about
-                }
-
-                Ok(()) // Done!
-            })); // Actually send the message
-        }
-    }
-
-    pool.shutdown().wait()?; // Shutdown pool
-
-    // Check failed to dial more than half of peers
-    if dial_errors as f32 >= 0.5 * num_peers as f32 {
-        Err(CommunicationError::MajorityDidNotReceive) // Return some error
-    } else {
-        let mut response_frequencies: collections::HashMap<Vec<u8>, i16> =
-            collections::HashMap::new(); // Initialize response frequencies map
-
-        // Do some mutex stuff first
-        if let Ok(responses) = responses.lock() {
-            // Get first item
-            if let Some(most_common_response_ref) = responses.get(0) {
-                let mut most_common_response = (*most_common_response_ref).clone(); // Clone most common response
-                let mut most_common_response_frequency = 0; // Frequency of most common response
-                                                            // Iterate through responses
-                for response in responses.iter() {
-                    let frequency = response_frequencies.entry(response.clone()).or_insert(0); // Get frequency entry
-                    *frequency += 1; // Increment frequency
-
-                    // Check is most common response
-                    if *response == most_common_response {
-                        most_common_response_frequency += 1; // Increment frequency
-                    } else {
-                        // Check has highest frequency
-                        if *frequency > most_common_response_frequency {
-                            most_common_response = response.clone(); // Set most common response
-                            most_common_response_frequency = *frequency; // Set most common response frequency
-                        }
-                    }
-                }
-
-                Ok(most_common_response) // Done!
-            } else {
-                Err(CommunicationError::Unknown) // Idk
-            }
-        } else {
-            Err(CommunicationError::MutexFailure) // Let the caller know we're bad at asynchronous rust
-        }
-    }
-}
-
-/// Broadcast a given message to a set of peers. TODO: WebSocket support, secio support, errors
-pub fn broadcast_message_raw(
-    message: message::Message,
-    peers: Vec<Multiaddr>,
-) -> Result<(), CommunicationError> {
-    let mut ws_peers: Vec<Multiaddr> = vec![]; // Init WebSocket peers list
-    let mut tcp_peers: Vec<Multiaddr> = vec![]; // Init TCP peers list
-
-    // Iterate through peers
-    for peer in peers.clone() {
-        // Check is WebSockets peer
-        if peer.to_string().contains("/ws") {
-            ws_peers.push(peer); // Append peer
-        } else {
-            tcp_peers.push(peer); // Append peer
-        }
-    }
-
-    let num_ws_peers = ws_peers.len(); // Get number of WebSockets peers
-    let num_tcp_peers = tcp_peers.len(); // Get number of TCP peers
-
-    let mut ws_err: Result<(), CommunicationError> = Ok(()); // Declare a buffer for ws errors
-    let mut tcp_err: Result<(), CommunicationError> = Ok(()); // Declare a buffer for tcp errors
-
-    // Check has any ws peers
-    if ws_peers.len() > 0 {
-        ws_err = broadcast_message_raw_ws(message.clone(), ws_peers); // Broadcast over WS
-    }
-    // Check any tcp peers
-    if tcp_peers.len() > 0 {
-        tcp_err = broadcast_message_raw_tcp(message, tcp_peers); // Broadcast over TCP
-    }
-
-    if num_ws_peers > num_tcp_peers {
-        ws_err // Return WebSockets error
-    } else {
-        tcp_err // Return TCP error
-    }
-}
-
-/// Broadcast a particular message over tcp.
-fn broadcast_message_raw_tcp(
-    message: message::Message,
-    peers: Vec<Multiaddr>,
-) -> Result<(), CommunicationError> {
-    let serialized_message = bincode::serialize(&message)?; // Serialize message
-
-    let tcp = TcpConfig::new(); // Initialize TCP config
-
-    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
-    let mut dial_errors: i32 = 0; // Initialize num communication errors list
-
-    let num_peers = peers.len(); // Get number of peers for later
-
-    // Iterate through peers
-    for peer in peers {
-        // Dial peer
-        if let Ok(conn_future) = tcp.clone().dial(peer.clone()) {
-            let msg = serialized_message.clone(); // Clone message
-
-            let mut did_send = true; // We'll set this later if we encounter an error sending a message
-            let mut did_connect = false; // We'll set this later if we can connect to the peer
-
-            let message_send_future = conn_future
-                .map_err(|e| {
-                    e // Return error
-                })
-                .and_then(move |mut conn| {
-                    did_connect = true; // We've successfully connected to a peer!
-
-                    conn.write_all(msg.as_slice().into()).map(|_| ()) // Write to connection
-                })
-                .map_err(move |e| {
-                    did_send = false; // Set send error
-
-                    e // Return error
-                });
-
-            let _ = pool.spawn(lazy(move || {
-                // Initialize runtime
-                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
-                    let _ = rt.block_on(message_send_future); // Send it!
-                }
-
-                // Check for any errors at all
-                if !did_connect || !did_send {
-                    dial_errors += 1; // One more comm error to worry about
-                }
-
-                Ok(()) // Done!
-            })); // Actually send the message
-        }
-    }
-
-    pool.shutdown().wait()?; // Shutdown pool
-
-    // Check failed to dial more than half of peers
-    if dial_errors as f32 >= 0.5 * num_peers as f32 {
-        Err(CommunicationError::MajorityDidNotReceive) // Return some error
-    } else {
-        Ok(()) // Done!
-    }
-}
-
-/// Broadcast a particular message over WebSockets.
-fn broadcast_message_raw_ws(
-    message: message::Message,
-    peers: Vec<Multiaddr>,
-) -> Result<(), CommunicationError> {
-    let serialized_message = bincode::serialize(&message)?; // Serialize message
-
-    let ws = WsConfig::new(TcpConfig::new()); // Initialize WS config
-
-    let pool = tokio::executor::thread_pool::ThreadPool::new(); // Create thread pool
-    let mut dial_errors: i32 = 0; // Initialize num communication errors list
-
-    let num_peers = peers.len(); // Get number of peers for later
-
-    // Iterate through peers
-    for peer in peers {
-        // Dial peer
-        if let Ok(conn_future) = ws.clone().dial(peer.clone()) {
-            let msg = serialized_message.clone(); // Clone message
-
-            let mut did_send = true; // We'll set this later if we encounter an error sending a message
-            let mut did_connect = false; // We'll set this later if we can connect to the peer
-
-            let message_send_future = conn_future
-                .map_err(|_e| {
-                    io::Error::from(io::ErrorKind::BrokenPipe) // Return error lol
-                })
-                .and_then(move |mut conn| {
-                    did_connect = true; // We've successfully connected to a peer!
-
-                    conn.write_all(msg.as_slice().into()).map(|_| ()) // Write to connection
-                })
-                .map_err(move |e| {
-                    did_send = false; // Set send error
-
-                    e // Return error
-                });
-
-            let _ = pool.spawn(lazy(move || {
-                // Initialize runtime
-                if let Ok(mut rt) = tokio::runtime::Runtime::new() {
-                    let _ = rt.block_on(message_send_future); // Send it!
-                }
-
-                // Check for any errors at all
-                if !did_connect || !did_send {
-                    dial_errors += 1; // One more comm error to worry about
-                }
-
-                Ok(()) // Done!
-            })); // Actually send the message
-        }
-    }
-
-    pool.shutdown().wait()?; // Shutdown pool
-
-    // Check failed to dial more than half of peers
-    if dial_errors as f32 >= 0.5 * num_peers as f32 {
-        Err(CommunicationError::MajorityDidNotReceive) // Return some error
-    } else {
-        Ok(()) // Done!
+            swarm,                             // Set swarm
+        })
     }
 }
 

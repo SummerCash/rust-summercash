@@ -1,4 +1,4 @@
-use libp2p::{Multiaddr, identity::Keypair}; // Import libp2p
+use libp2p::{identity::Keypair, Multiaddr}; // Import libp2p
 
 use bincode; // Import bincode
 
@@ -44,8 +44,11 @@ pub fn synchronize_for_network(
             } else {
                 Err(client::CommunicationError::MessageSerializationFailure) // Return a serialization error, since we couldn't deserialize the list of proposals
             }
+        } else if let Err(e) = resp_result {
+            Err(e) // Return error
         } else {
-            Err(resp_result.unwrap_err()) // Return error
+            // Return some unknown error, since we couldn't get an actual error
+            Err(client::CommunicationError::Unknown)
         }
     } else {
         Err(client::CommunicationError::NoAvailablePeers) // Return an error since there are no available peers
