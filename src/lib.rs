@@ -16,7 +16,6 @@ extern crate hex; // Link hex encoding library
 #[macro_use]
 extern crate log;
 
-#[macro_use]
 extern crate libp2p; // Link libp2p library
 
 extern crate num; // Link num library

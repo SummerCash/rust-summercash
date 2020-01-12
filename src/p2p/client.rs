@@ -7,14 +7,10 @@ use super::peers;
 use super::sync; // Import the sync module // Import the peers module
 
 use std::{
-    collections,
     error::Error,
     io::{self, Write},
     str,
-    sync::{Arc, Mutex},
 }; // Allow libp2p to implement the write() helper method.
-
-use futures::future::lazy;
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent},
@@ -23,11 +19,11 @@ use libp2p::{
     kad::{record::store::MemoryStore, Kademlia, KademliaEvent, Record},
     mdns::{Mdns, MdnsEvent},
     swarm::NetworkBehaviourEventProcess,
-    tcp::{TcpConfig, TcpDialFut, TcpTransStream},
-    tokio_io::{AsyncRead, AsyncWrite},
-    websocket::WsConfig,
     Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport, TransportError,
 }; // Import the libp2p library
+
+// We need these traits from the futures library in order to build a swarm.
+use futures::io::{AsyncRead, AsyncWrite};
 
 /// The global string representation for an invalid peer id.
 pub static INVALID_PEER_ID_STRING: &str = "INVALID_PEER_ID";
@@ -142,7 +138,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior
     pub fn add_address(&self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
         self.kad_dht.add_address(id, multi_address);
-        
+
         // Add the peer to the list of floodsub peers to message
         self.floodsub.add_node_to_partial_view(*id);
     }
@@ -153,8 +149,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior
 */
 
 /// Discovery via mDNS events.
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviourEventProcess<MdnsEvent>
-    for ClientBehavior<TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<TSubstream>
 {
     /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
     fn inject_event(&mut self, event: MdnsEvent) {
@@ -185,8 +181,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehavio
 /// Network synchronization via KAD DHT events.
 /// Synchronization of network proposals, for example, is done in this manner.
 /// TODO: Not implemented
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviourEventProcess<KademliaEvent>
-    for ClientBehavior<TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<TSubstream>
 {
     // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
     fn inject_event(&mut self, event: KademliaEvent) {
@@ -209,8 +205,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehavio
     END IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
 */
 
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviourEventProcess<FloodsubEvent>
-    for ClientBehavior<TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
 {
     /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
     fn inject_event(&mut self, message: FloodsubEvent) {
@@ -219,20 +215,23 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehavio
 }
 
 /// A network client.
-pub struct Client<TTransport: Clone + Transport, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+pub struct Client {
     /// The active SummerCash runtime environment
     pub runtime: system::System,
 
     /// The list of accounts used to vote on proposals
     pub voting_accounts: Vec<account::Account>,
 
+    /// The client's libp2p peer identity keypair
+    pub keypair: identity::Keypair,
+
     /// The client's libp2p peer identity
     pub peer_id: PeerId,
 }
 
 /// Implement a set of client helper methods.
-impl<TTransport: Transport + std::clone::Clone, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> Client<TTransport, TSubstream> where TTransport::Error: Send + 'static{
-    pub fn new(network: network::Network) -> Result<Client<TTransport, TSubstream>, ConstructionError> {
+impl Client {
+    pub fn new(network: network::Network) -> Result<Client, ConstructionError> {
         // Check peer identity exists locally
         if let Ok(p2p_account) =
             account::Account::read_from_disk(blake3::hash_slice(b"p2p_identity"))
@@ -275,10 +274,10 @@ impl<TTransport: Transport + std::clone::Clone, TSubstream: AsyncRead + AsyncWri
     pub fn with_peer_id(
         network: network::Network,
         keypair: identity::Keypair,
-    ) -> Result<Client<TTransport, TSubstream>, ConstructionError> {
+    ) -> Result<Client, ConstructionError> {
         // Check for errors while reading config
         if let Ok(read_config) = config::Config::read_from_disk(network.to_str()) {
-            Client::with_config(keypair, read_config) // Return initialized client
+            Ok(Client::with_config(keypair, read_config)) // Return initialized client
         } else {
             let config = sync::config::synchronize_for_network(
                 network,
@@ -286,22 +285,16 @@ impl<TTransport: Transport + std::clone::Clone, TSubstream: AsyncRead + AsyncWri
                 keypair.clone(),
             )?; // Get the network config file
 
-            Client::with_config(keypair, config) // Return initialized client
+            Ok(Client::with_config(keypair, config)) // Return initialized client
         }
     }
 
     /// Initialize a new client with the given network_name, peer_id, and config.
-    pub fn with_config(
-        keypair: identity::Keypair,
-        cfg: config::Config,
-    ) -> Result<Client<TTransport, TSubstream>, ConstructionError> {
+    pub fn with_config(keypair: identity::Keypair, cfg: config::Config) -> Client {
         let voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
 
-        // Return the initialized client
-        match Client::with_voting_accounts(keypair, cfg, voting_accounts) {
-            Ok(c) => Ok(c),
-            Err(e) => Err(e.into()),
-        }
+        // Initialize a client with the given keypair, configuration & voting accounts
+        Client::with_voting_accounts(keypair, cfg, voting_accounts)
     }
 
     // Initialize a new client with the given network_name, peer_id, config, and voting_accounts list.
@@ -309,39 +302,45 @@ impl<TTransport: Transport + std::clone::Clone, TSubstream: AsyncRead + AsyncWri
         keypair: identity::Keypair,
         cfg: config::Config,
         voting_accounts: Vec<account::Account>,
-    ) -> io::Result<Client<TTransport, TSubstream>> {
-        let peer_id = PeerId::from_public_key(keypair.public()); // Get peer id
+    ) -> Client {
+        // Return the initialized client inside a result
+        Client {
+            runtime: system::System::new(cfg),                  // Set runtime
+            voting_accounts,                                    // Set voters
+            peer_id: PeerId::from_public_key(keypair.public()), // Set peer id
+            keypair,
+        }
+    }
 
-        let transport = libp2p::build_tcp_ws_secio_mplex_yamux(keypair); // Build a transport
-
+    /// Starts the client.
+    pub async fn start(&self) -> io::Result<()> {
         let kad_cfg = kad::KademliaConfig::default(); // Get the default kad dht config
-        let store = kad::record::store::MemoryStore::new(peer_id.clone()); // Initialize a memory store to store peer information in
+        let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
         // an mDNS service handler as well as a floodsub instance targeted at the given peer
-        let mut behavior: ClientBehavior<TSubstream> = ClientBehavior {
-            floodsub: Floodsub::new(peer_id.clone()),
-            mdns: Mdns::new()?,
-            kad_dht: Kademlia::new(peer_id.clone(), store),
+        let mut behavior = ClientBehavior {
+            floodsub: Floodsub::new(self.peer_id.clone()),
+            mdns: Mdns::new().await?,
+            kad_dht: Kademlia::new(self.peer_id.clone(), store),
         };
 
-        let bootstrap_addresses =
-            peers::get_network_bootstrap_peers(network::Network::from(cfg.network_name.as_ref())); // Get a list of network bootstrap peers
+        let bootstrap_addresses = peers::get_network_bootstrap_peers(network::Network::from(
+            self.runtime.config.network_name.as_ref(),
+        )); // Get a list of network bootstrap peers
 
         // Iterate through bootstrap addresses
         for bootstrap_peer in bootstrap_addresses {
             behavior.add_address(&bootstrap_peer.0, bootstrap_peer.1); // Add the bootstrap peer to the DHT
         }
 
-        let swarm = Swarm::new(transport, behavior, peer_id.clone()); // Initialize a swarm
+        let swarm = Swarm::new(
+            libp2p::build_tcp_ws_secio_mplex_yamux(self.keypair)?,
+            behavior,
+            self.peer_id.clone(),
+        ); // Initialize a swarm
 
-        // Return the initialized client inside a result
-        Ok(Client {
-            runtime: system::System::new(cfg), // Set runtime
-            voting_accounts,                   // Set voters
-            peer_id,                           // Set peer id
-            swarm,                             // Set swarm
-        })
+        Ok(())
     }
 }
 
