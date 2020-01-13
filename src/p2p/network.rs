@@ -38,6 +38,14 @@ impl Network {
     }
 }
 
+impl From<String> for Network {
+    /// Converts the given string to a network.
+    fn from(s: String) -> Self {
+        // Convert the string to a network
+        Self::from(s.as_ref())
+    }
+}
+
 /// Implement string to network conversion.
 impl From<&str> for Network {
     /// Convert a given string to a network.

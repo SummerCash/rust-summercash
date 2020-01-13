@@ -1,25 +1,19 @@
 use super::super::accounts::account; // Import the account module
 use super::super::core::sys::{config, system}; // Import the system module
 use super::super::crypto::blake3; // Import the blake3 hashing module
-use super::message; // Import the network module
 use super::network; // Import the network module
 use super::peers;
-use super::sync; // Import the sync module // Import the peers module
+use super::sync::{self, proposals}; // Import the sync module // Import the peers module
 
-use std::{
-    error::Error,
-    io::{self, Write},
-    str,
-}; // Allow libp2p to implement the write() helper method.
+use std::{error::Error, io, str}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent},
-    futures::Future,
     identity, kad,
     kad::{record::store::MemoryStore, Kademlia, KademliaEvent, Record},
     mdns::{Mdns, MdnsEvent},
     swarm::NetworkBehaviourEventProcess,
-    Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport, TransportError,
+    Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
 // We need these traits from the futures library in order to build a swarm.
@@ -334,13 +328,37 @@ impl Client {
             behavior.add_address(&bootstrap_peer.0, bootstrap_peer.1); // Add the bootstrap peer to the DHT
         }
 
+        // Bootstrap the behavior's DHT
+        behavior.kad_dht.bootstrap();
+
         let swarm = Swarm::new(
             libp2p::build_tcp_ws_secio_mplex_yamux(self.keypair)?,
             behavior,
             self.peer_id.clone(),
         ); // Initialize a swarm
 
-        Ok(())
+        // Try to get the address we'll listen on
+        if let Ok(addr) = "/ip4/0.0.0.0/tcp/0".parse() {
+            // Try to tell the swarm to listen on this address, return an error if this doesn't work
+            if let Err(e) = Swarm::listen_on(&mut swarm, addr) {
+                // Return an error
+                return Err(io::ErrorKind::AddrNotAvailable.into());
+            };
+
+            // Download all of the proposals that have been published in the network
+            proposals::synchronize_for_network(
+                behavior.kad_dht,
+                self.runtime.config.network_name.into(),
+            );
+
+            // Continuously poll the swarm
+            loop {
+                swarm.next_event().await;
+            }
+        } else {
+            // Return an error that says we can't listen on this address
+            return Err(io::ErrorKind::AddrNotAvailable.into());
+        }
     }
 }
 

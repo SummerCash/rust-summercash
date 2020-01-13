@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use std::ops::{Deref, DerefMut}; // Allow implementation of deref&defer_mut
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+}; // Allow implementation of deref&defer_mut
 
 // The length of a standard hash (32 bytes).
 pub const HASH_SIZE: usize = 32;
@@ -41,6 +44,14 @@ impl DerefMut for Hash {
 impl AsRef<[u8]> for Hash {
     fn as_ref(&self) -> &[u8] {
         &self.0 // Lmao
+    }
+}
+
+/// Implement conversion from a hash to a hex-encoded string.
+impl fmt::Display for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Convert the slice to a hex string
+        write!(f, "{}", hex::encode(self))
     }
 }
 
