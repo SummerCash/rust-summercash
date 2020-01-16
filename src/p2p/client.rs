@@ -3,9 +3,9 @@ use super::super::core::sys::{config, system}; // Import the system module
 use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::peers;
-use super::sync::{self, proposals}; // Import the sync module // Import the peers module
+use super::sync::{self, context::Ctx}; // Import the sync module // Import the peers module
 
-use std::{error::Error, io, str}; // Allow libp2p to implement the write() helper method.
+use std::{error::Error, io, str, sync::Arc}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent},
@@ -111,12 +111,22 @@ impl From<io::Error> for CommunicationError {
     }
 }
 
+impl From<sled::Error> for CommunicationError {
+    /// Converts the given IO error to a CommunicationError.
+    fn from(e: sled::Error) -> Self {
+        // Return an IO error to represent the sled error, since that's basically that DB interaction is
+        Self::IOFailure {
+            error: e.description().to_owned(),
+        }
+    }
+}
+
 /// A network behavior describing a client connected to a pub-sub compatible,
 /// optionally mDNS-compatible network. Such a "behavior" may be implemented for
 /// any libp2p transport, but any transport used with this behavior must implement
 /// asynchronous reading & writing capabilities.
 #[derive(NetworkBehaviour)]
-pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+pub struct ClientBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Some pubsub mechanism bound to the above transport
     pub floodsub: Floodsub<TSubstream>,
 
@@ -125,9 +135,13 @@ pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 's
 
     /// Allow for the client to do some external discovery on the global network through a KAD DHT
     pub kad_dht: Kademlia<TSubstream, MemoryStore>,
+
+    pub ctx: Arc<Ctx<'a>>,
 }
 
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    ClientBehavior<'a, TSubstream>
+{
     /// Adds the given peer with a particular ID & multi address to the behavior.
     pub fn add_address(&self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
@@ -143,8 +157,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior
 */
 
 /// Discovery via mDNS events.
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<TSubstream>
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<'a, TSubstream>
 {
     /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
     fn inject_event(&mut self, event: MdnsEvent) {
@@ -175,8 +189,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 /// Network synchronization via KAD DHT events.
 /// Synchronization of network proposals, for example, is done in this manner.
 /// TODO: Not implemented
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<TSubstream>
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<'a, TSubstream>
 {
     // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
     fn inject_event(&mut self, event: KademliaEvent) {
@@ -199,8 +213,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     END IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
 */
 
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<'a, TSubstream>
 {
     /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
     fn inject_event(&mut self, message: FloodsubEvent) {
@@ -273,7 +287,7 @@ impl Client {
         if let Ok(read_config) = config::Config::read_from_disk(network.to_str()) {
             Ok(Client::with_config(keypair, read_config)) // Return initialized client
         } else {
-            let config = sync::config::synchronize_for_network(
+            let config = sync::synchronize_configuration_for_network(
                 network,
                 peers::get_network_bootstrap_peer_addresses(network),
                 keypair.clone(),
@@ -317,6 +331,7 @@ impl Client {
             floodsub: Floodsub::new(self.peer_id.clone()),
             mdns: Mdns::new().await?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
+            ctx: Arc::new(Ctx::new()),
         };
 
         let bootstrap_addresses = peers::get_network_bootstrap_peers(network::Network::from(
