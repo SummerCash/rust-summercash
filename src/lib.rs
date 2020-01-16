@@ -25,3 +25,6 @@ extern crate serde; // Link serde
 extern crate serde_json; // Link serde
 extern crate sled; // Link sled crate
 extern crate walkdir; // Link directory walk crate
+
+#[macro_use]
+extern crate clap;
