@@ -214,7 +214,8 @@ impl Graph {
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn new(root_transaction: transaction::Transaction, network_name: &str) -> Graph {
-        Graph::new_with_db_path(root_transaction, &io::format_db_dir(network_name)) // Return initialized graph
+        Graph::new_with_db_path(root_transaction, &io::format_db_dir(network_name))
+        // Return initialized graph
     }
 
     /// Initialize a new graph instance, and store the corresponding db in db_path.
@@ -266,7 +267,7 @@ impl Graph {
             }], // Set nodes
             hash_routes: hash_routes,                   // Set address routes
             node_children: collections::HashMap::new(), // Set node children
-            db: Some(sled::open(db_path).unwrap()), // Set db
+            db: Some(sled::open(db_path).unwrap()),     // Set db
         } // Return initialized dag
     }
 
@@ -332,6 +333,25 @@ impl Graph {
         }
 
         self.nodes.len() - 1 // Return index of transaction
+    }
+
+    /// Push a new node to the graph.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The node to push to the graph
+    pub fn push(&mut self, node: Node) -> usize {
+        // Put the node in the graph
+        self.push(node.transaction, node.state_entry)
+    }
+
+    /// Purges the contents of each of the nodes in the in-memory graph.
+    pub fn purge(&mut self) {
+        // Go through each of the nodes & manually purge
+        for i in 0..self.nodes.len() {
+            // Reset the state contents of the nodes
+            self.nodes[i].state_entry = None;
+        }
     }
 
     /// Update an item in the graph.
@@ -525,7 +545,8 @@ impl Graph {
                         // Iterate through parents
                         if !node_children.contains_key(&parent.clone()) {
                             // Check parent routes not initialized
-                            node_children.insert(parent.clone(), vec![current_node.hash.clone()]); // Insert route to child
+                            node_children.insert(parent.clone(), vec![current_node.hash.clone()]);
+                            // Insert route to child
                         }
 
                         node_children
@@ -672,7 +693,8 @@ impl Graph {
                             Some(self.nodes[*index].transaction.execute(None)); // Set state entry
 
                         parent_entries
-                            .push(self.clone().nodes[*index].state_entry.clone().unwrap()); // Add state entry to parent entries vec
+                            .push(self.clone().nodes[*index].state_entry.clone().unwrap());
+                        // Add state entry to parent entries vec
                     }
 
                     if let Ok(prev_state_entry) = self.execute_parent_nodes(*index) {
@@ -683,14 +705,17 @@ impl Graph {
                                 .execute(Some(prev_state_entry)),
                         ); // Set state entry
 
-                        parent_entries.push(self.nodes[*index].state_entry.clone().unwrap()); // Add state entry to parent entries vec
+                        parent_entries.push(self.nodes[*index].state_entry.clone().unwrap());
+                        // Add state entry to parent entries vec
                     }
                 }
             }
 
             Ok(state::merge_entries(parent_entries)) // Return merged entries
         } else {
-            Err(sled::Error::CollectionNotFound((&[child_index as u8]).into())) // Return error
+            Err(sled::Error::CollectionNotFound(
+                (&[child_index as u8]).into(),
+            )) // Return error
         }
     }
 }
@@ -712,7 +737,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -747,7 +772,7 @@ mod tests {
 
     #[test]
     fn test_push() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -789,7 +814,7 @@ mod tests {
 
     #[test]
     fn test_update() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -839,7 +864,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
@@ -876,7 +901,7 @@ mod tests {
 
     #[test]
     fn test_get_with_hash() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
         let mut rng: rand::prelude::ThreadRng = rand::thread_rng(); // Generate source of randomness
 
         let rand: u16 = rng.gen(); // Generate random number
