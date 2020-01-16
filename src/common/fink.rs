@@ -14,7 +14,7 @@ use std::str::FromStr; // Let the bigint library implement from_str
 ///
 /// let n_finks_per = fink::num_finks_per_smc(); // 1000000000000000000
 /// ```
-pub fn num_finks_per_smc() -> BigUint {
+pub const fn num_finks_per_smc() -> BigUint {
     BigUint::from_str("1000000000000000000").unwrap() // Return number of finks per SMC
 }
 
@@ -36,7 +36,8 @@ pub fn num_finks_per_smc() -> BigUint {
 /// ```
 pub fn convert_finks_to_smc(n_finks: BigUint) -> BigRational {
     Ratio::from_integer(BigInt::from_biguint(Sign::Plus, n_finks))
-        / Ratio::from_integer(BigInt::from_biguint(Sign::Plus, num_finks_per_smc())) // Return number of SMCs
+        / Ratio::from_integer(BigInt::from_biguint(Sign::Plus, num_finks_per_smc()))
+    // Return number of SMCs
 }
 
 /// Converts a given quantity of SummerCash denoted in SMC to Finks.

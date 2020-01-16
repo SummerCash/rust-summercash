@@ -7,13 +7,16 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 use super::super::super::common; // Import the io module
 
 /// The current version of rust-summercash.
-pub static NODE_VERSION: &str = "v0.1.0";
+pub const NODE_VERSION: &str = "v0.1.0";
+
+pub const DEFAULT_REWARD_PER_GAS: BigUint = BigUint::from(1000000 as u32);
 
 /// A container specifying a set of SummerCash protocol constants.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     /// The amount of finks per gas to give as a reward for validating a tx (i.e. increase rewards across the board) TODO: Gas table
     pub reward_per_gas: BigUint,
+
     /// The name of the network
     pub network_name: String,
 }
@@ -28,7 +31,9 @@ impl Config {
             "network_{}.json",
             self.network_name
         )))?; // Initialize file
+
         file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
+
         Ok(()) // All good!
     }
 
