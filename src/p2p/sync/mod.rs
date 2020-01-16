@@ -1,24 +1,5 @@
-pub mod context;
-
-use std::{collections::HashMap, sync::Arc};
-
-use super::{
-    super::{
-        core::{
-            sys::{config::Config, proposal::Proposal},
-            types::graph::{Graph, Node},
-        },
-        crypto::hash::Hash,
-    },
-    client::CommunicationError,
-};
-
-use context::Ctx;
-
-use libp2p::kad::{
-    record::{store::MemoryStore, Key},
-    Kademlia, Quorum,
-}; // Import the libp2p library
+use super::super::crypto::hash::Hash;
+use libp2p::kad::record::Key;
 
 /// Every time we want to synchronize the local DAG, we'll download & then purge 10 transactions at a time.
 pub const TRANSACTIONS_PER_SYNCHRONIZATION_ROUND: u8 = 10;
@@ -39,16 +20,16 @@ pub const HEAD_TRANSACTION_KEY: &[u8] = b"ledger::transactions::head";
 pub const NEXT_TRANSACTION_KEY: &[u8] = b"ledger::transactions::next";
 
 /// Represents the DHT Key for an entry in the DAG with a particular hash.
-pub const TRANSACTION_KEY: &[u8] = b"ledger::transactions::transaction";
+pub const TRANSACTION_KEY: &[u8] = b"ledger::transactions::tx";
 
 /// Constructs a new NEXT_TRANSACTION_KEY from the given hash.
-pub const fn next_transaction_key<'a>(hash: Hash) -> &'a [u8] {
+pub fn next_transaction_key(hash: Hash) -> Key {
     // Format the normal next tx path with the given hash
-    format!("ledger::transactions::next({})", hash.to_str()).as_bytes()
+    Key::new(&format!("ledger::transactions::next({})", hash.to_str()).as_bytes())
 }
 
-/// Constructs a new
-pub const fn transaction_with_hash_key<'a>(hash: Hash) -> &'a [u8] {
+/// Constructs a new TRANSACTION_KEY from the given hash.
+pub fn transaction_with_hash_key(hash: Hash) -> Key {
     // Format the normal transaction path with the given hash
-    format!("ledger::transactions::transaction({})", hash.to_str()).as_bytes()
+    Key::new(&format!("ledger::transactions::tx({})", hash.to_str()).as_bytes())
 }

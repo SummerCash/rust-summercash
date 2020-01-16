@@ -9,7 +9,8 @@ use super::super::super::common; // Import the io module
 /// The current version of rust-summercash.
 pub const NODE_VERSION: &str = "v0.1.0";
 
-pub const DEFAULT_REWARD_PER_GAS: BigUint = BigUint::from(1000000 as u32);
+/// The default amount of finks per gas.
+pub const DEFAULT_REWARD_PER_GAS: u32 = 1000000;
 
 /// A container specifying a set of SummerCash protocol constants.
 #[derive(Serialize, Deserialize, Clone)]

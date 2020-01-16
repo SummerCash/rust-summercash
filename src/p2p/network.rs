@@ -28,8 +28,8 @@ pub enum Network {
 /// Implement a set of network enum helper methods.
 impl Network {
     /// Get the string representation of a particular network.
-    pub(crate) fn to_str(&self) -> &str {
-        match *self {
+    fn to_str(self) -> &'static str {
+        match self {
             Network::MainNetwork => MAIN_NETWORK_NAME,
             Network::PublicTestNetwork => PUBLIC_TEST_NETWORK_NAME,
             Network::DevTestNetwork => DEV_TEST_NETWORK_NAME,
@@ -38,11 +38,11 @@ impl Network {
     }
 }
 
-/// Implement conversion from a network primitive to an inlined string.
+/// Implement conversions from a network primitive to a referenced string.
 impl Into<&str> for Network {
-    /// Converts the network primitive identifier into a string reference.
-    fn into(&self) -> &str {
-        // Convert the network to a string
+    /// Converts the network primitive identiofier to a referenced string.
+    fn into(self) -> &'static str {
+        // Return the string version of the network identifier
         self.to_str()
     }
 }
@@ -50,7 +50,7 @@ impl Into<&str> for Network {
 /// Implement conversions from a network primitive to an owned string.
 impl Into<String> for Network {
     /// Converts the network primitive identifier into an owned string.
-    fn into(&self) -> String {
+    fn into(self) -> String {
         // Convert the network to an owned string through the existing to_str impl
         self.to_str().to_owned()
     }

@@ -340,7 +340,7 @@ impl Graph {
     /// # Arguments
     ///
     /// * `node` - The node to push to the graph
-    pub fn push(&mut self, node: Node) -> usize {
+    pub fn add(&mut self, node: Node) -> usize {
         // Put the node in the graph
         self.push(node.transaction, node.state_entry)
     }

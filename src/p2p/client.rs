@@ -6,8 +6,6 @@ use super::super::core::sys::{
 use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::peers;
-use super::sync::context::{Ctx, Ref}; // Import the sync module // Import the peers module
-
 use std::{error::Error, io, str}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
@@ -129,7 +127,7 @@ impl From<sled::Error> for CommunicationError {
 /// any libp2p transport, but any transport used with this behavior must implement
 /// asynchronous reading & writing capabilities.
 #[derive(NetworkBehaviour)]
-pub struct ClientBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Some pubsub mechanism bound to the above transport
     pub floodsub: Floodsub<TSubstream>,
 
@@ -140,16 +138,14 @@ pub struct ClientBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin 
     pub kad_dht: Kademlia<TSubstream, MemoryStore>,
 }
 
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    ClientBehavior<'a, TSubstream>
-{
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
     /// Adds the given peer with a particular ID & multi address to the behavior.
-    pub fn add_address(&self, id: &PeerId, multi_address: Multiaddr) {
+    pub fn add_address(&mut self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
         self.kad_dht.add_address(id, multi_address);
 
         // Add the peer to the list of floodsub peers to message
-        self.floodsub.add_node_to_partial_view(*id);
+        self.floodsub.add_node_to_partial_view(id.clone());
     }
 }
 
@@ -158,8 +154,8 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 */
 
 /// Discovery via mDNS events.
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<'a, TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<TSubstream>
 {
     /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
     fn inject_event(&mut self, event: MdnsEvent) {
@@ -190,15 +186,15 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 /// Network synchronization via KAD DHT events.
 /// Synchronization of network proposals, for example, is done in this manner.
 /// TODO: Not implemented
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<'a, TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<TSubstream>
 {
     // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
     fn inject_event(&mut self, event: KademliaEvent) {
         match event {
             // The record was found successfully; print it
             KademliaEvent::GetRecordResult(Ok(result)) => {
-                for Record { key, value, .. } in result.records {
+                for Record { key, value: _, .. } in result.records {
                     // Print out the record
                     info!("Found key: {:?}", key);
                 }
@@ -214,11 +210,11 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     END IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
 */
 
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<'a, TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
 {
     /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
-    fn inject_event(&mut self, message: FloodsubEvent) {
+    fn inject_event(&mut self, _message: FloodsubEvent) {
         // TODO: Unimplemented
     }
 }
@@ -289,7 +285,7 @@ impl Client {
             Ok(Client::with_config(keypair, read_config)) // Return initialized client
         } else {
             let config = Config {
-                reward_per_gas: config::DEFAULT_REWARD_PER_GAS,
+                reward_per_gas: config::DEFAULT_REWARD_PER_GAS.into(),
                 network_name: network.into(),
             };
 
@@ -322,7 +318,6 @@ impl Client {
 
     /// Starts the client.
     pub async fn start(&self) -> io::Result<()> {
-        let kad_cfg = kad::KademliaConfig::default(); // Get the default kad dht config
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
@@ -345,8 +340,8 @@ impl Client {
         // Bootstrap the behavior's DHT
         behavior.kad_dht.bootstrap();
 
-        let swarm = Swarm::new(
-            libp2p::build_tcp_ws_secio_mplex_yamux(self.keypair)?,
+        let mut swarm = Swarm::new(
+            libp2p::build_tcp_ws_secio_mplex_yamux(self.keypair.clone())?,
             behavior,
             self.peer_id.clone(),
         ); // Initialize a swarm
@@ -354,18 +349,11 @@ impl Client {
         // Try to get the address we'll listen on
         if let Ok(addr) = "/ip4/0.0.0.0/tcp/0".parse() {
             // Try to tell the swarm to listen on this address, return an error if this doesn't work
-            if let Err(e) = Swarm::listen_on(&mut swarm, addr) {
+            if let Err(_) = Swarm::listen_on(&mut swarm, addr) {
                 // Return an error
                 return Err(io::ErrorKind::AddrNotAvailable.into());
             };
 
-            // Download all of the proposals that have been published in the network
-            proposals::synchronize_for_network(
-                behavior.kad_dht,
-                self.runtime.config.network_name.into(),
-            );
-
-            // Continuously poll the swarm
             loop {
                 swarm.next_event().await;
             }

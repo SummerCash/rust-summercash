@@ -14,7 +14,7 @@ use std::str::FromStr; // Let the bigint library implement from_str
 ///
 /// let n_finks_per = fink::num_finks_per_smc(); // 1000000000000000000
 /// ```
-pub const fn num_finks_per_smc() -> BigUint {
+pub fn num_finks_per_smc() -> BigUint {
     BigUint::from_str("1000000000000000000").unwrap() // Return number of finks per SMC
 }
 
