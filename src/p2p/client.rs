@@ -234,6 +234,27 @@ pub struct Client {
     pub peer_id: PeerId,
 }
 
+impl Into<String> for &Client {
+    /// Converts the given client into a string.
+    fn into(self) -> String {
+        // The collected accounts in a siingle string
+        let mut accounts_string = String::new();
+
+        // Iterate through the accounts in the client configuration
+        for i in 0..self.voting_accounts.len() {
+            if let Ok(addr) = self.voting_accounts[i].address() {
+                accounts_string += hex::encode(addr).as_ref();
+            }
+        }
+
+        format!(
+            "primary voting account: {},\npeer ID: {}",
+            accounts_string,
+            self.peer_id.to_base58(),
+        )
+    }
+}
+
 /// Implement a set of client helper methods.
 impl Client {
     pub fn new(network: network::Network) -> Result<Client, ConstructionError> {
@@ -332,10 +353,28 @@ impl Client {
             self.runtime.config.network_name.as_ref(),
         )); // Get a list of network bootstrap peers
 
+        // Log the pending bootstrap operation
+        info!("Bootstrapping a network DHT & behavior to existing bootstrap nodes...");
+
+        // The current bp #
+        let mut i: usize = 0;
+
         // Iterate through bootstrap addresses
         for bootstrap_peer in bootstrap_addresses {
+            // Log the pending connection op
+            info!(
+                "Connecting to bootstrap node {} ({})...",
+                i, bootstrap_peer.1
+            );
+
             behavior.add_address(&bootstrap_peer.0, bootstrap_peer.1); // Add the bootstrap peer to the DHT
+
+            // Next bp...
+            i += 1;
         }
+
+        // Start bootstrapping the DHT to the peers we've connected to
+        info!("Bootstrapping the network DHT to the connected peers");
 
         // Bootstrap the behavior's DHT
         behavior.kad_dht.bootstrap();
@@ -347,17 +386,26 @@ impl Client {
         ); // Initialize a swarm
 
         // Try to get the address we'll listen on
-        if let Ok(addr) = "/ip4/0.0.0.0/tcp/0".parse() {
+        if let Ok(addr) = "/ip4/0.0.0.0/tcp/0".parse::<Multiaddr>() {
             // Try to tell the swarm to listen on this address, return an error if this doesn't work
-            if let Err(_) = Swarm::listen_on(&mut swarm, addr) {
+            if let Err(e) = Swarm::listen_on(&mut swarm, addr.clone()) {
+                // Log the error
+                error!("Swarm failed to bind to listening address {}: {}", addr, e);
+
                 // Return an error
                 return Err(io::ErrorKind::AddrNotAvailable.into());
             };
+
+            // Print the address we'll be listening on
+            info!("Swarm listening on addr {}; ready for connections", addr);
 
             loop {
                 swarm.next_event().await;
             }
         } else {
+            // Log the error
+            error!("Swarm failed to bind to listening address");
+
             // Return an error that says we can't listen on this address
             return Err(io::ErrorKind::AddrNotAvailable.into());
         }

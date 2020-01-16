@@ -2,6 +2,9 @@
 #[macro_use]
 extern crate clap;
 
+#[macro_use]
+extern crate log;
+
 extern crate env_logger;
 extern crate tokio;
 
@@ -46,7 +49,15 @@ async fn main() -> Result<(), Error> {
     }
 
     // Get a client for the network that the user specified
-    let c: Client = Client::new(opts.network.into())?;
+    let c: Client = Client::new(opts.network.clone().into())?;
+
+    // Convert the client into its string representation
+    let c_str: String = (&c).into();
+
+    // Log the initialized client, as well as the network name
+    info!("Initiated network client ({}): \n{}", opts.network, c_str);
+
+    // Start the client
     c.start().await?;
 
     // We're done!
