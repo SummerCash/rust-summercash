@@ -28,13 +28,31 @@ pub enum Network {
 /// Implement a set of network enum helper methods.
 impl Network {
     /// Get the string representation of a particular network.
-    pub fn to_str(&self) -> &str {
+    pub(crate) fn to_str(&self) -> &str {
         match *self {
             Network::MainNetwork => MAIN_NETWORK_NAME,
             Network::PublicTestNetwork => PUBLIC_TEST_NETWORK_NAME,
             Network::DevTestNetwork => DEV_TEST_NETWORK_NAME,
             Network::LocalTestNetwork => LOCAL_TEST_NETWORK_NAME,
         } // Handle different networks
+    }
+}
+
+/// Implement conversion from a network primitive to an inlined string.
+impl Into<&str> for Network {
+    /// Converts the network primitive identifier into a string reference.
+    fn into(&self) -> &str {
+        // Convert the network to a string
+        self.to_str()
+    }
+}
+
+/// Implement conversions from a network primitive to an owned string.
+impl Into<String> for Network {
+    /// Converts the network primitive identifier into an owned string.
+    fn into(&self) -> String {
+        // Convert the network to an owned string through the existing to_str impl
+        self.to_str().to_owned()
     }
 }
 
@@ -54,12 +72,16 @@ impl From<&str> for Network {
         match s {
             // The main net
             "andromeda" => Network::MainNetwork,
+
             // The public test net
             "vela" => Network::PublicTestNetwork,
+
             // The dev test net
             "virgo" => Network::DevTestNetwork,
+
             // A local test net
             "olympia" => Network::LocalTestNetwork,
+
             // Let's assume this is a local test net, since it doesn't have a proper name
             _ => Network::LocalTestNetwork,
         }

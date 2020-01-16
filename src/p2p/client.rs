@@ -1,11 +1,14 @@
 use super::super::accounts::account; // Import the account module
-use super::super::core::sys::{config, system}; // Import the system module
+use super::super::core::sys::{
+    config::{self, Config},
+    system,
+}; // Import the system module
 use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::peers;
-use super::sync::{self, context::Ctx}; // Import the sync module // Import the peers module
+use super::sync::context::{Ctx, Ref}; // Import the sync module // Import the peers module
 
-use std::{error::Error, io, str, sync::Arc}; // Allow libp2p to implement the write() helper method.
+use std::{error::Error, io, str}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent},
@@ -135,8 +138,6 @@ pub struct ClientBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin 
 
     /// Allow for the client to do some external discovery on the global network through a KAD DHT
     pub kad_dht: Kademlia<TSubstream, MemoryStore>,
-
-    pub ctx: Arc<Ctx<'a>>,
 }
 
 impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
@@ -284,14 +285,13 @@ impl Client {
         keypair: identity::Keypair,
     ) -> Result<Client, ConstructionError> {
         // Check for errors while reading config
-        if let Ok(read_config) = config::Config::read_from_disk(network.to_str()) {
+        if let Ok(read_config) = config::Config::read_from_disk(network.into()) {
             Ok(Client::with_config(keypair, read_config)) // Return initialized client
         } else {
-            let config = sync::synchronize_configuration_for_network(
-                network,
-                peers::get_network_bootstrap_peer_addresses(network),
-                keypair.clone(),
-            )?; // Get the network config file
+            let config = Config {
+                reward_per_gas: config::DEFAULT_REWARD_PER_GAS,
+                network_name: network.into(),
+            };
 
             Ok(Client::with_config(keypair, config)) // Return initialized client
         }
@@ -331,7 +331,6 @@ impl Client {
             floodsub: Floodsub::new(self.peer_id.clone()),
             mdns: Mdns::new().await?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
-            ctx: Arc::new(Ctx::new()),
         };
 
         let bootstrap_addresses = peers::get_network_bootstrap_peers(network::Network::from(
