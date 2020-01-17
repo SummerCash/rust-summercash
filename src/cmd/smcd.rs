@@ -46,6 +46,7 @@ async fn main() -> Result<(), Error> {
 
     // Get a client for the network that the user specified
     let mut c = Client::new(opts.network.clone().into(), &opts.data_dir)?;
+
     // Convert the client into its string representation
     let c_str: String = (&c).into();
 

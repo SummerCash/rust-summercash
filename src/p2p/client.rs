@@ -172,35 +172,42 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior
     BEGIN IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
 */
 
-/// Discovery via mDNS events.
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<TSubstream>
-{
-    /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
-    fn inject_event(&mut self, event: MdnsEvent) {
-        // Check what kind of packet the peer has sent us, and, from there, decide what we want to do with it.
-        match event {
-            MdnsEvent::Discovered(list) =>
-            // Go through each of the peers we were able to connect to, and add them to the localized node registry
-            {
-                for (peer, _) in list {
-                    // Log the discovered peer to stdout
-                    debug!("Received mDNS 'alive' confirmation from peer: {}", peer);
+pub mod mdns {
+    use super::*;
 
-                    // Register the discovered peer in the localized pubsub service instance
-                    self.floodsub.add_node_to_partial_view(peer)
+    /// Discovery via mDNS events.
+    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+        NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<TSubstream>
+    {
+        /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
+        fn inject_event(&mut self, event: MdnsEvent) {
+            // Check what kind of packet the peer has sent us, and, from there, decide what we want to do with it.
+            match event {
+                MdnsEvent::Discovered(list) =>
+                // Go through each of the peers we were able to connect to, and add them to the localized node registry
+                {
+                    for (peer, addr) in list {
+                        // Log the discovered peer to stdout
+                        debug!("Received mDNS 'alive' confirmation from peer: {}", peer);
+
+                        // Register the discovered peer in the localized KAD DHT service instance
+                        self.kad_dht.add_address(&peer, addr);
+
+                        // Register the discovered peer in the localized pubsub service instance
+                        self.floodsub.add_node_to_partial_view(peer)
+                    }
                 }
-            }
-            MdnsEvent::Expired(list) =>
-            // Go through each of the peers we were able to connect to, and remove them from the localized node registry
-            {
-                for (peer, _) in list {
-                    if !self.mdns.has_node(&peer) {
-                        // Log the peer that will be removed
-                        info!("Peer {} dead; removing", peer);
+                MdnsEvent::Expired(list) =>
+                // Go through each of the peers we were able to connect to, and remove them from the localized node registry
+                {
+                    for (peer, _) in list {
+                        if !self.mdns.has_node(&peer) {
+                            // Log the peer that will be removed
+                            info!("Peer {} dead; removing", peer);
 
-                        // Oops, rent is up, and the bourgeoisie haven't given up their power. I guess it's time to die, poor person. Sad proletariat.
-                        self.floodsub.remove_node_from_partial_view(&peer);
+                            // Oops, rent is up, and the bourgeoisie haven't given up their power. I guess it's time to die, poor person. Sad proletariat.
+                            self.floodsub.remove_node_from_partial_view(&peer);
+                        }
                     }
                 }
             }
@@ -208,25 +215,42 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     }
 }
 
-/// Network synchronization via KAD DHT events.
-/// Synchronization of network proposals, for example, is done in this manner.
-/// TODO: Not implemented
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<TSubstream>
-{
-    // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
-    fn inject_event(&mut self, event: KademliaEvent) {
-        match event {
-            // The record was found successfully; print it
-            KademliaEvent::GetRecordResult(Ok(result)) => {
-                for Record { key, value: _, .. } in result.records {
-                    // Print out the record
-                    info!("Found key: {:?}", key);
+pub mod kademlia {
+    use super::*;
+
+    /// Network synchronization via KAD DHT events.
+    /// Synchronization of network proposals, for example, is done in this manner.
+    /// TODO: Not implemented
+    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+        NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<TSubstream>
+    {
+        // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
+        fn inject_event(&mut self, event: KademliaEvent) {
+            match event {
+                // The record was found successfully; print it
+                KademliaEvent::GetRecordResult(Ok(result)) => {
+                    for Record { key, value: _, .. } in result.records {
+                        // Print out the record
+                        debug!("Found key: {:?}", key);
+                    }
                 }
+
+                // An error occurred while fetching the record; print it
+                KademliaEvent::GetRecordResult(Err(e)) => debug!("Failed to load record: {:?}", e),
+
+                // The record was successfulyl set; print out the record name
+                KademliaEvent::PutRecordResult(Ok(result)) => {
+                    // Print out the successful set operation
+                    debug!(
+                        "Set key successfully: {}",
+                        String::from_utf8_lossy(result.key.as_ref())
+                    );
+                }
+
+                // An error occurred while fetching the record; print it
+                KademliaEvent::PutRecordResult(Err(e)) => debug!("Failed to set key: {:?}", e),
+                _ => {}
             }
-            // An error occurred while fetching the record; print it
-            KademliaEvent::GetRecordResult(Err(e)) => warn!("Failed to load record: {:?}", e),
-            _ => {}
         }
     }
 }
@@ -235,12 +259,16 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     END IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
 */
 
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
-{
-    /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
-    fn inject_event(&mut self, _message: FloodsubEvent) {
-        // TODO: Unimplemented
+pub mod floodsub {
+    use super::*;
+
+    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+        NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
+    {
+        /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
+        fn inject_event(&mut self, _message: FloodsubEvent) {
+            // TODO: Unimplemented
+        }
     }
 }
 
@@ -538,7 +566,7 @@ impl Client {
 
             // If there aren't any transactions in the graph, sync from the beginning
             if self.runtime.ledger.nodes.len() == 0 {
-                info!("Synchronizing root transaction");
+                debug!("Synchronizing root transaction");
 
                 // Fetch the hash of the first node from the network
                 swarm
@@ -546,19 +574,15 @@ impl Client {
                     .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), Quorum::Majority);
             } else {
                 // Print out the transaction hash that we'll be broadcasting to everyone
-                info!(
+                debug!(
                     "Broadcasting root transaction: {}",
                     self.runtime.ledger.nodes[0].hash.clone()
                 );
 
-                // Put the first node in the local DAG onto the network KAD DHT
-                swarm.kad_dht.put_record(
-                    Record::new(
-                        Key::new(&sync::ROOT_TRANSACTION_KEY),
-                        bincode::serialize(&self.runtime.ledger.nodes[0])?,
-                    ),
-                    Quorum::Majority,
-                );
+                // Tell our peers that we can tell them the root tx key
+                swarm
+                    .kad_dht
+                    .start_providing(Key::new(&sync::ROOT_TRANSACTION_KEY));
             }
 
             loop {
