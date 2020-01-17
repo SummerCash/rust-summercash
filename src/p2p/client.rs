@@ -573,25 +573,23 @@ impl Client {
                     .kad_dht
                     .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), Quorum::Majority);
             } else {
-                // Print out the transaction hash that we'll be broadcasting to everyone
-                debug!(
-                    "Broadcasting root transaction: {}",
-                    self.runtime.ledger.nodes[0].hash.clone()
-                );
+                debug!("Broadcasting root transaction");
 
-                // Tell our peers that we can tell them the root tx key
-                swarm
-                    .kad_dht
-                    .start_providing(Key::new(&sync::ROOT_TRANSACTION_KEY));
+                // Broadcast the local node's current root transaction to the network
+                swarm.kad_dht.put_record(
+                    Record::new(
+                        Key::new(&sync::ROOT_TRANSACTION_KEY),
+                        self.runtime.ledger.nodes[0].hash.to_vec(),
+                    ),
+                    Quorum::Majority,
+                );
             }
 
             loop {
                 // Poll the swarm
                 match swarm.next_event().await {
                     // Info from the swarm is really all we care about
-                    SwarmEvent::Behaviour(e) => {
-                        info!("idk: {:?}", e);
-                    }
+                    SwarmEvent::Behaviour(e) => debug!("idk: {:?}", e),
 
                     // Just do some logging with the excess data
                     SwarmEvent::Connected(peer_id) => {
