@@ -9,7 +9,7 @@ extern crate env_logger;
 extern crate tokio;
 
 use failure::Error;
-use summercash::p2p::client::Client;
+use summercash::{core::types::genesis::Config, p2p::client::Client};
 
 /// The SummerCash node daemon.
 #[derive(Clap)]
@@ -29,6 +29,10 @@ struct Opts {
     /// Changes the directory that node data will be stored in
     #[clap(long = "data_dir", default_value = "data")]
     data_dir: String,
+
+    /// Uses a given genesis configuration file to construct a new genesis state for the network.
+    #[clap(long = "genesis_file", default_value = "")]
+    genesis_file: String,
 }
 
 /// Starts the SMCd node daemon.
@@ -41,7 +45,13 @@ async fn main() -> Result<(), Error> {
     opts = use_options(opts)?;
 
     // Get a client for the network that the user specified
-    let c: Client = Client::new(opts.network.clone().into(), &opts.data_dir)?;
+    let mut c = Client::new(opts.network.clone().into(), &opts.data_dir)?;
+
+    // If the user wants to make a genesis state, let's do it.
+    if opts.genesis_file != "" {
+        // Construct the genesis state
+        use_genesis_file(&mut c, &opts.genesis_file, &opts.network)?;
+    }
 
     // Convert the client into its string representation
     let c_str: String = (&c).into();
@@ -53,6 +63,15 @@ async fn main() -> Result<(), Error> {
     c.start().await?;
 
     // We're done!
+    Ok(())
+}
+
+/// Constructs a new genesis for the network, considering a given genesis file.
+fn use_genesis_file(client: &mut Client, file: &str, network: &str) -> Result<(), Error> {
+    // Make the genesis state for the network
+    client.construct_genesis(Config::read_from_file(file, network)?)?;
+
+    // All done!
     Ok(())
 }
 
