@@ -472,7 +472,7 @@ impl Client {
     }
 
     /// Starts the client.
-    pub async fn start(&self) -> io::Result<()> {
+    pub async fn start(&self) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
@@ -526,8 +526,11 @@ impl Client {
                 // Log the error
                 error!("Swarm failed to bind to listening address {}: {}", addr, e);
 
+                // Convert the addr err into an io error
+                let e: std::io::Error = io::ErrorKind::AddrNotAvailable.into();
+
                 // Return an error
-                return Err(io::ErrorKind::AddrNotAvailable.into());
+                return Err(e.into());
             };
 
             // Print the address we'll be listening on
@@ -535,10 +538,27 @@ impl Client {
 
             // If there aren't any transactions in the graph, sync from the beginning
             if self.runtime.ledger.nodes.len() == 0 {
+                info!("Synchronizing root transaction");
+
                 // Fetch the hash of the first node from the network
                 swarm
                     .kad_dht
                     .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), Quorum::Majority);
+            } else {
+                // Print out the transaction hash that we'll be broadcasting to everyone
+                info!(
+                    "Broadcasting root transaction: {}",
+                    self.runtime.ledger.nodes[0].hash.clone()
+                );
+
+                // Put the first node in the local DAG onto the network KAD DHT
+                swarm.kad_dht.put_record(
+                    Record::new(
+                        Key::new(&sync::ROOT_TRANSACTION_KEY),
+                        bincode::serialize(&self.runtime.ledger.nodes[0])?,
+                    ),
+                    Quorum::Majority,
+                );
             }
 
             loop {
@@ -577,8 +597,11 @@ impl Client {
             // Log the error
             error!("Swarm failed to bind to listening address");
 
+            // Convert the error into an IO error
+            let e: std::io::Error = io::ErrorKind::AddrNotAvailable.into();
+
             // Return an error that says we can't listen on this address
-            return Err(io::ErrorKind::AddrNotAvailable.into());
+            return Err(e.into());
         }
     }
 }

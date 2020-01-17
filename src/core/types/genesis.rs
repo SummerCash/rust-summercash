@@ -58,7 +58,7 @@ impl Config {
         /// The raw configuration stored on disk, in JSON format with hex addresses, rather than inline vecs.
         #[derive(Deserialize)]
         struct RawConfig {
-            alloc: HashMap<String, i64>,
+            alloc: HashMap<String, i128>,
         };
 
         // Open the genesis configuration file
@@ -78,7 +78,7 @@ impl Config {
             // Put the key pair into the final configuration
             final_cfg.allocate_to_address(
                 Address::from_str(address)?,
-                BigUint::from_i64(value.clone()).unwrap_or_default(),
+                BigUint::from_i128(value.clone()).unwrap_or_default(),
             );
         }
 
