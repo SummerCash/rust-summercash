@@ -79,7 +79,7 @@ impl System {
     }
 
     /// Execute a proposal in the pending proposals set with the given hash.
-    pub fn execute_proposal(mut self, proposal_id: hash::Hash) -> Result<(), ExecutionError> {
+    pub fn execute_proposal(&mut self, proposal_id: hash::Hash) -> Result<(), ExecutionError> {
         // Check proposal doesn't exist
         if !self.pending_proposals.contains_key(&proposal_id) {
             Err(ExecutionError::ProposalDoesNotExist {
@@ -107,7 +107,7 @@ impl System {
                         }
                         // Is adding a value to the reward_per_gas
                         proposal::Operation::Append { value_to_append } => {
-                            self.config.reward_per_gas = self.config.reward_per_gas
+                            self.config.reward_per_gas = self.config.reward_per_gas.clone()
                                 + bigint::BigUint::from_bytes_le(&value_to_append)
                         } // Add to reward_per_gas
                     }

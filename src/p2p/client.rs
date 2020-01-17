@@ -1,23 +1,26 @@
 use super::super::accounts::account; // Import the account module
-use super::super::core::sys::{
-    config::{self, Config},
-    system,
+use super::super::accounts::account::Account;
+use super::super::core::{
+    sys::{
+        config::{self, Config},
+        proposal::{Operation, Proposal, ProposalData},
+        system,
+    },
+    types::{genesis, state::Entry, transaction::Transaction},
 }; // Import the system module
 use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::peers;
-use std::{
-    error::Error,
-    io, str,
-    sync::{Arc, Mutex},
-}; // Allow libp2p to implement the write() helper method.
-
-use super::sync::{self, context::Ctx};
+use super::sync;
+use std::{collections::HashMap, error::Error, io, str}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent},
     identity, kad,
-    kad::{record::store::MemoryStore, Kademlia, KademliaEvent, Record},
+    kad::{
+        record::{store::MemoryStore, Key},
+        Kademlia, KademliaEvent, Quorum, Record,
+    },
     mdns::{Mdns, MdnsEvent},
     swarm::{NetworkBehaviourEventProcess, SwarmEvent},
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
@@ -366,6 +369,84 @@ impl Client {
         }
     }
 
+    /// Constructs a new graph according to an inputted genesis configuration file.
+    ///
+    /// # Arguments
+    ///
+    /// * `genesis` - The configuration for the genesis dag
+    /// * `data_dir` - The directory in which genesis dag data will be stored
+    pub fn construct_genesis(&mut self, genesis: genesis::Config) -> Result<(), failure::Error> {
+        // Generate an account to which all of the genesis funds will be transfered
+        let genesis_account = Account::new();
+
+        // Make the genesis transaction
+        let root_tx = Transaction::new(
+            0,
+            Default::default(),
+            genesis_account.address()?,
+            genesis.issuance(),
+            b"genesis",
+            vec![],
+        );
+
+        // The state at the root transaction
+        let mut state = HashMap::new();
+
+        // Allocate the total issuace to the generated account
+        state.insert(genesis_account.address()?.to_str(), genesis.issuance());
+
+        // The hash of the root transaction. We'll update this each time we add a genesis child transaction.
+        let mut last_hash = root_tx.hash.clone();
+
+        // The current nonce
+        let mut i = 1;
+
+        // Update the global state to reflect the increase in balance
+        self.runtime.ledger.push(root_tx, Some(Entry::new(state)));
+
+        // Get the value of each account in the genesis allocation
+        for (address, value) in genesis.alloc.iter() {
+            // Make a transaction worth the value allocated to the address
+            let tx = Transaction::new(
+                i,
+                genesis_account.address()?,
+                address.clone(),
+                value.clone(),
+                b"genesis_child",
+                vec![last_hash],
+            );
+
+            // Since we might need to make more transactions, we'll want to keep them as children of this transaction.
+            // Update the last_hash to reflect this.
+            last_hash = tx.hash;
+
+            // Make a proposal storing a copy of the transaction, so we can put the proposal into the runtime's proposal execution engine
+            let proposal = Proposal::new(
+                format!("genesis child: {}", tx.hash),
+                ProposalData::new(
+                    "ledger::transactions".to_owned(),
+                    Operation::Append {
+                        value_to_append: bincode::serialize(&tx)?,
+                    },
+                ),
+            );
+
+            // Once we register the proposal with the runtime, its ID gets consumed. Let's store a copy of it.
+            let proposal_id = proposal.proposal_id.clone();
+
+            // Add the transaction to the runtime's list of proposals, so we can use it to execute the transaction more efficiently
+            self.runtime.register_proposal(proposal);
+
+            // Now execute the proposal
+            self.runtime.execute_proposal(proposal_id)?;
+
+            i += 1;
+        }
+
+        // All done!
+        Ok(())
+    }
+
     /// Starts the client.
     pub async fn start(&self) -> io::Result<()> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
@@ -424,22 +505,17 @@ impl Client {
                 // Return an error
                 return Err(io::ErrorKind::AddrNotAvailable.into());
             };
+
             // Print the address we'll be listening on
             info!("Swarm listening on addr {}; ready for connections", addr);
 
-            // Make a context buffer that the node can use to synchronize with
-            let ctx: Mutex<Ctx> = Mutex::new(Ctx::new());
-
-            // Get a thread-safe reference to the context for the swarm thread
-            let swarm_ctx = Arc::new(ctx);
-
-            // Get a thread-safe reference to the context for the handler thread
-            let handler_ctx = swarm_ctx.clone();
-            let handler_dht = Arc::new(Mutex::new(swarm.kad_dht));
-            let handler_runtime = Arc::new(Mutex::new(self.runtime));
-
-            // Start a handler thread
-            std::thread::spawn(move || Client::handler(handler_ctx, handler_dht, handler_runtime));
+            // If there aren't any transactions in the graph, sync from the beginning
+            if self.runtime.ledger.nodes.len() == 0 {
+                // Fetch the hash of the first node from the network
+                swarm
+                    .kad_dht
+                    .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), Quorum::Majority);
+            }
 
             loop {
                 // Poll the swarm
@@ -480,55 +556,6 @@ impl Client {
             // Return an error that says we can't listen on this address
             return Err(io::ErrorKind::AddrNotAvailable.into());
         }
-    }
-
-    /// Handles any incoming changes from the swarm, and starts the synchronization sequence.
-    fn handler<TSubstream>(
-        ctx_lock: Arc<Mutex<Ctx>>,
-        dht_lock: Arc<Mutex<Kademlia<TSubstream, MemoryStore>>>,
-        runtime_lock: Arc<Mutex<system::System>>,
-    ) -> Result<(), failure::Error> {
-        // Try to get a lock on the context buffer. If this fails, something has gone HORRIBLY wrong.
-        let mut ctx = if let Ok(unlocked) = ctx_lock.lock() {
-            unlocked
-        } else {
-            return Ok(());
-        };
-
-        // Try to get a lock on the runtime.
-        let mut runtime = if let Ok(unlocked) = runtime_lock.lock() {
-            unlocked
-        } else {
-            return Ok(());
-        };
-
-        // Try to get a lock on the DHT.
-        let mut dht = if let Ok(unlocked) = dht_lock.lock() {
-            unlocked
-        } else {
-            return Ok(());
-        };
-
-        // If there aren't any transactions in the DAG, let's start with the root
-        let current_transaction_hash = if runtime.ledger.nodes.len() == 0 {
-            // Get the root node in the entire transaction history
-            let root_tx = sync::synchronize_root_transaction_for_network(&mut ctx, &mut dht)?;
-
-            // Keep a copy of the node's hash, since we'll dispose of the rest of it once it's back in the graph
-            let node_hash = root_tx.hash.clone();
-
-            // Add the node to the graph
-            runtime.ledger.add(root_tx);
-
-            // Return the hash of the node as the current transaction hash
-            node_hash
-        } else {
-            // Use the last transaction, since one exists
-            runtime.ledger.nodes[runtime.ledger.nodes.len() - 1].hash
-        };
-
-        // All good!
-        Ok(())
     }
 }
 

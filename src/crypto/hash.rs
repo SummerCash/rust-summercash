@@ -55,6 +55,14 @@ impl fmt::Display for Hash {
     }
 }
 
+impl Default for Hash {
+    /// Initializes an empty hash.
+    fn default() -> Self {
+        // Just make an empty vec
+        Self::new(vec![0; 32])
+    }
+}
+
 /* BEGIN EXPORTED METHODS */
 
 /// Implement a set of hash helper methods.
