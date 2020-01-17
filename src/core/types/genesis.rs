@@ -30,6 +30,9 @@ impl Config {
     /// * `address` - The address that capital will be allocated towards
     /// * `amount` - The amount of capital allocated to the address
     pub fn allocate_to_address(&mut self, address: Address, amount: BigUint) {
+        // Increment the total value of the allocation
+        self.total_value += amount.clone();
+
         // Put the amount in the alloc map
         self.alloc.insert(address, amount);
     }
@@ -52,13 +55,31 @@ impl Config {
 
     /// Reads a genesis configuration from the given genesis file in a given data dir.
     pub fn read_from_file(data_dir: &str, network: &str) -> Result<Self, failure::Error> {
+        /// The raw configuration stored on disk, in JSON format with hex addresses, rather than inline vecs.
+        #[derive(Deserialize)]
+        struct RawConfig {
+            alloc: HashMap<String, BigUint>,
+        };
+
         // Open the genesis configuration file
         let file = File::open(format!("{}/genesis/{}.json", data_dir, network))?;
 
         // Get a reader for the file
         let reader = BufReader::new(file);
 
-        // Deserialize the config, and return it
-        Ok(serde_json::from_reader(reader)?)
+        // Deserialize the raw config. We still have some more work to do, though.
+        let raw_cfg: RawConfig = serde_json::from_reader(reader)?;
+
+        // We'll convert all of the strings into their address representations
+        let mut final_cfg: Self = Self::new();
+
+        // Go through each address, and its corresponding value. Put these values & addrs into the final configuration obj.
+        for (address, value) in raw_cfg.alloc.iter() {
+            // Put the key pair into the final configuration
+            final_cfg.allocate_to_address(Address::from_str(address)?, value.clone());
+        }
+
+        // Return the final configuration instance
+        Ok(final_cfg)
     }
 }
