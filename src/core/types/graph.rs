@@ -516,8 +516,14 @@ impl Graph {
     }
 
     /// Read the entirety of a persisted graph, or just state entry headers.
-    fn read_some_from_disk(read_all: bool, network_name: &str) -> Graph {
-        let db = sled::open(io::format_db_dir(network_name)).unwrap(); // Open database
+    fn read_some_from_disk(read_all: bool, network: &str) -> Self {
+        // Read the database
+        Self::read_some_from_disk_with_data_dir(read_all, &io::format_db_dir(network))
+    }
+
+    /// Read the entirety of a persisted graph, or just state entry headers.
+    fn read_some_from_disk_with_data_dir(read_all: bool, directory: &str) -> Graph {
+        let db = sled::open(directory).unwrap(); // Open database
 
         let mut nodes: Vec<Node> = vec![]; // Empty vector
         let mut hash_routes: collections::hash_map::HashMap<hash::Hash, usize> =
@@ -582,6 +588,15 @@ impl Graph {
     /// ```
     pub fn read_partial_from_disk(network_name: &str) -> Graph {
         Graph::read_some_from_disk(false, network_name) // Read just transaction headers
+    }
+
+    /// Read the transactions--but not state data--in a graph from the disk, where the database is located in the given data_dir.
+    pub fn read_partial_from_disk_with_data_dir(data_dir: &str, network_name: &str) -> Self {
+        // Read just transaction headers
+        Graph::read_some_from_disk_with_data_dir(
+            false,
+            &format!("{}/db/{}", data_dir, network_name),
+        )
     }
 
     /// Read a graph instance from the disk.

@@ -24,7 +24,7 @@ pub struct Account {
 impl Account {
     /// Initialize a new account from a generated keypair.
     pub fn new() -> Account {
-        let mut csprng = OsRng{};
+        let mut csprng = OsRng {};
 
         Account {
             keypair: ed25519_dalek::Keypair::generate(&mut csprng)
@@ -65,6 +65,26 @@ impl Account {
         }
     }
 
+    /// Write an account to the disk at a given data directory.
+    pub fn write_to_disk_with_name_at_data_directory(
+        &self,
+        s: &str,
+        data_dir: &str,
+    ) -> io::Result<()> {
+        fs::create_dir_all(&format!("{}/keystore", data_dir))?; // Make a keystore directory in the data dir
+
+        // Initialize a file to store the new account in
+        let mut file = fs::File::create(&format!(
+            "{}/keystore/{}.json",
+            data_dir,
+            blake3::hash_slice(s.as_bytes()).to_str()
+        ))?;
+
+        file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize the account, and put it in the new file
+
+        Ok(()) // All good!
+    }
+
     pub fn write_to_disk_with_name(&self, s: &str) -> io::Result<()> {
         fs::create_dir_all(common::io::keystore_dir())?; // Make keystore directory
 
@@ -72,8 +92,21 @@ impl Account {
             "{}.json",
             blake3::hash_slice(s.as_bytes()).to_str()
         )))?; // Initialize file
+
         file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
+
         Ok(()) // All good!
+    }
+
+    /// Read an account from the disk at a given data directory.
+    pub fn read_from_disk_at_data_directory(
+        address: address::Address,
+        data_dir: &str,
+    ) -> io::Result<Account> {
+        // Open the file holding the account details corresponding to the address
+        let file = fs::File::open(&format!("{}/keystore/{}.json", data_dir, address.to_str()))?;
+
+        Ok(serde_json::from_reader(file)?) // Deserialize the account from the information held in the file + return
     }
 
     /// Read an account from the disk.

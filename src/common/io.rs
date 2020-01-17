@@ -1,8 +1,11 @@
 use path_clean; // Import path clean module
 
+/// The root data directory.
+pub const DATA_DIR: &str = "./data";
+
 /// Get the path in which data is stored.
 pub fn data_dir() -> String {
-    path_clean::clean("./data") // Return path
+    path_clean::clean(DATA_DIR) // Return path
 }
 
 /// Append a given string to the data dir.

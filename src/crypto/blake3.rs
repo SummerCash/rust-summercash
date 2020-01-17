@@ -33,7 +33,7 @@ mod tests {
 
         assert_eq!(
             hashed.to_str(),
-            "021ced8799296ceca557832ab941a50b4a11f83478cf141f51f933f653ab9fbc"
+            "d74981efa70a0c880b8d8c1985d075dbcbf679b99a5f9914e5aaf96b831a9e24"
         ); // Ensure properly hashed
     }
 }

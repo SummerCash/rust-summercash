@@ -47,13 +47,26 @@ pub struct System {
 impl System {
     /// Initialize a new proposal execution system.
     pub fn new(config: config::Config) -> System {
-        let network_name = config.network_name.clone(); // Get network name
+        // Copy the network name, since we'll have to move the configuration into the system
+        let network_name = &config.network_name.clone();
 
         System {
-            config: config,                                              // Set config
+            config: config,                                             // Set config
             pending_proposals: collections::HashMap::new(), // set pending proposals to empty initialized hash map
-            ledger: graph::Graph::read_partial_from_disk(&network_name), // Set ledger
+            ledger: graph::Graph::read_partial_from_disk(network_name), // Set ledger
         } // Return initialized system
+    }
+
+    /// Initialize a new proposal execution system with the given data directory.
+    pub fn with_data_dir(config: config::Config, data_dir: &str) -> Self {
+        // Copy the network name, sine we'll have to move the configuration into the system
+        let network_name = &config.network_name.clone();
+
+        System {
+            config: config,
+            pending_proposals: collections::HashMap::new(),
+            ledger: graph::Graph::read_partial_from_disk_with_data_dir(data_dir, network_name),
+        }
     }
 
     /// Add a given proposal to the system's pending proposals list.

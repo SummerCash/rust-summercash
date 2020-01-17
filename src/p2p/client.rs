@@ -165,6 +165,9 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
             // Go through each of the peers we were able to connect to, and add them to the localized node registry
             {
                 for (peer, _) in list {
+                    // Log the discovered peer to stdout
+                    info!("Received mDNS 'alive' confirmation from peer: {}", peer);
+
                     // Register the discovered peer in the localized pubsub service instance
                     self.floodsub.add_node_to_partial_view(peer)
                 }
@@ -174,6 +177,9 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
             {
                 for (peer, _) in list {
                     if !self.mdns.has_node(&peer) {
+                        // Log the peer that will be removed
+                        info!("Peer {} dead; removing", peer);
+
                         // Oops, rent is up, and the bourgeoisie haven't given up their power. I guess it's time to die, poor person. Sad proletariat.
                         self.floodsub.remove_node_from_partial_view(&peer);
                     }
@@ -257,14 +263,15 @@ impl Into<String> for &Client {
 
 /// Implement a set of client helper methods.
 impl Client {
-    pub fn new(network: network::Network) -> Result<Client, ConstructionError> {
+    pub fn new(network: network::Network, data_dir: &str) -> Result<Client, ConstructionError> {
         // Check peer identity exists locally
-        if let Ok(p2p_account) =
-            account::Account::read_from_disk(blake3::hash_slice(b"p2p_identity"))
-        {
+        if let Ok(p2p_account) = account::Account::read_from_disk_at_data_directory(
+            blake3::hash_slice(b"p2p_identity"),
+            data_dir,
+        ) {
             // Check has valid p2p keypair
             if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
-                Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair))
+                Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair), data_dir)
             // Return initialized client
             } else {
                 Err(ConstructionError::InvalidPeerIdentity) // Return error
@@ -272,11 +279,15 @@ impl Client {
         } else {
             let p2p_account = account::Account::new(); // Generate p2p account
                                                        // Write p2p account to disk
-            match p2p_account.write_to_disk_with_name("p2p_identity") {
+            match p2p_account.write_to_disk_with_name_at_data_directory("p2p_identity", data_dir) {
                 Ok(_) => {
                     // Check has valid p2p keypair
                     if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
-                        Client::with_peer_id(network, identity::Keypair::Ed25519(p2p_keypair))
+                        Client::with_peer_id(
+                            network,
+                            identity::Keypair::Ed25519(p2p_keypair),
+                            data_dir,
+                        )
                     // Return initialized client
                     } else {
                         Err(ConstructionError::InvalidPeerIdentity) // Return error
@@ -300,26 +311,27 @@ impl Client {
     pub fn with_peer_id(
         network: network::Network,
         keypair: identity::Keypair,
+        data_dir: &str,
     ) -> Result<Client, ConstructionError> {
         // Check for errors while reading config
         if let Ok(read_config) = config::Config::read_from_disk(network.into()) {
-            Ok(Client::with_config(keypair, read_config)) // Return initialized client
+            Ok(Client::with_config(keypair, read_config, data_dir)) // Return initialized client
         } else {
             let config = Config {
                 reward_per_gas: config::DEFAULT_REWARD_PER_GAS.into(),
                 network_name: network.into(),
             };
 
-            Ok(Client::with_config(keypair, config)) // Return initialized client
+            Ok(Client::with_config(keypair, config, data_dir)) // Return initialized client
         }
     }
 
     /// Initialize a new client with the given network_name, peer_id, and config.
-    pub fn with_config(keypair: identity::Keypair, cfg: config::Config) -> Client {
+    pub fn with_config(keypair: identity::Keypair, cfg: config::Config, data_dir: &str) -> Client {
         let voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
 
         // Initialize a client with the given keypair, configuration & voting accounts
-        Client::with_voting_accounts(keypair, cfg, voting_accounts)
+        Client::with_voting_accounts(keypair, cfg, voting_accounts, data_dir)
     }
 
     // Initialize a new client with the given network_name, peer_id, config, and voting_accounts list.
@@ -327,12 +339,13 @@ impl Client {
         keypair: identity::Keypair,
         cfg: config::Config,
         voting_accounts: Vec<account::Account>,
+        data_dir: &str,
     ) -> Client {
         // Return the initialized client inside a result
         Client {
-            runtime: system::System::new(cfg),                  // Set runtime
-            voting_accounts,                                    // Set voters
-            peer_id: PeerId::from_public_key(keypair.public()), // Set peer id
+            runtime: system::System::with_data_dir(cfg, data_dir), // Set runtime
+            voting_accounts,                                       // Set voters
+            peer_id: PeerId::from_public_key(keypair.public()),    // Set peer id
             keypair,
         }
     }
@@ -429,7 +442,11 @@ mod tests {
 
         config.write_to_disk().unwrap(); // Write config to disk
 
-        let client = Client::new(network::Network::LocalTestNetwork).unwrap(); // Initialize client
+        let client = Client::new(
+            network::Network::LocalTestNetwork,
+            super::super::super::common::io::DATA_DIR,
+        )
+        .unwrap(); // Initialize client
         assert_eq!(client.runtime.config.network_name, "olympia"); // Ensure client has correct net
     }
 }
