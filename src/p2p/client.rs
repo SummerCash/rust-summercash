@@ -6,14 +6,20 @@ use super::super::core::sys::{
 use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::peers;
-use std::{error::Error, io, str}; // Allow libp2p to implement the write() helper method.
+use std::{
+    error::Error,
+    io, str,
+    sync::{Arc, Mutex},
+}; // Allow libp2p to implement the write() helper method.
+
+use super::sync::{self, context::Ctx};
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent},
     identity, kad,
     kad::{record::store::MemoryStore, Kademlia, KademliaEvent, Record},
     mdns::{Mdns, MdnsEvent},
-    swarm::NetworkBehaviourEventProcess,
+    swarm::{NetworkBehaviourEventProcess, SwarmEvent},
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -122,6 +128,16 @@ impl From<sled::Error> for CommunicationError {
     }
 }
 
+impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
+    /// Converts the given mutex poison error to a CommunicationError.
+    fn from(e: std::sync::PoisonError<T>) -> Self {
+        // Just return a misc. error, since we aren't really sure why this happened
+        Self::Custom {
+            error: e.description().to_owned(),
+        }
+    }
+}
+
 /// A network behavior describing a client connected to a pub-sub compatible,
 /// optionally mDNS-compatible network. Such a "behavior" may be implemented for
 /// any libp2p transport, but any transport used with this behavior must implement
@@ -166,7 +182,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
             {
                 for (peer, _) in list {
                     // Log the discovered peer to stdout
-                    info!("Received mDNS 'alive' confirmation from peer: {}", peer);
+                    debug!("Received mDNS 'alive' confirmation from peer: {}", peer);
 
                     // Register the discovered peer in the localized pubsub service instance
                     self.floodsub.add_node_to_partial_view(peer)
@@ -408,12 +424,54 @@ impl Client {
                 // Return an error
                 return Err(io::ErrorKind::AddrNotAvailable.into());
             };
-
             // Print the address we'll be listening on
             info!("Swarm listening on addr {}; ready for connections", addr);
 
+            // Make a context buffer that the node can use to synchronize with
+            let ctx: Mutex<Ctx> = Mutex::new(Ctx::new());
+
+            // Get a thread-safe reference to the context for the swarm thread
+            let swarm_ctx = Arc::new(ctx);
+
+            // Get a thread-safe reference to the context for the handler thread
+            let handler_ctx = swarm_ctx.clone();
+            let handler_dht = Arc::new(Mutex::new(swarm.kad_dht));
+            let handler_runtime = Arc::new(Mutex::new(self.runtime));
+
+            // Start a handler thread
+            std::thread::spawn(move || Client::handler(handler_ctx, handler_dht, handler_runtime));
+
             loop {
-                swarm.next_event().await;
+                // Poll the swarm
+                match swarm.next_event().await {
+                    // Info from the swarm is really all we care about
+                    SwarmEvent::Behaviour(e) => {
+                        info!("idk: {:?}", e);
+                    }
+
+                    // Just do some logging with the excess data
+                    SwarmEvent::Connected(peer_id) => {
+                        debug!("Connected to peer: {}", peer_id.to_base58())
+                    }
+                    SwarmEvent::Disconnected(peer_id) => {
+                        debug!("Disconnected from peer: {}", peer_id.to_base58())
+                    }
+                    SwarmEvent::NewListenAddr(l_addr) => {
+                        info!("Assigned to new address; listening on {} now", l_addr)
+                    }
+                    SwarmEvent::ExpiredListenAddr(e_addr) => {
+                        info!("Listener address {} expired", e_addr)
+                    }
+                    SwarmEvent::UnreachableAddr {
+                        peer_id: _,
+                        address,
+                        error,
+                    } => warn!("Failed to connect to peer at addr {}: {}", address, error),
+                    SwarmEvent::StartConnect(peer_id) => debug!(
+                        "Starting connection process with peer: {}",
+                        peer_id.to_base58()
+                    ),
+                }
             }
         } else {
             // Log the error
@@ -422,6 +480,55 @@ impl Client {
             // Return an error that says we can't listen on this address
             return Err(io::ErrorKind::AddrNotAvailable.into());
         }
+    }
+
+    /// Handles any incoming changes from the swarm, and starts the synchronization sequence.
+    fn handler<TSubstream>(
+        ctx_lock: Arc<Mutex<Ctx>>,
+        dht_lock: Arc<Mutex<Kademlia<TSubstream, MemoryStore>>>,
+        runtime_lock: Arc<Mutex<system::System>>,
+    ) -> Result<(), failure::Error> {
+        // Try to get a lock on the context buffer. If this fails, something has gone HORRIBLY wrong.
+        let mut ctx = if let Ok(unlocked) = ctx_lock.lock() {
+            unlocked
+        } else {
+            return Ok(());
+        };
+
+        // Try to get a lock on the runtime.
+        let mut runtime = if let Ok(unlocked) = runtime_lock.lock() {
+            unlocked
+        } else {
+            return Ok(());
+        };
+
+        // Try to get a lock on the DHT.
+        let mut dht = if let Ok(unlocked) = dht_lock.lock() {
+            unlocked
+        } else {
+            return Ok(());
+        };
+
+        // If there aren't any transactions in the DAG, let's start with the root
+        let current_transaction_hash = if runtime.ledger.nodes.len() == 0 {
+            // Get the root node in the entire transaction history
+            let root_tx = sync::synchronize_root_transaction_for_network(&mut ctx, &mut dht)?;
+
+            // Keep a copy of the node's hash, since we'll dispose of the rest of it once it's back in the graph
+            let node_hash = root_tx.hash.clone();
+
+            // Add the node to the graph
+            runtime.ledger.add(root_tx);
+
+            // Return the hash of the node as the current transaction hash
+            node_hash
+        } else {
+            // Use the last transaction, since one exists
+            runtime.ledger.nodes[runtime.ledger.nodes.len() - 1].hash
+        };
+
+        // All good!
+        Ok(())
     }
 }
 
