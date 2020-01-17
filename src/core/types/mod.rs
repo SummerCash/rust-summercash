@@ -1,3 +1,4 @@
+pub mod genesis;
 pub mod graph; // Export the graph module
 pub mod logs; // Export the log types
 pub mod receipt; // Export the receipt types
