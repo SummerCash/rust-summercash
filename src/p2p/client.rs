@@ -424,7 +424,7 @@ impl Client {
             // Log the details of the pending allocation action
             info!(
                 "Allocating {} SMC to {} from the genesis fund",
-                address, value
+                value, address
             );
 
             // Make a transaction worth the value allocated to the address

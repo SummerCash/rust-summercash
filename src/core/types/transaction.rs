@@ -4,7 +4,7 @@ use std::collections; // Import the collections library
 
 use chrono; // Import time library
 
-use num::bigint::BigUint; // Add support for large unsigned integers
+use num::{bigint::BigUint, Zero}; // Add support for large unsigned integers
 
 use bincode;
 use serde::{Deserialize, Serialize}; // Import serde serialization
@@ -214,12 +214,20 @@ impl Transaction {
                 let mut balances: collections::HashMap<String, BigUint> =
                     entry.data.balances.clone(); // Initialize balances map
 
-                *balances
-                    .get_mut(&self.transaction_data.sender.to_str())
-                    .unwrap() -= self.transaction_data.value.clone(); // Subtract transaction value from sender balance
-                *balances
-                    .get_mut(&self.transaction_data.recipient.to_str())
-                    .unwrap() += self.transaction_data.value.clone(); // Add transaction value to recipient balance
+                balances.insert(
+                    self.transaction_data.sender.to_str(),
+                    balances
+                        .get(&self.transaction_data.sender.to_str())
+                        .unwrap_or(&BigUint::zero())
+                        - self.transaction_data.value.clone(),
+                ); // Subtract transaction value from sender balance
+                balances.insert(
+                    self.transaction_data.recipient.to_str(),
+                    balances
+                        .get(&self.transaction_data.recipient.to_str())
+                        .unwrap_or(&BigUint::zero())
+                        + self.transaction_data.value.clone(),
+                ); // Add transaction value to recipient balance
 
                 state::Entry::new(balances) // Return state entry
             }
@@ -315,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -337,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_sign_transaction() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair
@@ -356,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_verify_transaction_signature() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
 
         let sender_keypair: Keypair = Keypair::generate(&mut csprng); // Generate sender key pair
         let recipient_keypair: Keypair = Keypair::generate(&mut csprng); // Generate recipient key pair

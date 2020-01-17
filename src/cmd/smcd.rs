@@ -46,18 +46,17 @@ async fn main() -> Result<(), Error> {
 
     // Get a client for the network that the user specified
     let mut c = Client::new(opts.network.clone().into(), &opts.data_dir)?;
+    // Convert the client into its string representation
+    let c_str: String = (&c).into();
+
+    // Log the initialized client, as well as the network name
+    info!("Initiated network client ({}): \n{}", opts.network, c_str);
 
     // If the user wants to make a genesis state, let's do it.
     if opts.genesis_file != "none" {
         // Construct the genesis state
         use_genesis_file(&mut c, &opts.genesis_file, &opts.network)?;
     }
-
-    // Convert the client into its string representation
-    let c_str: String = (&c).into();
-
-    // Log the initialized client, as well as the network name
-    info!("Initiated network client ({}): \n{}", opts.network, c_str);
 
     // Start the client
     c.start().await?;
