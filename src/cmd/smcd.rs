@@ -31,7 +31,7 @@ struct Opts {
     data_dir: String,
 
     /// Uses a given genesis configuration file to construct a new genesis state for the network.
-    #[clap(long = "genesis_file", default_value = "")]
+    #[clap(long = "genesis_file", default_value = "none")]
     genesis_file: String,
 }
 
@@ -48,7 +48,7 @@ async fn main() -> Result<(), Error> {
     let mut c = Client::new(opts.network.clone().into(), &opts.data_dir)?;
 
     // If the user wants to make a genesis state, let's do it.
-    if opts.genesis_file != "" {
+    if opts.genesis_file != "none" {
         // Construct the genesis state
         use_genesis_file(&mut c, &opts.genesis_file, &opts.network)?;
     }
