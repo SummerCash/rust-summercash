@@ -75,7 +75,7 @@ fn use_genesis_file(client: &mut Client, file: &str, network: &str) -> Result<()
     );
 
     // Make the genesis state for the network
-    client.construct_genesis(Config::read_from_file(file, network)?)?;
+    client.construct_genesis(Config::read_from_file(file)?)?;
 
     // All done!
     Ok(())

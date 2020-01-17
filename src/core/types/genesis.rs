@@ -1,5 +1,5 @@
 use super::super::super::common::address::Address;
-use num::{BigUint, Zero};
+use num::{BigUint, FromPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File, io::BufReader};
 
@@ -54,15 +54,15 @@ impl Config {
     }
 
     /// Reads a genesis configuration from the given genesis file in a given data dir.
-    pub fn read_from_file(data_dir: &str, network: &str) -> Result<Self, failure::Error> {
+    pub fn read_from_file(file_name: &str) -> Result<Self, failure::Error> {
         /// The raw configuration stored on disk, in JSON format with hex addresses, rather than inline vecs.
         #[derive(Deserialize)]
         struct RawConfig {
-            alloc: HashMap<String, BigUint>,
+            alloc: HashMap<String, i64>,
         };
 
         // Open the genesis configuration file
-        let file = File::open(format!("{}/genesis/{}.json", data_dir, network))?;
+        let file = File::open(file_name)?;
 
         // Get a reader for the file
         let reader = BufReader::new(file);
@@ -76,7 +76,10 @@ impl Config {
         // Go through each address, and its corresponding value. Put these values & addrs into the final configuration obj.
         for (address, value) in raw_cfg.alloc.iter() {
             // Put the key pair into the final configuration
-            final_cfg.allocate_to_address(Address::from_str(address)?, value.clone());
+            final_cfg.allocate_to_address(
+                Address::from_str(address)?,
+                BigUint::from_i64(value.clone()).unwrap_or_default(),
+            );
         }
 
         // Return the final configuration instance
