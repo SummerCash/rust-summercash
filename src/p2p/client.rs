@@ -379,6 +379,12 @@ impl Client {
         // Generate an account to which all of the genesis funds will be transfered
         let genesis_account = Account::new();
 
+        // Log the genesis account address to the console
+        debug!(
+            "Using genesis seed account: {}",
+            genesis_account.address()?.to_str()
+        );
+
         // Make the genesis transaction
         let root_tx = Transaction::new(
             0,
@@ -387,6 +393,15 @@ impl Client {
             genesis.issuance(),
             b"genesis",
             vec![],
+        );
+
+        // Print the hash of the transaction, as well as the value of it
+        info!(
+            "Constructing a genesis state from root tx '{}' worth {} SMC",
+            root_tx.hash.to_str(),
+            super::super::common::fink::convert_finks_to_smc(
+                root_tx.transaction_data.value.clone()
+            )
         );
 
         // The state at the root transaction
@@ -406,6 +421,12 @@ impl Client {
 
         // Get the value of each account in the genesis allocation
         for (address, value) in genesis.alloc.iter() {
+            // Log the details of the pending allocation action
+            info!(
+                "Allocating {} SMC to {} from the genesis fund",
+                address, value
+            );
+
             // Make a transaction worth the value allocated to the address
             let tx = Transaction::new(
                 i,
@@ -442,6 +463,9 @@ impl Client {
 
             i += 1;
         }
+
+        // Yay!
+        info!("Finished constructing the genesis state!");
 
         // All done!
         Ok(())

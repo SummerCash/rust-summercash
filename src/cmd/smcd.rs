@@ -68,6 +68,12 @@ async fn main() -> Result<(), Error> {
 
 /// Constructs a new genesis for the network, considering a given genesis file.
 fn use_genesis_file(client: &mut Client, file: &str, network: &str) -> Result<(), Error> {
+    // Log the pending gen op
+    info!(
+        "Constructing a new network ({}) genesis state from the given file: {}",
+        network, file
+    );
+
     // Make the genesis state for the network
     client.construct_genesis(Config::read_from_file(file, network)?)?;
 
