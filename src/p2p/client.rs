@@ -404,7 +404,7 @@ impl Client {
     /// * `genesis` - The configuration for the genesis dag
     /// * `data_dir` - The directory in which genesis dag data will be stored
     pub fn construct_genesis(&mut self, genesis: genesis::Config) -> Result<(), failure::Error> {
-        // Generate an account to which all of the genesis funds will be transfered
+        // Generate an account to which all of the genesis funds will be transferred
         let genesis_account = Account::new();
 
         // Log the genesis account address to the console
@@ -500,7 +500,10 @@ impl Client {
     }
 
     /// Starts the client.
-    pub async fn start(&self) -> Result<(), failure::Error> {
+    pub async fn start(
+        &self,
+        bootstrap_addresses: Vec<(PeerId, Multiaddr)>,
+    ) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
@@ -510,10 +513,6 @@ impl Client {
             mdns: Mdns::new().await?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
         };
-
-        let bootstrap_addresses = peers::get_network_bootstrap_peers(network::Network::from(
-            self.runtime.config.network_name.as_ref(),
-        )); // Get a list of network bootstrap peers
 
         // Log the pending bootstrap operation
         info!("Bootstrapping a network DHT & behavior to existing bootstrap nodes...");
@@ -613,7 +612,7 @@ impl Client {
                         "Starting connection process with peer: {}",
                         peer_id.to_base58()
                     ),
-                }
+                };
             }
         } else {
             // Log the error

@@ -9,7 +9,11 @@ extern crate env_logger;
 extern crate tokio;
 
 use failure::Error;
-use summercash::{core::types::genesis::Config, p2p::client::Client};
+use libp2p::{Multiaddr, PeerId};
+use summercash::{
+    core::types::genesis::Config,
+    p2p::{client::Client, network, peers},
+};
 
 /// The SummerCash node daemon.
 #[derive(Clap)]
@@ -27,22 +31,30 @@ struct Opts {
     network: String,
 
     /// Changes the directory that node data will be stored in
-    #[clap(long = "data_dir", default_value = "data")]
+    #[clap(long = "data-dir", default_value = "data")]
     data_dir: String,
 
     /// Uses a given genesis configuration file to construct a new genesis state for the network.
-    #[clap(long = "genesis_file", default_value = "none")]
+    #[clap(long = "genesis-file", default_value = "none")]
     genesis_file: String,
+
+    /// Uses a bootstrap peer with the given ID to connect to the network.
+    #[clap(long = "bootstrap-peer-id", default_value = "net_bps")]
+    bootstrap_peer: String,
+
+    /// Uses a bootstrap peer with the given multi-address to connect to the network.
+    #[clap(long = "bootstrap-peer-addr", default_value = "net_bps")]
+    bootstrap_peer_addr: String,
 }
 
 /// Starts the SMCd node daemon.
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     // Get any flags issued by the user
-    let mut opts: Opts = Opts::parse();
+    let opts: Opts = use_options(Opts::parse())?;
 
     // Use the options
-    opts = use_options(opts)?;
+    let (bootstrap_nodes, opts) = use_bootstrap_peers(&opts.network.clone(), opts)?;
 
     // Get a client for the network that the user specified
     let mut c = Client::new(opts.network.clone().into(), &opts.data_dir)?;
@@ -60,10 +72,33 @@ async fn main() -> Result<(), Error> {
     }
 
     // Start the client
-    c.start().await?;
+    c.start(bootstrap_nodes).await?;
 
     // We're done!
     Ok(())
+}
+
+/// Gets the network bootstrap peers from the configuration struct.
+fn use_bootstrap_peers(
+    network: &str,
+    opts: Opts,
+) -> Result<(Vec<(PeerId, Multiaddr)>, Opts), Error> {
+    // If the user has provided a custom bootstrap peer, use that.
+    if opts.bootstrap_peer != "net_bps" && opts.bootstrap_peer_addr != "net_bps" {
+        Ok((
+            vec![(
+                opts.bootstrap_peer.clone().parse()?,
+                opts.bootstrap_peer.clone().parse()?,
+            )],
+            opts,
+        ))
+    } else {
+        // Otherwise, just use the hard-coded bootstrap node for the active network
+        Ok((
+            peers::get_network_bootstrap_peers(network::Network::from(network)),
+            opts,
+        ))
+    }
 }
 
 /// Constructs a new genesis for the network, considering a given genesis file.
