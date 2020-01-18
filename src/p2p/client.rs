@@ -10,7 +10,6 @@ use super::super::core::{
 }; // Import the system module
 use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::network; // Import the network module
-use super::peers;
 use super::sync;
 use std::{collections::HashMap, error::Error, io, str}; // Allow libp2p to implement the write() helper method.
 

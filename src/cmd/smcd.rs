@@ -26,6 +26,10 @@ struct Opts {
     #[clap(short = "s", long = "silent")]
     silent: bool,
 
+    /// Prevents the local node from connecting to any bootstrap peers.
+    #[clap(short = "nb", long = "no-bootstrap")]
+    no_bootstrap: bool,
+
     /// Ensures that the node will connect to the given network
     #[clap(long = "network", default_value = "andromeda")]
     network: String,
@@ -92,6 +96,9 @@ fn use_bootstrap_peers(
             )],
             opts,
         ))
+    } else if opts.no_bootstrap {
+        // The user has explicitly requested that they not connect to any bootstrap peers. Follow this wish.
+        Ok((vec![], opts))
     } else {
         // Otherwise, just use the hard-coded bootstrap node for the active network
         Ok((
