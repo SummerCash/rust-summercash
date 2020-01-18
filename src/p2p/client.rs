@@ -11,9 +11,11 @@ use super::super::core::{
 use super::super::crypto::{blake3, hash::Hash}; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::sync;
+use core::task::{Context, Poll};
 use std::{collections::HashMap, error::Error, io, str}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
+    core::ConnectedPoint,
     floodsub::{Floodsub, FloodsubEvent},
     identity, kad,
     kad::{
@@ -21,7 +23,11 @@ use libp2p::{
         Kademlia, KademliaEvent, Quorum, Record,
     },
     mdns::{Mdns, MdnsEvent},
-    swarm::{NetworkBehaviourEventProcess, SwarmEvent},
+    swarm::{
+        protocols_handler::{IntoProtocolsHandler, ProtocolsHandler},
+        NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+        SwarmEvent,
+    },
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -140,6 +146,60 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
     }
 }
 
+/// A behavior with a built-in, fetchable state.
+pub struct StatefulBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+    ClientBehavior<TSubstream>,
+);
+
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
+    for StatefulBehavior<TSubstream>
+{
+    type ProtocolsHandler = <ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler;
+    type OutEvent = <ClientBehavior<TSubstream> as NetworkBehaviour>::OutEvent;
+
+    fn new_handler(
+        &mut self,
+    ) -> <ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler {
+        // Call the same method on the inner behavior
+        self.0.new_handler()
+    }
+
+    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
+        // Call the same method on the inner behavior
+        self.0.addresses_of_peer(peer_id)
+    }
+
+    fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
+        // Call the same method on the inner behavior
+        self.0.inject_connected(peer_id, endpoint)
+    }
+
+    fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+        // Call the same method on the inner behavior
+        self.0.inject_disconnected(peer_id, endpoint)
+    }
+
+    fn inject_node_event(
+        &mut self,
+        peer_id: PeerId,
+        event: <<<ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+    ) {
+        // Call the same method on the inner behavior
+        self.0.inject_node_event(peer_id, event)
+    }
+
+    fn poll(
+        &mut self,
+        ctx: &mut Context,
+        params: &mut impl PollParameters,
+    ) -> Poll<
+        NetworkBehaviourAction<<<<ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, <ClientBehavior<TSubstream> as NetworkBehaviour>::OutEvent>,
+>{
+        // Call the same method on the inner behavior
+        self.0.poll(ctx, params)
+    }
+}
+
 /// A network behavior describing a client connected to a pub-sub compatible,
 /// optionally mDNS-compatible network. Such a "behavior" may be implemented for
 /// any libp2p transport, but any transport used with this behavior must implement
@@ -164,6 +224,24 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior
 
         // Add the peer to the list of floodsub peers to message
         self.floodsub.add_node_to_partial_view(id.clone());
+    }
+
+    /// Gets the number of active, connected peers.
+    pub fn active_peers(&mut self) -> usize {
+        // Return the number of connected peers
+        self.kad_dht.kbuckets_entries().size_hint().0
+    }
+
+    /// Gets a quorum for an acceptable majority of the active subset of the network.
+    pub fn active_subset_quorum(&mut self) -> Quorum {
+        // Get the number of active peers in the network
+        let n_peers = self.active_peers();
+
+        // Construct a quorum for at least 1/2 of the network
+        Quorum::N(
+            std::num::NonZeroUsize::new(n_peers / 2)
+                .unwrap_or(std::num::NonZeroUsize::new(1).unwrap()),
+        )
     }
 }
 
@@ -235,17 +313,85 @@ pub mod kademlia {
                                 // Deserialize the root transaction hash from the given value
                                 let root_hash: Hash = if let Ok(val) = bincode::deserialize(&value)
                                 {
+                                    // Alert the user that we've determined what the hash of the root tx is
+                                    info!(
+                                        "Received the root transaction hash for the network: {}",
+                                        val
+                                    );
+
                                     val
                                 } else {
                                     return;
                                 };
 
-                                let n_peers = self.kad_dht.get_record(
-                                    &Key::new(&sync::next_transaction_key(root_hash)),
-                                    Quorum::N(self.kad_dht.kbuckets_entries().size_hint().0 / 4),
+                                // Get a quorum to poll at least 50% of the network
+                                let q: Quorum = self.active_subset_quorum();
+
+                                // Get the actual root transaction, not just the hash, from the network
+                                self.kad_dht.get_record(
+                                    &Key::new(&sync::transaction_with_hash_key(root_hash)),
+                                    q,
                                 );
                             }
-                            _ => info!("Found key: {:?}", key),
+
+                            _ => {
+                                // If the response is a transaction response, try deserializing the transaction, and doing something with it
+                                if String::from_utf8_lossy(key.as_ref())
+                                    .contains("ledger::transactions::tx")
+                                {
+                                    // Deserialize the transaction that the peer responded with
+                                    let tx: Transaction = if let Ok(val) =
+                                        bincode::deserialize::<Transaction>(&value)
+                                    {
+                                        // Alert the user that we've obtained a copy of the tx
+                                        info!(
+                                            "Obtained a copy of a transaction with the hash: {}",
+                                            val.hash.clone()
+                                        );
+
+                                        val
+                                    } else {
+                                        return;
+                                    };
+
+                                    self.inject_event(KademliaEvent::GetRecordResult(Ok(
+                                        libp2p::kad::GetRecordOk { records: vec![] },
+                                    )));
+
+                                    // Get a quorum to poll at least 50% of the network
+                                    let q: Quorum = self.active_subset_quorum();
+
+                                    // Get the next hash in the dag
+                                    self.kad_dht.get_record(
+                                        &Key::new(&sync::next_transaction_key(tx.hash)),
+                                        q,
+                                    );
+                                } else if String::from_utf8_lossy(key.as_ref())
+                                    .contains("ledger::transactions::next")
+                                {
+                                    // Try to convert the raw bytes into an actual hash
+                                    let hash: Hash =
+                                        if let Ok(val) = bincode::deserialize::<Hash>(&value) {
+                                            info!(
+                                                "Determined the next hash in the remote DAG: {}",
+                                                val.clone()
+                                            );
+
+                                            val
+                                        } else {
+                                            return;
+                                        };
+
+                                    // Get a quorum to poll at least 50% of the network
+                                    let q: Quorum = self.active_subset_quorum();
+
+                                    // Get the actual transaction corresponding to what we now know is the hash of such a transaction
+                                    self.kad_dht.get_record(
+                                        &Key::new(&sync::transaction_with_hash_key(hash)),
+                                        q,
+                                    );
+                                }
+                            }
                         }
                     }
                 }
@@ -519,6 +665,7 @@ impl Client {
     pub async fn start(
         &self,
         bootstrap_addresses: Vec<(PeerId, Multiaddr)>,
+        port: u16,
     ) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
@@ -563,7 +710,7 @@ impl Client {
         ); // Initialize a swarm
 
         // Try to get the address we'll listen on
-        if let Ok(addr) = "/ip4/0.0.0.0/tcp/0".parse::<Multiaddr>() {
+        if let Ok(addr) = format!("/ip4/0.0.0.0/tcp/{}", port).parse::<Multiaddr>() {
             // Try to tell the swarm to listen on this address, return an error if this doesn't work
             if let Err(e) = Swarm::listen_on(&mut swarm, addr.clone()) {
                 // Log the error
@@ -579,21 +726,17 @@ impl Client {
             // Print the address we'll be listening on
             info!("Swarm listening on addr {}; ready for connections", addr);
 
+            // Get a quorum for at least 1/2 of the network
+            let q: Quorum = swarm.active_subset_quorum();
+
             // If there aren't any transactions in the graph, sync from the beginning
             if self.runtime.ledger.nodes.len() == 0 {
                 debug!("Synchronizing root transaction");
 
-                // We'll want to query at least 1/4 the network. To do this, we must know the number of peers in the network.
-                let n_peers = swarm.kad_dht.kbuckets_entries().size_hint().0;
-
                 // Fetch the hash of the first node from the network
-                swarm.kad_dht.get_record(
-                    &Key::new(&sync::ROOT_TRANSACTION_KEY),
-                    Quorum::N(
-                        std::num::NonZeroUsize::new(n_peers / 4)
-                            .unwrap_or(std::num::NonZeroUsize::new(1).unwrap()),
-                    ),
-                );
+                swarm
+                    .kad_dht
+                    .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), q);
             } else {
                 debug!("Broadcasting root transaction");
 
@@ -603,15 +746,43 @@ impl Client {
                         Key::new(&sync::ROOT_TRANSACTION_KEY),
                         self.runtime.ledger.nodes[0].hash.to_vec(),
                     ),
-                    Quorum::Majority,
+                    q,
                 );
+
+                // Make sure the network has a full copy of the entire transaction history
+                for i in 0..self.runtime.ledger.nodes.len() {
+                    // If we aren't at the head tx yet, we can post the next tx hash
+                    if i < self.runtime.ledger.nodes.len() - 1 {
+                        // Post the next tx hash to the network
+                        swarm.kad_dht.put_record(
+                            Record::new(
+                                Key::new(&sync::next_transaction_key(
+                                    self.runtime.ledger.nodes[i].hash,
+                                )),
+                                self.runtime.ledger.nodes[i + 1].hash.to_vec(),
+                            ),
+                            q,
+                        );
+                    }
+
+                    // Broadcast a copy of the root node to the network
+                    swarm.kad_dht.put_record(
+                        Record::new(
+                            Key::new(&sync::transaction_with_hash_key(
+                                self.runtime.ledger.nodes[i].hash,
+                            )),
+                            self.runtime.ledger.nodes[i].to_bytes(),
+                        ),
+                        q,
+                    );
+                }
             }
 
             loop {
                 // Poll the swarm
                 match swarm.next_event().await {
                     // Info from the swarm is really all we care about
-                    SwarmEvent::Behaviour(e) => debug!("idk: {:?}", e),
+                    SwarmEvent::Behaviour(e) => error!("idk: {:?}", e),
 
                     // Just do some logging with the excess data
                     SwarmEvent::Connected(peer_id) => {

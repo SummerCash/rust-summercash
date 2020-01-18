@@ -30,6 +30,10 @@ struct Opts {
     #[clap(short = "nb", long = "no-bootstrap")]
     no_bootstrap: bool,
 
+    /// Signals to the local node that it should prefer the given port for all incoming operations.
+    #[clap(short = "p", long = "node-port", default_value = "0")]
+    node_port: u16,
+
     /// Ensures that the node will connect to the given network
     #[clap(long = "network", default_value = "andromeda")]
     network: String,
@@ -76,7 +80,7 @@ async fn main() -> Result<(), Error> {
     }
 
     // Start the client
-    c.start(bootstrap_nodes).await?;
+    c.start(bootstrap_nodes, opts.node_port).await?;
 
     // We're done!
     Ok(())
