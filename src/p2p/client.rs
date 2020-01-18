@@ -8,7 +8,7 @@ use super::super::core::{
     },
     types::{genesis, state::Entry, transaction::Transaction},
 }; // Import the system module
-use super::super::crypto::blake3; // Import the blake3 hashing module
+use super::super::crypto::{blake3, hash::Hash}; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::sync;
 use std::{collections::HashMap, error::Error, io, str}; // Allow libp2p to implement the write() helper method.
@@ -228,26 +228,42 @@ pub mod kademlia {
             match event {
                 // The record was found successfully; print it
                 KademliaEvent::GetRecordResult(Ok(result)) => {
-                    for Record { key, value: _, .. } in result.records {
-                        // Print out the record
-                        debug!("Found key: {:?}", key);
+                    for Record { key, value, .. } in result.records {
+                        // Handle different key types
+                        match key.as_ref() {
+                            b"ledger::transactions::root" => {
+                                // Deserialize the root transaction hash from the given value
+                                let root_hash: Hash = if let Ok(val) = bincode::deserialize(&value)
+                                {
+                                    val
+                                } else {
+                                    return;
+                                };
+
+                                let n_peers = self.kad_dht.get_record(
+                                    &Key::new(&sync::next_transaction_key(root_hash)),
+                                    Quorum::N(self.kad_dht.kbuckets_entries().size_hint().0 / 4),
+                                );
+                            }
+                            _ => info!("Found key: {:?}", key),
+                        }
                     }
                 }
 
                 // An error occurred while fetching the record; print it
-                KademliaEvent::GetRecordResult(Err(e)) => debug!("Failed to load record: {:?}", e),
+                KademliaEvent::GetRecordResult(Err(e)) => info!("Failed to load record: {:?}", e),
 
                 // The record was successfulyl set; print out the record name
                 KademliaEvent::PutRecordResult(Ok(result)) => {
                     // Print out the successful set operation
-                    debug!(
+                    info!(
                         "Set key successfully: {}",
                         String::from_utf8_lossy(result.key.as_ref())
                     );
                 }
 
                 // An error occurred while fetching the record; print it
-                KademliaEvent::PutRecordResult(Err(e)) => debug!("Failed to set key: {:?}", e),
+                KademliaEvent::PutRecordResult(Err(e)) => info!("Failed to set key: {:?}", e),
 
                 _ => {}
             }
