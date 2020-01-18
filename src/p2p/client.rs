@@ -200,7 +200,7 @@ pub mod mdns {
                 // Go through each of the peers we were able to connect to, and remove them from the localized node registry
                 {
                     for (peer, _) in list {
-                        if !self.mdns.has_node(&peer) {
+                        if self.mdns.has_node(&peer) {
                             // Log the peer that will be removed
                             info!("Peer {} dead; removing", peer);
 
@@ -248,6 +248,7 @@ pub mod kademlia {
 
                 // An error occurred while fetching the record; print it
                 KademliaEvent::PutRecordResult(Err(e)) => debug!("Failed to set key: {:?}", e),
+
                 _ => {}
             }
         }
@@ -566,10 +567,17 @@ impl Client {
             if self.runtime.ledger.nodes.len() == 0 {
                 debug!("Synchronizing root transaction");
 
+                // We'll want to query at least 1/4 the network. To do this, we must know the number of peers in the network.
+                let n_peers = swarm.kad_dht.kbuckets_entries().size_hint().0;
+
                 // Fetch the hash of the first node from the network
-                swarm
-                    .kad_dht
-                    .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), Quorum::Majority);
+                swarm.kad_dht.get_record(
+                    &Key::new(&sync::ROOT_TRANSACTION_KEY),
+                    Quorum::N(
+                        std::num::NonZeroUsize::new(n_peers / 4)
+                            .unwrap_or(std::num::NonZeroUsize::new(1).unwrap()),
+                    ),
+                );
             } else {
                 debug!("Broadcasting root transaction");
 

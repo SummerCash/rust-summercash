@@ -92,7 +92,7 @@ fn use_bootstrap_peers(
         Ok((
             vec![(
                 opts.bootstrap_peer.clone().parse()?,
-                opts.bootstrap_peer.clone().parse()?,
+                opts.bootstrap_peer_addr.clone().parse()?,
             )],
             opts,
         ))
