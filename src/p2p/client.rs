@@ -4,18 +4,16 @@ use super::super::core::{
     sys::{
         config::{self, Config},
         proposal::{Operation, Proposal, ProposalData},
-        system,
+        system::{self},
     },
     types::{genesis, state::Entry, transaction::Transaction},
 }; // Import the system module
 use super::super::crypto::{blake3, hash::Hash}; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::sync;
-use core::task::{Context, Poll};
 use std::{collections::HashMap, error::Error, io, str}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    core::ConnectedPoint,
     floodsub::{Floodsub, FloodsubEvent},
     identity, kad,
     kad::{
@@ -23,11 +21,7 @@ use libp2p::{
         Kademlia, KademliaEvent, Quorum, Record,
     },
     mdns::{Mdns, MdnsEvent},
-    swarm::{
-        protocols_handler::{IntoProtocolsHandler, ProtocolsHandler},
-        NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
-        SwarmEvent,
-    },
+    swarm::{NetworkBehaviourEventProcess, SwarmEvent},
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -143,60 +137,6 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
         Self::Custom {
             error: e.description().to_owned(),
         }
-    }
-}
-
-/// A behavior with a built-in, fetchable state.
-pub struct StatefulBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
-    ClientBehavior<TSubstream>,
-);
-
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
-    for StatefulBehavior<TSubstream>
-{
-    type ProtocolsHandler = <ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler;
-    type OutEvent = <ClientBehavior<TSubstream> as NetworkBehaviour>::OutEvent;
-
-    fn new_handler(
-        &mut self,
-    ) -> <ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler {
-        // Call the same method on the inner behavior
-        self.0.new_handler()
-    }
-
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        // Call the same method on the inner behavior
-        self.0.addresses_of_peer(peer_id)
-    }
-
-    fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-        // Call the same method on the inner behavior
-        self.0.inject_connected(peer_id, endpoint)
-    }
-
-    fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-        // Call the same method on the inner behavior
-        self.0.inject_disconnected(peer_id, endpoint)
-    }
-
-    fn inject_node_event(
-        &mut self,
-        peer_id: PeerId,
-        event: <<<ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
-    ) {
-        // Call the same method on the inner behavior
-        self.0.inject_node_event(peer_id, event)
-    }
-
-    fn poll(
-        &mut self,
-        ctx: &mut Context,
-        params: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<<<<ClientBehavior<TSubstream> as NetworkBehaviour>::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, <ClientBehavior<TSubstream> as NetworkBehaviour>::OutEvent>,
->{
-        // Call the same method on the inner behavior
-        self.0.poll(ctx, params)
     }
 }
 
