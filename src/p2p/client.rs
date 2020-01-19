@@ -21,7 +21,10 @@ use libp2p::{
         Kademlia, KademliaEvent, Quorum, Record,
     },
     mdns::{Mdns, MdnsEvent},
-    swarm::{NetworkBehaviour, NetworkBehaviourEventProcess, SwarmEvent},
+    swarm::{
+        protocols_handler::ProtocolsHandler, NetworkBehaviour, NetworkBehaviourEventProcess,
+        SwarmEvent,
+    },
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -152,17 +155,24 @@ mod state {
         pub graph: Arc<Mutex<system::System>>,
     }
 
-    /// An event emitted by the RuntimeBehavior.
-    enum RuntimeEvent {
-        /// A proposal has been discovered
-        DiscoveredProposal(Proposal),
+    /// A generic, non-functional handler for this "protocol".
+    struct Handler<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>;
+
+    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ProtocolsHandler
+        for Handler<TSubstream>
+    {
+        type InEvent = ();
+        type OutEvent = ();
+        type Error = failure::Error;
+        type Substream = TSubstream;
+        type InboundProtocol = InboundUpgrade<TSubstream>;
+        type OutboundProtocol = OutboundUpgrade<TSubstream>;
     }
 
-    /// A handler for the RuntimeBehavior protocol.
-    struct Handler {}
-
     impl NetworkBehaviour for RuntimeBehavior {
-        type OutEvent = RuntimeEvent;
+        // This behaviour isn't really doing anything, so we don't need to spec out any types
+        type ProtocolsHandler = ();
+        type OutEvent = ();
     }
 }
 
