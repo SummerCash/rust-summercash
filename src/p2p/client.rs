@@ -4,7 +4,7 @@ use super::super::core::{
     sys::{
         config::{self, Config},
         proposal::{Operation, Proposal, ProposalData},
-        system::{self},
+        system,
     },
     types::{genesis, state::Entry, transaction::Transaction},
 }; // Import the system module
@@ -21,7 +21,7 @@ use libp2p::{
         Kademlia, KademliaEvent, Quorum, Record,
     },
     mdns::{Mdns, MdnsEvent},
-    swarm::{NetworkBehaviourEventProcess, SwarmEvent},
+    swarm::{NetworkBehaviour, NetworkBehaviourEventProcess, SwarmEvent},
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -137,6 +137,32 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
         Self::Custom {
             error: e.description().to_owned(),
         }
+    }
+}
+
+/// Implementations for a state-bearing Network event handler.
+mod state {
+    use super::*;
+
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
+    /// A behavior for the Runtime network primitive.
+    struct RuntimeBehavior {
+        pub graph: Arc<Mutex<system::System>>,
+    }
+
+    /// An event emitted by the RuntimeBehavior.
+    enum RuntimeEvent {
+        /// A proposal has been discovered
+        DiscoveredProposal(Proposal),
+    }
+
+    /// A handler for the RuntimeBehavior protocol.
+    struct Handler {}
+
+    impl NetworkBehaviour for RuntimeBehavior {
+        type OutEvent = RuntimeEvent;
     }
 }
 
