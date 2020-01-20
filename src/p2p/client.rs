@@ -575,7 +575,7 @@ impl Client {
                         peer_id: _,
                         address,
                         error,
-                    } => warn!("Failed to connect to peer at addr {}: {}", address, error),
+                    } => debug!("Failed to connect to peer at addr {}: {}", address, error),
                     SwarmEvent::StartConnect(peer_id) => debug!(
                         "Starting connection process with peer: {}",
                         peer_id.to_base58()
