@@ -221,6 +221,7 @@ mod state {
                 Self::Error,
             >,
         > {
+            Poll::Pending
         }
     }
 
