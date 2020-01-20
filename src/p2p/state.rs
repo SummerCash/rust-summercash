@@ -1,13 +1,13 @@
 /// This module implements a state-ful NetworkBehaviour that essentially acts as a shell for the `Runtime` type inside
 /// a struct that is using a derived NetworkBehaviour.
-use super::super::core::sys::system::System;
+use super::{super::core::sys::system::System, client::CommunicationError};
 use core::task::{Context, Poll};
 use futures::{AsyncRead, AsyncWrite};
 
 use std::{
     io,
     marker::PhantomData,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use libp2p::{
@@ -30,6 +30,35 @@ pub struct RuntimeBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin
 
     stream: PhantomData<TSubstream>,
 }
+
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    RuntimeBehavior<'a, TSubstream>
+{
+    /// Gets a writing lock to the state's system.
+    pub fn write(&mut self) -> Result<RwLockWriteGuard<&'a mut System>, failure::Error> {
+        // Try to get a writing lock on the runtime
+        if let Ok(rt) = self.runtime.write() {
+            // Return the runtime
+            Ok(rt)
+        } else {
+            // Return a mutex failure error
+            Err(CommunicationError::MutexFailure.into())
+        }
+    }
+
+    /// Gets a reading lock on the state's system.
+    pub fn read(&mut self) -> Result<RwLockReadGuard<&'a mut System>, failure::Error> {
+        // Try to get a reading lock on the runtime
+        if let Ok(rt) = self.runtime.read() {
+            // Return the runtime
+            Ok(rt)
+        } else {
+            // Return a mutex failure error
+            Err(CommunicationError::MutexFailure.into())
+        }
+    }
+}
+
 impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
     for RuntimeBehavior<'a, TSubstream>
 {

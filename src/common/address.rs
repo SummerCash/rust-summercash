@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_from_public_key() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
         let address = Address::from_public_key(&keypair.public); // Derive address from public key
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_from_key_pair() {
-        let mut csprng = OsRng{}; // Generate source of randomness
+        let mut csprng = OsRng {}; // Generate source of randomness
         let keypair: Keypair = Keypair::generate(&mut csprng); // Generate key pair
 
         let address = Address::from_key_pair(&keypair); // Derive address from pair
