@@ -1,0 +1,131 @@
+use super::{
+    super::{core::types::transaction::Transaction, crypto::hash::Hash},
+    client::ClientBehavior,
+    sync,
+};
+
+use futures::{AsyncRead, AsyncWrite};
+use libp2p::{
+    kad::{
+        record::{Key, Record},
+        KademliaEvent, Quorum,
+    },
+    swarm::NetworkBehaviourEventProcess,
+};
+
+/// Network synchronization via KAD DHT events.
+/// Synchronization of network proposals, for example, is done in this manner.
+/// TODO: Not implemented
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<'a, TSubstream>
+{
+    // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
+    fn inject_event(&mut self, event: KademliaEvent) {
+        match event {
+            // The record was found successfully; print it
+            KademliaEvent::GetRecordResult(Ok(result)) => {
+                for Record { key, value, .. } in result.records {
+                    // Handle different key types
+                    match key.as_ref() {
+                        b"ledger::transactions::root" => {
+                            // Deserialize the root transaction hash from the given value
+                            let root_hash: Hash = if let Ok(val) = bincode::deserialize(&value) {
+                                // Alert the user that we've determined what the hash of the root tx is
+                                info!(
+                                    "Received the root transaction hash for the network: {}",
+                                    val
+                                );
+
+                                val
+                            } else {
+                                return;
+                            };
+
+                            // Get a quorum to poll at least 50% of the network
+                            let q: Quorum = self.active_subset_quorum();
+
+                            // Get the actual root transaction, not just the hash, from the network
+                            self.kad_dht.get_record(
+                                &Key::new(&sync::transaction_with_hash_key(root_hash)),
+                                q,
+                            );
+                        }
+
+                        _ => {
+                            // If the response is a transaction response, try deserializing the transaction, and doing something with it
+                            if String::from_utf8_lossy(key.as_ref())
+                                .contains("ledger::transactions::tx")
+                            {
+                                // Deserialize the transaction that the peer responded with
+                                let tx: Transaction =
+                                    if let Ok(val) = bincode::deserialize::<Transaction>(&value) {
+                                        // Alert the user that we've obtained a copy of the tx
+                                        info!(
+                                            "Obtained a copy of a transaction with the hash: {}",
+                                            val.hash.clone()
+                                        );
+
+                                        val
+                                    } else {
+                                        return;
+                                    };
+
+                                self.inject_event(KademliaEvent::GetRecordResult(Ok(
+                                    libp2p::kad::GetRecordOk { records: vec![] },
+                                )));
+
+                                // Get a quorum to poll at least 50% of the network
+                                let q: Quorum = self.active_subset_quorum();
+
+                                // Get the next hash in the dag
+                                self.kad_dht
+                                    .get_record(&Key::new(&sync::next_transaction_key(tx.hash)), q);
+                            } else if String::from_utf8_lossy(key.as_ref())
+                                .contains("ledger::transactions::next")
+                            {
+                                // Try to convert the raw bytes into an actual hash
+                                let hash: Hash =
+                                    if let Ok(val) = bincode::deserialize::<Hash>(&value) {
+                                        info!(
+                                            "Determined the next hash in the remote DAG: {}",
+                                            val.clone()
+                                        );
+
+                                        val
+                                    } else {
+                                        return;
+                                    };
+
+                                // Get a quorum to poll at least 50% of the network
+                                let q: Quorum = self.active_subset_quorum();
+
+                                // Get the actual transaction corresponding to what we now know is the hash of such a transaction
+                                self.kad_dht.get_record(
+                                    &Key::new(&sync::transaction_with_hash_key(hash)),
+                                    q,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            // An error occurred while fetching the record; print it
+            KademliaEvent::GetRecordResult(Err(e)) => info!("Failed to load record: {:?}", e),
+
+            // The record was successfulyl set; print out the record name
+            KademliaEvent::PutRecordResult(Ok(result)) => {
+                // Print out the successful set operation
+                info!(
+                    "Set key successfully: {}",
+                    String::from_utf8_lossy(result.key.as_ref())
+                );
+            }
+
+            // An error occurred while fetching the record; print it
+            KademliaEvent::PutRecordResult(Err(e)) => info!("Failed to set key: {:?}", e),
+
+            _ => {}
+        }
+    }
+}
