@@ -1,5 +1,11 @@
 use super::{
-    super::{core::types::transaction::Transaction, crypto::hash::Hash},
+    super::{
+        core::{
+            sys::proposal::{Operation, Proposal, ProposalData},
+            types::transaction::Transaction,
+        },
+        crypto::hash::Hash,
+    },
     client::ClientBehavior,
     sync,
 };
@@ -70,9 +76,31 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                         return;
                                     };
 
-                                self.inject_event(KademliaEvent::GetRecordResult(Ok(
-                                    libp2p::kad::GetRecordOk { records: vec![] },
-                                )));
+                                // Try to get a lock on the runtime so we can put the tx in the database
+                                if let Ok(mut rt) = self.runtime.write() {
+                                    // Make a proposal for the transaction, so we can execute it more effectively
+                                    let proposal = Proposal::new(
+                                        "sync_child".to_owned(),
+                                        ProposalData::new(
+                                            "ledger::transactions".to_owned(),
+                                            Operation::Append {
+                                                value_to_append: value,
+                                            },
+                                        ),
+                                    );
+
+                                    // The ID of the proposal. We need to copy this, since we'll move it into the system through registration
+                                    let id = proposal.proposal_id.clone();
+
+                                    // Put the proposal in the system, so we can execute it
+                                    rt.register_proposal(proposal);
+
+                                    // Execute the proposal so it gets added to the dag
+                                    match rt.execute_proposal(id) {
+                                        Ok(_) => info!("Successfully executed transaction {}", id),
+                                        Err(e) => warn!("Transaction execution failed: {}", e),
+                                    }
+                                }
 
                                 // Get a quorum to poll at least 50% of the network
                                 let q: Quorum = self.active_subset_quorum();
@@ -113,7 +141,7 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
             // An error occurred while fetching the record; print it
             KademliaEvent::GetRecordResult(Err(e)) => info!("Failed to load record: {:?}", e),
 
-            // The record was successfulyl set; print out the record name
+            // The record was successfully set; print out the record name
             KademliaEvent::PutRecordResult(Ok(result)) => {
                 // Print out the successful set operation
                 info!(

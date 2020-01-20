@@ -211,6 +211,11 @@ impl Transaction {
     pub fn execute(&self, prev_entry: Option<state::Entry>) -> state::Entry {
         match prev_entry {
             Some(entry) => {
+                // Execute the transaction, but with no entry data, since there isn't anything in the entry in the first place
+                if entry.data.balances.len() == 0 {
+                    return self.execute(None);
+                }
+
                 let mut balances: collections::HashMap<String, BigUint> =
                     entry.data.balances.clone(); // Initialize balances map
 

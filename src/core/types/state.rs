@@ -7,7 +7,7 @@ use super::super::super::{crypto::blake3, crypto::hash}; // Import the hash modu
 use num::bigint::BigUint; // Add support for large unsigned integers
 
 /// The state at a particular point in time.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Entry {
     /// Body of the state entry
     pub data: EntryData,
@@ -15,7 +15,7 @@ pub struct Entry {
     pub hash: hash::Hash,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EntryData {
     /// Balances of every account at a certain point in time
     pub balances: collections::HashMap<String, BigUint>,
