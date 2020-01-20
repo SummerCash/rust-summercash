@@ -18,7 +18,7 @@ use std::{
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    floodsub::{Floodsub, FloodsubEvent},
+    floodsub::Floodsub,
     identity, kad,
     kad::{
         record::{store::MemoryStore, Key},
@@ -198,19 +198,6 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     NetworkBehaviourEventProcess<()> for ClientBehavior<'a, TSubstream>
 {
     fn inject_event(&mut self, _event: ()) {}
-}
-
-pub mod floodsub {
-    use super::*;
-
-    impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-        NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<'a, TSubstream>
-    {
-        /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
-        fn inject_event(&mut self, _message: FloodsubEvent) {
-            // TODO: Unimplemented
-        }
-    }
 }
 
 /// A network client.
