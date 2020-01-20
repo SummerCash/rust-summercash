@@ -12,8 +12,13 @@ use failure::Error;
 use libp2p::{Multiaddr, PeerId};
 use summercash::{
     core::types::genesis::Config,
-    p2p::{client::Client, network, peers},
+    p2p::{client::Client, network, peers, rpc::accounts::AccountsImpl},
 };
+
+use std::thread;
+
+use jsonrpc_core::IoHandler;
+use jsonrpc_http_server::ServerBuilder;
 
 /// The SummerCash node daemon.
 #[derive(Clap)]
@@ -30,9 +35,17 @@ struct Opts {
     #[clap(short = "nb", long = "no-bootstrap")]
     no_bootstrap: bool,
 
+    /// Disables the SummerCash RPC API, leaving the node in a completely isolated state.
+    #[clap(short = "i", long = "isolated")]
+    disable_api: bool,
+
     /// Signals to the local node that it should prefer the given port for all incoming operations.
     #[clap(short = "p", long = "node-port", default_value = "0")]
     node_port: u16,
+
+    /// Signals to the local node that it should listen on the givn port for all RPC API communications.
+    #[clap(short = "P", long = "rpc-port", default_value = "8080")]
+    api_port: u16,
 
     /// Ensures that the node will connect to the given network
     #[clap(long = "network", default_value = "andromeda")]
@@ -77,6 +90,32 @@ async fn main() -> Result<(), Error> {
     if opts.genesis_file != "none" {
         // Construct the genesis state
         use_genesis_file(&mut c, &opts.genesis_file, &opts.network)?;
+    }
+
+    // If the user wants to activate the SummerCash RPC API, let's do it.
+    if !opts.disable_api {
+        // Initialize a server for the RPC API
+        let mut io = IoHandler::new();
+
+        // Register the accounts API
+        AccountsImpl::register(&mut io);
+
+        // Create an HTTP server for the RPC API
+        let server = ServerBuilder::new(io)
+            .start_http(
+                &format!("0.0.0.0:{}", opts.api_port)
+                    .parse()
+                    .expect("Node was unable to parsed the given API port."),
+            )
+            .expect("Node was unable to create an HTTP server for the SummerCash RPC API.");
+
+        info!(
+            "Starting an HTTP server for the SummerCash RPC API on port {}",
+            opts.api_port
+        );
+
+        // Start listening in a different thread
+        thread::spawn(move || server.wait());
     }
 
     // Start the client
