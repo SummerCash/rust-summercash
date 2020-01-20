@@ -11,7 +11,8 @@ use super::super::core::{
 use super::super::crypto::{blake3, hash::Hash}; // Import the blake3 hashing module
 use super::network; // Import the network module
 use super::sync;
-use std::{collections::HashMap, error::Error, io, str}; // Allow libp2p to implement the write() helper method.
+use core::task::Poll;
+use std::{collections::HashMap, error::Error, io, marker::PhantomData, str}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent},
@@ -21,11 +22,15 @@ use libp2p::{
         Kademlia, KademliaEvent, Quorum, Record,
     },
     mdns::{Mdns, MdnsEvent},
+    ping::protocol::Ping,
     swarm::{
-        protocols_handler::ProtocolsHandler, NetworkBehaviour, NetworkBehaviourEventProcess,
-        SwarmEvent,
+        protocols_handler::{
+            KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr,
+            SubstreamProtocol,
+        },
+        NetworkBehaviour, NetworkBehaviourEventProcess, SwarmEvent,
     },
-    Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
+    InboundUpgrade, Multiaddr, NetworkBehaviour, OutboundUpgrade, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
 // We need these traits from the futures library in order to build a swarm.
@@ -146,32 +151,85 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
 /// Implementations for a state-bearing Network event handler.
 mod state {
     use super::*;
+    use core::task::Context;
 
     use std::sync::Arc;
     use std::sync::Mutex;
 
     /// A behavior for the Runtime network primitive.
-    struct RuntimeBehavior {
+    struct RuntimeBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
         pub graph: Arc<Mutex<system::System>>,
+        stream: PhantomData<TSubstream>,
     }
 
     /// A generic, non-functional handler for this "protocol".
-    struct Handler<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>;
+    struct Handler<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+        PhantomData<TSubstream>,
+    );
 
     impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ProtocolsHandler
         for Handler<TSubstream>
     {
         type InEvent = ();
         type OutEvent = ();
-        type Error = failure::Error;
+        type Error = io::Error;
         type Substream = TSubstream;
-        type InboundProtocol = InboundUpgrade<TSubstream>;
-        type OutboundProtocol = OutboundUpgrade<TSubstream>;
+        type InboundProtocol = Ping;
+        type OutboundProtocol = Ping;
+        type OutboundOpenInfo = ();
+
+        fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
+            SubstreamProtocol::new(Ping)
+        }
+
+        fn inject_fully_negotiated_inbound(
+            &mut self,
+            protocol: <Self::InboundProtocol as InboundUpgrade<Self::Substream>>::Output,
+        ) {
+        }
+
+        fn inject_fully_negotiated_outbound(
+            &mut self,
+            protocol: <Self::OutboundProtocol as OutboundUpgrade<Self::Substream>>::Output,
+            info: Self::OutboundOpenInfo,
+        ) {
+        }
+
+        fn inject_event(&mut self, event: Self::InEvent) {}
+
+        fn inject_dial_upgrade_error(
+            &mut self,
+            info: Self::OutboundOpenInfo,
+            error: ProtocolsHandlerUpgrErr<
+                <Self::OutboundProtocol as OutboundUpgrade<Self::Substream>>::Error,
+            >,
+        ) {
+        }
+
+        fn connection_keep_alive(&self) -> KeepAlive {
+            KeepAlive::Yes
+        }
+
+        fn poll(
+            &mut self,
+            cx: &mut Context,
+        ) -> Poll<
+            ProtocolsHandlerEvent<
+                Self::OutboundProtocol,
+                Self::OutboundOpenInfo,
+                Self::OutEvent,
+                Self::Error,
+            >,
+        > {
+        }
     }
 
-    impl NetworkBehaviour for RuntimeBehavior {
+    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
+        for RuntimeBehavior<TSubstream>
+    {
         // This behaviour isn't really doing anything, so we don't need to spec out any types
-        type ProtocolsHandler = ();
+        type ProtocolsHandler = Handler<TSubstream>;
+
         type OutEvent = ();
     }
 }
