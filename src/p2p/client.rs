@@ -12,9 +12,17 @@ use super::super::crypto::{blake3, hash::Hash}; // Import the blake3 hashing mod
 use super::network; // Import the network module
 use super::sync;
 use core::task::Poll;
-use std::{collections::HashMap, error::Error, io, marker::PhantomData, str}; // Allow libp2p to implement the write() helper method.
+use std::{
+    collections::HashMap,
+    error::Error,
+    io,
+    marker::PhantomData,
+    str,
+    sync::{Arc, RwLock},
+}; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
+    core::ConnectedPoint,
     floodsub::{Floodsub, FloodsubEvent},
     identity, kad,
     kad::{
@@ -25,10 +33,11 @@ use libp2p::{
     ping::protocol::Ping,
     swarm::{
         protocols_handler::{
-            KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr,
-            SubstreamProtocol,
+            IntoProtocolsHandler, KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent,
+            ProtocolsHandlerUpgrErr, SubstreamProtocol,
         },
-        NetworkBehaviour, NetworkBehaviourEventProcess, SwarmEvent,
+        NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+        SwarmEvent,
     },
     InboundUpgrade, Multiaddr, NetworkBehaviour, OutboundUpgrade, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
@@ -154,16 +163,60 @@ mod state {
     use core::task::Context;
 
     use std::sync::Arc;
-    use std::sync::Mutex;
 
     /// A behavior for the Runtime network primitive.
-    struct RuntimeBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
-        pub graph: Arc<Mutex<system::System>>,
+    pub struct RuntimeBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+        pub runtime: Arc<RwLock<&'a mut system::System>>,
+
         stream: PhantomData<TSubstream>,
+    }
+    impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
+        for RuntimeBehavior<'a, TSubstream>
+    {
+        // This behaviour isn't really doing anything, so we don't need to spec out any types
+        type ProtocolsHandler = Handler<TSubstream>;
+
+        type OutEvent = ();
+
+        fn new_handler(&mut self) -> Self::ProtocolsHandler {
+            Handler::<TSubstream>(PhantomData)
+        }
+
+        fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
+            vec![]
+        }
+
+        fn inject_connected(&mut self, _peer_id: PeerId, _endpoint: ConnectedPoint) {}
+
+        fn inject_disconnected(&mut self, _peer_id: &PeerId, _endpoint: ConnectedPoint) {}
+
+        fn inject_node_event(
+            &mut self,
+            _peer_id: PeerId,
+            _event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+        ) {
+        }
+
+fn poll(&mut self, _cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>>{
+            Poll::Pending
+        }
+    }
+
+    impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+        RuntimeBehavior<'a, TSubstream>
+    {
+        /// Initializes a new RuntimeBehavior with the given runtime reference.
+        pub fn new(runtime: std::sync::Arc<std::sync::RwLock<&'a mut system::System>>) -> Self {
+            // Initialize a new runtime behavior with the given runtime reference
+            Self {
+                runtime,
+                stream: PhantomData,
+            }
+        }
     }
 
     /// A generic, non-functional handler for this "protocol".
-    struct Handler<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+    pub struct Handler<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
         PhantomData<TSubstream>,
     );
 
@@ -184,23 +237,23 @@ mod state {
 
         fn inject_fully_negotiated_inbound(
             &mut self,
-            protocol: <Self::InboundProtocol as InboundUpgrade<Self::Substream>>::Output,
+            _protocol: <Self::InboundProtocol as InboundUpgrade<Self::Substream>>::Output,
         ) {
         }
 
         fn inject_fully_negotiated_outbound(
             &mut self,
-            protocol: <Self::OutboundProtocol as OutboundUpgrade<Self::Substream>>::Output,
-            info: Self::OutboundOpenInfo,
+            _protocol: <Self::OutboundProtocol as OutboundUpgrade<Self::Substream>>::Output,
+            _info: Self::OutboundOpenInfo,
         ) {
         }
 
-        fn inject_event(&mut self, event: Self::InEvent) {}
+        fn inject_event(&mut self, _event: Self::InEvent) {}
 
         fn inject_dial_upgrade_error(
             &mut self,
-            info: Self::OutboundOpenInfo,
-            error: ProtocolsHandlerUpgrErr<
+            _info: Self::OutboundOpenInfo,
+            _error: ProtocolsHandlerUpgrErr<
                 <Self::OutboundProtocol as OutboundUpgrade<Self::Substream>>::Error,
             >,
         ) {
@@ -212,7 +265,7 @@ mod state {
 
         fn poll(
             &mut self,
-            cx: &mut Context,
+            _cx: &mut Context,
         ) -> Poll<
             ProtocolsHandlerEvent<
                 Self::OutboundProtocol,
@@ -224,15 +277,6 @@ mod state {
             Poll::Pending
         }
     }
-
-    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
-        for RuntimeBehavior<TSubstream>
-    {
-        // This behaviour isn't really doing anything, so we don't need to spec out any types
-        type ProtocolsHandler = Handler<TSubstream>;
-
-        type OutEvent = ();
-    }
 }
 
 /// A network behavior describing a client connected to a pub-sub compatible,
@@ -240,7 +284,7 @@ mod state {
 /// any libp2p transport, but any transport used with this behavior must implement
 /// asynchronous reading & writing capabilities.
 #[derive(NetworkBehaviour)]
-pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+pub struct ClientBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Some pubsub mechanism bound to the above transport
     pub floodsub: Floodsub<TSubstream>,
 
@@ -249,9 +293,14 @@ pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 's
 
     /// Allow for the client to do some external discovery on the global network through a KAD DHT
     pub kad_dht: Kademlia<TSubstream, MemoryStore>,
+
+    /// Allow for a state to be maintained inside the client behavior
+    pub runtime: state::RuntimeBehavior<'a, TSubstream>,
 }
 
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    ClientBehavior<'a, TSubstream>
+{
     /// Adds the given peer with a particular ID & multi address to the behavior.
     pub fn add_address(&mut self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
@@ -280,6 +329,12 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior
     }
 }
 
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<()> for ClientBehavior<'a, TSubstream>
+{
+    fn inject_event(&mut self, _event: ()) {}
+}
+
 /*
     BEGIN IMPLEMENTATION OF DISCOVERY VIA mDNS & KAD EVENTS
 */
@@ -288,8 +343,8 @@ pub mod mdns {
     use super::*;
 
     /// Discovery via mDNS events.
-    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-        NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<TSubstream>
+    impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+        NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<'a, TSubstream>
     {
         /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
         fn inject_event(&mut self, event: MdnsEvent) {
@@ -333,8 +388,8 @@ pub mod kademlia {
     /// Network synchronization via KAD DHT events.
     /// Synchronization of network proposals, for example, is done in this manner.
     /// TODO: Not implemented
-    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-        NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<TSubstream>
+    impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+        NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<'a, TSubstream>
     {
         // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
         fn inject_event(&mut self, event: KademliaEvent) {
@@ -459,8 +514,8 @@ pub mod kademlia {
 pub mod floodsub {
     use super::*;
 
-    impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-        NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
+    impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+        NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<'a, TSubstream>
     {
         /// Wait for an incoming floodsub message from a known peer. Handle it somehow.
         fn inject_event(&mut self, _message: FloodsubEvent) {
@@ -698,11 +753,15 @@ impl Client {
 
     /// Starts the client.
     pub async fn start(
-        &self,
+        &mut self,
         bootstrap_addresses: Vec<(PeerId, Multiaddr)>,
         port: u16,
     ) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
+
+        // Get a reference to the local runtime instance. This is necessary, as we need to maintain a state between both the manager process, and the worker
+        // process.
+        let rt = Arc::new(RwLock::new(&mut self.runtime));
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
         // an mDNS service handler as well as a floodsub instance targeted at the given peer
@@ -710,6 +769,7 @@ impl Client {
             floodsub: Floodsub::new(self.peer_id.clone()),
             mdns: Mdns::new().await?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
+            runtime: state::RuntimeBehavior::new(rt.clone()),
         };
 
         // Log the pending bootstrap operation
@@ -764,52 +824,55 @@ impl Client {
             // Get a quorum for at least 1/2 of the network
             let q: Quorum = swarm.active_subset_quorum();
 
-            // If there aren't any transactions in the graph, sync from the beginning
-            if self.runtime.ledger.nodes.len() == 0 {
-                debug!("Synchronizing root transaction");
+            // Try to get a lock on the runtime ref that we generated earlier, so we can kick off synchronization
+            if let Ok(runtime) = rt.read() {
+                // If there aren't any nodes in the runtime's ledger instance, we'll have to start synchronizing from the very beginning
+                if runtime.ledger.nodes.len() == 0 {
+                    debug!("Synchronizing root transaction");
 
-                // Fetch the hash of the first node from the network
-                swarm
-                    .kad_dht
-                    .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), q);
-            } else {
-                debug!("Broadcasting root transaction");
+                    // Fetch the hash of the first node from the network
+                    swarm
+                        .kad_dht
+                        .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), q);
+                } else {
+                    debug!("Broadcasting root transaction");
 
-                // Broadcast the local node's current root transaction to the network
-                swarm.kad_dht.put_record(
-                    Record::new(
-                        Key::new(&sync::ROOT_TRANSACTION_KEY),
-                        self.runtime.ledger.nodes[0].hash.to_vec(),
-                    ),
-                    q,
-                );
+                    // Broadcast the local node's current root transaction to the network
+                    swarm.kad_dht.put_record(
+                        Record::new(
+                            Key::new(&sync::ROOT_TRANSACTION_KEY),
+                            runtime.ledger.nodes[0].hash.to_vec(),
+                        ),
+                        q,
+                    );
 
-                // Make sure the network has a full copy of the entire transaction history
-                for i in 0..self.runtime.ledger.nodes.len() {
-                    // If we aren't at the head tx yet, we can post the next tx hash
-                    if i < self.runtime.ledger.nodes.len() - 1 {
-                        // Post the next tx hash to the network
+                    // Make sure the network has a full copy of the entire transaction history
+                    for i in 0..runtime.ledger.nodes.len() {
+                        // If we aren't at the head tx yet, we can post the next tx hash
+                        if i < runtime.ledger.nodes.len() - 1 {
+                            // Post the next tx hash to the network
+                            swarm.kad_dht.put_record(
+                                Record::new(
+                                    Key::new(&sync::next_transaction_key(
+                                        runtime.ledger.nodes[i].hash,
+                                    )),
+                                    runtime.ledger.nodes[i + 1].hash.to_vec(),
+                                ),
+                                q,
+                            );
+                        }
+
+                        // Broadcast a copy of the root node to the network
                         swarm.kad_dht.put_record(
                             Record::new(
-                                Key::new(&sync::next_transaction_key(
-                                    self.runtime.ledger.nodes[i].hash,
+                                Key::new(&sync::transaction_with_hash_key(
+                                    runtime.ledger.nodes[i].hash,
                                 )),
-                                self.runtime.ledger.nodes[i + 1].hash.to_vec(),
+                                runtime.ledger.nodes[i].to_bytes(),
                             ),
                             q,
                         );
                     }
-
-                    // Broadcast a copy of the root node to the network
-                    swarm.kad_dht.put_record(
-                        Record::new(
-                            Key::new(&sync::transaction_with_hash_key(
-                                self.runtime.ledger.nodes[i].hash,
-                            )),
-                            self.runtime.ledger.nodes[i].to_bytes(),
-                        ),
-                        q,
-                    );
                 }
             }
 
