@@ -1,14 +1,26 @@
 use jsonrpc_core::{response::Output, Error, ErrorCode, IoHandler, Result};
 use jsonrpc_derive::rpc;
 
+use cryptolib::{
+    aes::{self, KeySize},
+    blockmodes,
+    buffer::{self, BufferResult, ReadBuffer, WriteBuffer},
+};
+
 use serde::Deserialize;
 
+use rand::{rngs::StdRng, RngCore, SeedableRng};
+
 use super::{
-    super::super::{accounts::account::Account, common::address::Address},
+    super::super::{accounts::account::Account, common::address::Address, crypto::blake3},
     error,
 };
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs,
+    io::{Read, Seek, SeekFrom, Write},
+};
 
 /// Defines the standard SummerCash accounts RPC API.
 #[rpc]
@@ -22,6 +34,16 @@ pub trait Accounts {
     /// an error will be returned.
     #[rpc(name = "get_account")]
     fn get(&self, address: Address, data_dir: String) -> Result<Account>;
+
+    /// Locks the account with the corresponding address in the given data directory. If the account is already locked,
+    /// an error is returned.
+    #[rpc(name = "lock_account")]
+    fn lock(&self, address: Address, enc_key: String, data_dir: String) -> Result<()>;
+
+    /// Unlocks the account with the corresponding address in the given data directory, and returns the account if the operation
+    /// was successful. If the account is already unlocked, an error is returned.
+    #[rpc(name = "unlock_account")]
+    fn unlock(&self, address: Address, dec_key: String, data_dir: String) -> Result<Account>;
 }
 
 /// An implementation of the accounts API.
@@ -50,6 +72,210 @@ impl Accounts for AccountsImpl {
             Ok(acc) => Ok(acc),
             Err(_) => Err(Error::new(ErrorCode::ServerError(
                 error::ERROR_UNABLE_TO_OPEN_ACCOUNT,
+            ))),
+        }
+    }
+
+    /// Locks the account with the corresponding address in the given data directory. If the account is already locked,
+    /// an error is returned.
+    fn lock(&self, address: Address, enc_key: String, data_dir: String) -> Result<()> {
+        // We'll need to generate an IV to do encryption properly
+        let mut iv: [u8; 16] = [0; 16];
+
+        // Make a random number generator for the pwd
+        let mut rng: StdRng = SeedableRng::from_seed(*blake3::hash_slice(enc_key.as_bytes()));
+
+        // Generate an IV
+        rng.fill_bytes(&mut iv);
+
+        // Make an instance of the encryption helper for the file
+        let mut enc = aes::cbc_encryptor(
+            KeySize::KeySize128,
+            &*blake3::hash_slice(enc_key.as_bytes()),
+            &iv,
+            blockmodes::PkcsPadding,
+        );
+
+        // Open the file that the account is stored in
+        let mut f = if let Ok(f) = fs::OpenOptions::new().read(true).write(true).open(format!(
+            "{}/keystore/{}.json",
+            data_dir,
+            address.to_str()
+        )) {
+            f
+        } else {
+            // Return an error
+            return Err(Error::new(ErrorCode::ServerError(
+                error::ERROR_UNABLE_TO_OPEN_ACCOUNT,
+            )));
+        };
+
+        // The contents of the file. We'll read the file into this buffer later.
+        let mut contents = Vec::new();
+
+        // Read into the buffer from the file.
+        match f.read_to_end(&mut contents) {
+            Ok(_) => {}
+            Err(_) => {
+                return Err(Error::new(ErrorCode::ServerError(
+                    error::ERROR_UNABLE_TO_OPEN_ACCOUNT,
+                )));
+            }
+        }
+
+        // Idk some crypto stuff
+        let mut read_buffer = buffer::RefReadBuffer::new(&contents);
+
+        // Make a buffer to store the final encrypted data in
+        let mut final_result = Vec::<u8>::new();
+
+        // More crypto garbage
+        let mut buffer = [0; 2048];
+
+        // Even more crypto stuff
+        let mut write_buffer = buffer::RefWriteBuffer::new(&mut buffer);
+
+        // Encrypt the stuff...
+        loop {
+            // Depersonalization isn't fun, but encryption is! Encrypt! Encrypt! Encrypt!
+            let result = if let Ok(res) = enc.encrypt(&mut read_buffer, &mut write_buffer, true) {
+                // We successfully encrypted the block. Cool.
+                res
+            } else {
+                // Return an error!
+                return Err(Error::new(ErrorCode::from(error::ERROR_ENCRYPTION_FAILED)));
+            };
+
+            final_result.extend(
+                write_buffer
+                    .take_read_buffer()
+                    .take_remaining()
+                    .iter()
+                    .map(|&i| i),
+            );
+
+            // Handle some bad stuff...
+            match result {
+                BufferResult::BufferUnderflow => break,
+                BufferResult::BufferOverflow => {}
+            }
+        }
+
+        // Reset the writer to the beginning of the file
+        if f.seek(SeekFrom::Start(0)).is_err() {
+            // Return an error
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_WRITE_ACCOUNT,
+            )));
+        }
+
+        // Put the encrypted data in the file
+        match f.write_all(&final_result) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_WRITE_ACCOUNT,
+            ))),
+        }
+    }
+
+    /// Unlocks the account with the corresponding address in the given data directory. If the account is already unlocked,
+    /// an error is returned.
+    fn unlock(&self, address: Address, dec_key: String, data_dir: String) -> Result<Account> {
+        // We'll need to generate an IV to do encryption properly
+        let mut iv: [u8; 16] = [0; 16];
+
+        // Make a random number generator for the pwd
+        let mut rng: StdRng = SeedableRng::from_seed(*blake3::hash_slice(dec_key.as_bytes()));
+
+        // Generate an IV
+        rng.fill_bytes(&mut iv);
+
+        // Make an instance of the decryption helper for the file
+        let mut dec = aes::cbc_decryptor(
+            KeySize::KeySize128,
+            &*blake3::hash_slice(dec_key.as_bytes()),
+            &iv,
+            blockmodes::PkcsPadding,
+        );
+
+        // Open the file that the account is stored in
+        let mut f = if let Ok(f) = fs::OpenOptions::new().read(true).write(true).open(format!(
+            "{}/keystore/{}.json",
+            data_dir,
+            address.to_str()
+        )) {
+            f
+        } else {
+            // Return an error
+            return Err(Error::new(ErrorCode::ServerError(
+                error::ERROR_UNABLE_TO_OPEN_ACCOUNT,
+            )));
+        };
+
+        // The contents of the file. We'll have to decrypt this in a second.
+        let mut contents = Vec::new();
+
+        // Read into the buffer from the file.
+        match f.read_to_end(&mut contents) {
+            Ok(_) => {}
+            Err(_) => {
+                return Err(Error::new(ErrorCode::ServerError(
+                    error::ERROR_UNABLE_TO_OPEN_ACCOUNT,
+                )));
+            }
+        }
+
+        // Generate a few buffers, set the encoder to read from the file's contents
+        let mut final_result = Vec::<u8>::new();
+        let mut read_buffer = buffer::RefReadBuffer::new(&contents);
+        let mut buffer = [0; 2048];
+        let mut write_buffer = buffer::RefWriteBuffer::new(&mut buffer);
+
+        loop {
+            // Try to decrypt the data in the file; return an error if this fails
+            let result = if let Ok(res) = dec.decrypt(&mut read_buffer, &mut write_buffer, true) {
+                res
+            } else {
+                // Return an error
+                return Err(Error::new(ErrorCode::from(error::ERROR_DECRYPTION_FAILED)));
+            };
+
+            // Put the decrypted data block into the overall buffer
+            final_result.extend(
+                write_buffer
+                    .take_read_buffer()
+                    .take_remaining()
+                    .iter()
+                    .map(|&i| i),
+            );
+
+            match result {
+                BufferResult::BufferUnderflow => break,
+                BufferResult::BufferOverflow => {}
+            }
+        }
+
+        // Deserialize the account
+        match serde_json::from_slice(final_result.as_slice()) {
+            Ok(acc) => {
+                // Reset the writer to the beginning of the file
+                if f.seek(SeekFrom::Start(0)).is_err() {
+                    // Return an error
+                    return Err(Error::new(ErrorCode::from(
+                        error::ERROR_UNABLE_TO_WRITE_ACCOUNT,
+                    )));
+                }
+
+                // Now that we've deserialized the account, let's write it back to the original file
+                match serde_json::to_writer(f, &acc) {
+                    Ok(_) => Ok(acc),
+                    Err(_) => Err(Error::new(ErrorCode::from(
+                        error::ERROR_UNABLE_TO_WRITE_ACCOUNT,
+                    ))),
+                }
+            }
+            Err(_) => Err(Error::new(ErrorCode::ServerError(
+                error::ERROR_UNABLE_TO_READ_ACCOUNT,
             ))),
         }
     }
@@ -134,7 +360,45 @@ impl Client {
     ) -> std::result::Result<Account, failure::Error> {
         self.do_request::<Account>(
             "get_account",
-            &format!("[{}, \"{}\"]", serde_json::to_string(&address)?, data_dir,),
+            &format!("[{}, \"{}\"]", serde_json::to_string(&address)?, data_dir),
+        )
+        .await
+    }
+
+    /// Encrypts an account with the giiven address. If the account is already locked, an error is returned.
+    pub async fn lock(
+        &self,
+        address: Address,
+        enc_key: &str,
+        data_dir: &str,
+    ) -> std::result::Result<(), failure::Error> {
+        self.do_request::<()>(
+            "lock_account",
+            &format!(
+                "[{}, \"{}\", \"{}\"]",
+                serde_json::to_string(&address)?,
+                enc_key,
+                data_dir
+            ),
+        )
+        .await
+    }
+
+    /// Decrypts an account with the given address. If the account is already unlocked, an error is returned.
+    pub async fn unlock(
+        &self,
+        address: Address,
+        dec_key: &str,
+        data_dir: &str,
+    ) -> std::result::Result<Account, failure::Error> {
+        self.do_request::<Account>(
+            "unlock_account",
+            &format!(
+                "[{}, \"{}\", \"{}\"]",
+                serde_json::to_string(&address)?,
+                dec_key,
+                data_dir
+            ),
         )
         .await
     }

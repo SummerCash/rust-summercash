@@ -18,6 +18,7 @@ extern crate log;
 
 extern crate libp2p; // Link libp2p library
 
+extern crate crypto as cryptolib;
 extern crate num; // Link num library
 extern crate path_clean; // Link path clean crate
 extern crate rand; // Link rand library
@@ -27,10 +28,8 @@ extern crate sled; // Link sled crate
 extern crate walkdir; // Link directory walk crate
 
 extern crate async_std;
-
 extern crate tokio_01;
 extern crate tokio_compat;
 
 extern crate clap;
-
 extern crate reqwest;

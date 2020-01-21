@@ -45,6 +45,14 @@ enum SubCommand {
     /// Gets a SummerCash object of a given type.
     #[clap(name = "get")]
     Get(Get),
+
+    /// Locks a SummerCash object of a given type.
+    #[clap(name = "lock")]
+    Lock(Lock),
+
+    /// Unlocks a SummerCash object of a given type.
+    #[clap(name = "unlock")]
+    Unlock(Unlock),
 }
 
 #[derive(Clap, Clone)]
@@ -60,9 +68,30 @@ enum Get {
 }
 
 #[derive(Clap, Clone)]
+enum Lock {
+    /// Locks a particular account with the given address.
+    Account(CryptoAccount),
+}
+
+#[derive(Clap, Clone)]
+enum Unlock {
+    /// Unlocks a particular account with the given address.
+    Account(CryptoAccount),
+}
+
+#[derive(Clap, Clone)]
 struct Account {
     /// The address of the account
     address: String,
+}
+
+#[derive(Clap, Clone)]
+struct CryptoAccount {
+    /// The address of the account
+    address: String,
+
+    /// The encryption / decryption key used to unlock or lock the account
+    key: String,
 }
 
 #[tokio::main]
@@ -73,6 +102,8 @@ async fn main() -> Result<(), failure::Error> {
     match opts.subcmd.clone() {
         SubCommand::Create(c) => create(opts, c).await,
         SubCommand::Get(c) => get(opts, c).await,
+        SubCommand::Lock(l) => lock(opts, l).await,
+        SubCommand::Unlock(u) => unlock(opts, u).await,
     }
 }
 
@@ -108,6 +139,56 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
             {
                 Ok(acc) => info!("Found account: {}", acc),
                 Err(e) => error!("Failed to load the account: {}", e),
+            }
+        }
+    };
+
+    Ok(())
+}
+
+/// Locks the object with matching constraints.
+async fn lock(opts: Opts, l: Lock) -> Result<(), failure::Error> {
+    match l {
+        Lock::Account(acc) => {
+            // Make a client for the accounts API
+            let client = accounts::Client::new(&opts.rpc_host_url);
+
+            // Lock the account
+            match client
+                .lock(
+                    Address::from(Hash::from_str(&acc.address)?),
+                    &acc.key,
+                    &opts.data_dir,
+                )
+                .await
+            {
+                Ok(_) => info!("Locked account '{}' successfully", acc.address),
+                Err(e) => error!("Failed to lock the account: {}", e),
+            }
+        }
+    };
+
+    Ok(())
+}
+
+/// Locks the object with matching constraints.
+async fn unlock(opts: Opts, u: Unlock) -> Result<(), failure::Error> {
+    match u {
+        Unlock::Account(acc) => {
+            // Make a client for the accounts API
+            let client = accounts::Client::new(&opts.rpc_host_url);
+
+            // Lock the account
+            match client
+                .unlock(
+                    Address::from(Hash::from_str(&acc.address)?),
+                    &acc.key,
+                    &opts.data_dir,
+                )
+                .await
+            {
+                Ok(acc) => info!("Unlocked account successfully: {}", acc),
+                Err(e) => error!("Failed to lock the account: {}", e),
             }
         }
     };
