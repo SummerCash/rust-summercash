@@ -5,7 +5,7 @@ use rand::rngs::OsRng; // Import the os's rng
 
 use walkdir::WalkDir; // Import the walkdir utility
 
-use std::{fs, io, io::Write}; // Import the io library
+use std::{fmt, fs, io, io::Write}; // Import the io library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
@@ -117,6 +117,40 @@ impl Account {
         )))?; // Open account file
 
         Ok(serde_json::from_reader(file)?) // Return read account
+    }
+}
+
+impl fmt::Display for Account {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[derive(Serialize)]
+        struct HexRepresentation {
+            private_key: String,
+            address: String,
+        }
+
+        // Convert the account into a string struct
+        let acc_hex = HexRepresentation {
+            private_key: {
+                if let Ok(kp) = self.keypair() {
+                    hex::encode(kp.secret)
+                } else {
+                    "invalid_key".to_owned()
+                }
+            },
+            address: {
+                if let Ok(addr) = self.address() {
+                    hex::encode(addr)
+                } else {
+                    "invalid_key".to_owned()
+                }
+            },
+        };
+
+        write!(
+            f,
+            "{}",
+            serde_json::to_string_pretty(&acc_hex).unwrap_or_default()
+        )
     }
 }
 

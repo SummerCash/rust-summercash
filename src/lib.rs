@@ -26,4 +26,11 @@ extern crate serde_json; // Link serde
 extern crate sled; // Link sled crate
 extern crate walkdir; // Link directory walk crate
 
+extern crate async_std;
+
+extern crate tokio_01;
+extern crate tokio_compat;
+
 extern crate clap;
+
+extern crate reqwest;

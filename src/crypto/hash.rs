@@ -63,6 +63,20 @@ impl Default for Hash {
     }
 }
 
+impl From<String> for Hash {
+    /// Converts the given owned string to a hash.
+    fn from(s: String) -> Self {
+        Self::new(hex::decode(s).unwrap_or_default())
+    }
+}
+
+impl From<&str> for Hash {
+    /// Converts the given string reference to a hash.
+    fn from(s: &str) -> Self {
+        Self::new(hex::decode(s).unwrap_or_default())
+    }
+}
+
 /* BEGIN EXPORTED METHODS */
 
 /// Implement a set of hash helper methods.

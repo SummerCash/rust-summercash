@@ -7,6 +7,7 @@ extern crate log;
 
 extern crate env_logger;
 extern crate tokio;
+//extern crate tokio_01;
 
 use failure::Error;
 use libp2p::{Multiaddr, PeerId};
@@ -22,6 +23,7 @@ use jsonrpc_http_server::ServerBuilder;
 
 /// The SummerCash node daemon.
 #[derive(Clap)]
+#[clap(version = "1.0", author = "Dowland A.")]
 struct Opts {
     /// Print debug info
     #[clap(short = "d", long = "debug")]
