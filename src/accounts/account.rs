@@ -65,6 +65,27 @@ impl Account {
         }
     }
 
+    /// Persist the account to the disk at a given data directory.
+    pub fn write_to_disk_at_data_directory(&self, data_dir: &str) -> io::Result<()> {
+        // Make a keystore directory in the data dir
+        fs::create_dir_all(&format!("{}/keystore", data_dir))?;
+
+        // Try to derive an address from the account's keypair
+        if let Ok(address) = self.address() {
+            // Initialize a file that we can save the account to
+            let mut file =
+                fs::File::create(&format!("{}/keystore/{}.json", data_dir, address.to_str()))?;
+            // Serializ the account + write it to the file
+            file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?;
+
+            // Everything's good!
+            Ok(())
+        } else {
+            // Return an error
+            Err(io::Error::from(io::ErrorKind::InvalidData))
+        }
+    }
+
     /// Write an account to the disk at a given data directory.
     pub fn write_to_disk_with_name_at_data_directory(
         &self,

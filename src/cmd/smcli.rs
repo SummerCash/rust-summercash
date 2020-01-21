@@ -4,7 +4,7 @@ extern crate clap;
 extern crate log;
 use clap::Clap;
 
-use summercash::p2p::rpc::accounts::Client;
+use summercash::{common::address::Address, crypto::hash::Hash, p2p::rpc::accounts};
 
 use std::clone::Clone;
 
@@ -41,6 +41,10 @@ enum SubCommand {
     /// Creates a new SummerCash object of a given type.
     #[clap(name = "create")]
     Create(Create),
+
+    /// Gets a SummerCash object of a given type.
+    #[clap(name = "get")]
+    Get(Get),
 }
 
 #[derive(Clap, Clone)]
@@ -49,15 +53,27 @@ enum Create {
     Account,
 }
 
+#[derive(Clap, Clone)]
+enum Get {
+    /// Gets a particular account with the given address.
+    Account(Account),
+}
+
+#[derive(Clap, Clone)]
+struct Account {
+    /// The address of the account
+    address: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
     // Get the options that the user passed to the program
     let opts: Opts = use_options(Opts::parse())?;
 
     match opts.subcmd.clone() {
-        SubCommand::Create(c) => create(opts, c),
+        SubCommand::Create(c) => create(opts, c).await,
+        SubCommand::Get(c) => get(opts, c).await,
     }
-    .await
 }
 
 /// Creates the object from the given options.
@@ -65,12 +81,33 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
     match c {
         Create::Account => {
             // Make a client for the accounts API
-            let client = Client::new(&opts.rpc_host_url);
+            let client = accounts::Client::new(&opts.rpc_host_url);
 
             // Generate the account
-            match client.generate().await {
+            match client.generate(&opts.data_dir).await {
                 Ok(acc) => info!("Successfully generated account: {}", acc),
                 Err(e) => error!("Failed to generate account: {}", e),
+            }
+        }
+    };
+
+    Ok(())
+}
+
+/// Gets the object with matching criteria.
+async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
+    match g {
+        Get::Account(acc) => {
+            // Make a client for the accounts API
+            let client = accounts::Client::new(&opts.rpc_host_url);
+
+            // Get the account
+            match client
+                .get(Address::from(Hash::from_str(&acc.address)?), &opts.data_dir)
+                .await
+            {
+                Ok(acc) => info!("Found account: {}", acc),
+                Err(e) => error!("Failed to load the account: {}", e),
             }
         }
     };
