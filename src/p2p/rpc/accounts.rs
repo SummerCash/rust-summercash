@@ -44,6 +44,10 @@ pub trait Accounts {
     /// was successful. If the account is already unlocked, an error is returned.
     #[rpc(name = "unlock_account")]
     fn unlock(&self, address: Address, dec_key: String, data_dir: String) -> Result<Account>;
+
+    /// Deletes the account with the corresponding address.
+    #[rpc(name = "delete_account")]
+    fn delete(&self, address: Address, data_dir: String) -> Result<()>;
 }
 
 /// An implementation of the accounts API.
@@ -279,6 +283,17 @@ impl Accounts for AccountsImpl {
             ))),
         }
     }
+
+    /// Deletes the account with the corresponding address in the given data directory.
+    fn delete(&self, address: Address, data_dir: String) -> Result<()> {
+        // Delete the account
+        match fs::remove_file(format!("{}/keystore/{}.json", data_dir, address)) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_DELETE_ACCOUNT,
+            ))),
+        }
+    }
 }
 
 impl AccountsImpl {
@@ -399,6 +414,19 @@ impl Client {
                 dec_key,
                 data_dir
             ),
+        )
+        .await
+    }
+
+    /// Deletes an account with the given address.
+    pub async fn delete(
+        &self,
+        address: Address,
+        data_dir: &str,
+    ) -> std::result::Result<(), failure::Error> {
+        self.do_request::<()>(
+            "delete_account",
+            &format!("[{}, \"{}\"]", address, data_dir),
         )
         .await
     }

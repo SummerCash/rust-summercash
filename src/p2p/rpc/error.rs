@@ -19,3 +19,6 @@ pub const ERROR_ENCRYPTION_FAILED: i64 = 5;
 
 /// An error code representing a failure in the executor's decryption process.
 pub const ERROR_DECRYPTION_FAILED: i64 = 6;
+
+/// An error code representing the inability of the executor to delete an account.
+pub const ERROR_UNABLE_TO_DELETE_ACCOUNT: i64 = 7;

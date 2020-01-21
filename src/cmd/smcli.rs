@@ -53,6 +53,10 @@ enum SubCommand {
     /// Unlocks a SummerCash object of a given type.
     #[clap(name = "unlock")]
     Unlock(Unlock),
+
+    /// Deletes a SummerCash object of a given type.
+    #[clap(name = "delete")]
+    Delete(Delete),
 }
 
 #[derive(Clap, Clone)]
@@ -80,6 +84,12 @@ enum Unlock {
 }
 
 #[derive(Clap, Clone)]
+enum Delete {
+    /// Deletes an account with the given address.
+    Account(Account),
+}
+
+#[derive(Clap, Clone)]
 struct Account {
     /// The address of the account
     address: String,
@@ -104,6 +114,7 @@ async fn main() -> Result<(), failure::Error> {
         SubCommand::Get(c) => get(opts, c).await,
         SubCommand::Lock(l) => lock(opts, l).await,
         SubCommand::Unlock(u) => unlock(opts, u).await,
+        SubCommand::Delete(d) => delete(opts, d).await,
     }
 }
 
@@ -189,6 +200,27 @@ async fn unlock(opts: Opts, u: Unlock) -> Result<(), failure::Error> {
             {
                 Ok(acc) => info!("Unlocked account successfully: {}", acc),
                 Err(e) => error!("Failed to lock the account: {}", e),
+            }
+        }
+    };
+
+    Ok(())
+}
+
+/// Deletes the object with matching constraints.
+async fn delete(opts: Opts, d: Delete) -> Result<(), failure::Error> {
+    match d {
+        Delete::Account(acc) => {
+            // Make a client for the accounts API
+            let client = accounts::Client::new(&opts.rpc_host_url);
+
+            // Delete the account
+            match client
+                .delete(Address::from(Hash::from_str(&acc.address)?), &opts.data_dir)
+                .await
+            {
+                Ok(_) => info!("Deleted account '{}' successfully", acc.address),
+                Err(e) => error!("Failed to delete account '{}': {}", acc.address, e),
             }
         }
     };
