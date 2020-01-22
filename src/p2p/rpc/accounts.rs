@@ -270,13 +270,19 @@ impl Accounts for AccountsImpl {
         // Deserialize the account
         match serde_json::from_slice(final_result.as_slice()) {
             Ok(acc) => {
-                // Reset the writer to the beginning of the file
-                if f.seek(SeekFrom::Start(0)).is_err() {
+                // Re-open the file, but with permissions that delete what was previously in the file
+                f = if let Ok(opened_file) = fs::OpenOptions::new()
+                    .truncate(true)
+                    .write(true)
+                    .open(format!("{}/keystore/{}.json", data_dir, address.to_str()))
+                {
+                    opened_file
+                } else {
                     // Return an error
                     return Err(Error::new(ErrorCode::from(
                         error::ERROR_UNABLE_TO_WRITE_ACCOUNT,
                     )));
-                }
+                };
 
                 // Now that we've deserialized the account, let's write it back to the original file
                 match serde_json::to_writer(f, &acc) {
