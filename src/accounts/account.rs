@@ -188,7 +188,8 @@ pub fn get_all_unlocked_accounts_in_data_directory(data_dir: &str) -> Vec<Addres
         if let Ok(metadata) = e.metadata() {
             if metadata.is_file() {
                 if let Some(path_str) = e.path().to_str() {
-                    accounts.push(Address::from(
+                    // Get the address of the current account from the file name
+                    let addr = Address::from(
                         path_str
                             .split(".json")
                             .map(|s| {
@@ -196,7 +197,12 @@ pub fn get_all_unlocked_accounts_in_data_directory(data_dir: &str) -> Vec<Addres
                                 split[split.len() - 1]
                             })
                             .collect::<Vec<&str>>()[0],
-                    ));
+                    );
+
+                    // Make sure this isn't a p2p keypair
+                    if addr != blake3::hash_slice(b"p2p_identity") {
+                        accounts.push(addr);
+                    }
                 }
             }
         }
@@ -220,11 +226,14 @@ pub fn get_all_unlocked_accounts() -> Vec<Account> {
             if metadata.is_file() {
                 // Convert path to string
                 if let Some(path_str) = e.path().to_str() {
-                    // Open account file
-                    if let Ok(file) = fs::File::open(path_str) {
-                        // Read account from file
-                        if let Ok(account) = serde_json::from_reader(file) {
-                            accounts.push(account); // Add account to account addresses vec
+                    // Make sure this isn't a stowaway p2p account
+                    if !path_str.contains(&blake3::hash_slice(b"p2p_identity").to_str()) {
+                        // Open account file
+                        if let Ok(file) = fs::File::open(path_str) {
+                            // Read account from file
+                            if let Ok(account) = serde_json::from_reader(file) {
+                                accounts.push(account); // Add account to account addresses vec
+                            }
                         }
                     }
                 }

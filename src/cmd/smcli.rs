@@ -188,7 +188,7 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
                 .balance(Address::from(Hash::from_str(&acc.address)?))
                 .await
             {
-                Ok(balance) => info!("Balance: {}", balance),
+                Ok(balance) => info!("Balance: {} SMC", balance.clone(),),
                 Err(e) => error!("Failed to calculate the account's balance: {}", e),
             }
         }

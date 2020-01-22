@@ -222,8 +222,11 @@ impl Into<String> for &Client {
         // Iterate through the accounts in the client configuration
         for i in 0..self.voting_accounts.len() {
             if let Ok(addr) = self.voting_accounts[i].address() {
-                accounts_string +=
-                    &format!("{}{}", if i > 0 { ", " } else { "" }, hex::encode(addr));
+                // Ensure that the account can be used to vote, and isn't a duplicate
+                if addr != blake3::hash_slice(b"p2p_identity") {
+                    accounts_string +=
+                        &format!("{}{}", if i > 0 { ", " } else { "" }, hex::encode(addr));
+                }
             }
         }
 
@@ -253,8 +256,12 @@ impl Client {
         } else {
             let p2p_account = account::Account::new(); // Generate p2p account
                                                        // Write p2p account to disk
+
             match p2p_account.write_to_disk_with_name_at_data_directory("p2p_identity", data_dir) {
                 Ok(_) => {
+                    // Save the keypair as a normal account as well
+                    p2p_account.write_to_disk_at_data_directory(data_dir)?;
+
                     // Check has valid p2p keypair
                     if let Ok(p2p_keypair) = p2p_account.p2p_keypair() {
                         Client::with_peer_id(
