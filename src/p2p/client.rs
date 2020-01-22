@@ -387,7 +387,8 @@ impl Client {
             // Log the details of the pending allocation action
             info!(
                 "Allocating {} SMC to {} from the genesis fund",
-                value, address
+                super::super::common::fink::convert_finks_to_smc(value.clone()),
+                address
             );
 
             // Make a transaction worth the value allocated to the address

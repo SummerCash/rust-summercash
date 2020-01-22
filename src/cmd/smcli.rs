@@ -4,7 +4,11 @@ extern crate clap;
 extern crate log;
 use clap::Clap;
 
-use summercash::{common::address::Address, crypto::hash::Hash, p2p::rpc::accounts};
+use summercash::{
+    common::address::Address,
+    crypto::hash::Hash,
+    p2p::rpc::{accounts, dag},
+};
 
 use std::clone::Clone;
 
@@ -76,6 +80,9 @@ enum Get {
 
     /// Gets the balance of a particular account.
     Balance(Account),
+
+    /// Gets a list of nodes contained in the working dag.
+    Dag(UnitDag),
 }
 
 #[derive(Clap, Clone)]
@@ -119,6 +126,9 @@ struct CryptoAccount {
 
 #[derive(Clap, Clone)]
 struct UnitAccount {}
+
+#[derive(Clap, Clone)]
+struct UnitDag {}
 
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
@@ -180,6 +190,22 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
             {
                 Ok(balance) => info!("Balance: {}", balance),
                 Err(e) => error!("Failed to calculate the account's balance: {}", e),
+            }
+        }
+        Get::Dag(_) => {
+            // Make a client for the DAG API
+            let client = dag::Client::new(&opts.rpc_host_url);
+
+            match client.get().await {
+                Ok(nodes) => {
+                    info!("Loaded the DAG successfully!");
+
+                    // Print out each of the nodes
+                    for node in nodes {
+                        println!("{}", serde_json::to_string_pretty(&node)?);
+                    }
+                }
+                Err(e) => error!("Failed to load the DAG: {}", e),
             }
         }
     };

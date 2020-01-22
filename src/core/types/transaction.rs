@@ -49,7 +49,7 @@ pub struct Transaction {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TransactionData {
     /// The index of the transaction in the sender's set of txs
-    pub nonce: u128,
+    pub nonce: u64,
     /// The sender of the transaction
     pub sender: address::Address,
     /// The recipient of the transaction
@@ -108,7 +108,7 @@ impl Transaction {
     /// let tx = &mut transaction::Transaction::new(0, sender, recipient, BigUint::from_i64(0).unwrap(), b"test transaction payload", vec![hash::Hash::new(vec![0; hash::HASH_SIZE])]); // Initialize transaction
     /// ```
     pub fn new(
-        nonce: u128,
+        nonce: u64,
         sender: address::Address,
         recipient: address::Address,
         value_finks: BigUint,

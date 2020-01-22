@@ -13,7 +13,11 @@ use failure::Error;
 use libp2p::{Multiaddr, PeerId};
 use summercash::{
     core::types::genesis::Config,
-    p2p::{client::Client, network, peers, rpc::accounts::AccountsImpl},
+    p2p::{
+        client::Client,
+        network, peers,
+        rpc::{accounts::AccountsImpl, dag::DagImpl},
+    },
 };
 
 use std::thread;
@@ -101,6 +105,7 @@ async fn main() -> Result<(), Error> {
 
         // Register the accounts API
         AccountsImpl::register(&mut io, c.runtime.clone());
+        DagImpl::register(&mut io, c.runtime.clone());
 
         // Create an HTTP server for the RPC API
         let server = ServerBuilder::new(io)

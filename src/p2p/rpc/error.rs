@@ -28,3 +28,12 @@ pub const ERROR_UNABLE_TO_OBTAIN_LOCK: i64 = 8;
 
 /// An error code representing the inability of the executor to get a lock on the last valid state entry.
 pub const ERROR_UNABLE_TO_OBTAIN_STATE_REF: i64 = 9;
+
+/// An error code representing the inability of the executor to find/open the genesis file for the DAG.
+pub const ERROR_UNABLE_TO_OPEN_GENESIS_CONFIG: i64 = 10;
+
+/// An error code representing the inability of the executor to create a genesis block.
+pub const ERROR_UNABLE_TO_CREATE_GENESIS: i64 = 11;
+
+/// An error code representing the inability of the executor to serialize some SummerCash object.
+pub const ERROR_SERIALIZATION_FAILED: i64 = 12;

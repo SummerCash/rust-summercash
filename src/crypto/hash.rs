@@ -1,4 +1,7 @@
-use serde::{Deserialize, Serialize}; // Import serde serialization
+use serde::{
+    de::{self, Visitor},
+    {Deserialize, Deserializer, Serialize, Serializer},
+}; // Import serde serialization
 
 use std::{
     fmt,
@@ -9,7 +12,7 @@ use std::{
 pub const HASH_SIZE: usize = 32;
 
 // A standard 32-byte blake3 hash.
-#[derive(Serialize, Deserialize, Clone, Copy, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, Hash, Debug)]
 pub struct Hash([u8; HASH_SIZE]);
 
 /* BEGIN HASH TYPE METHODS */
@@ -74,6 +77,47 @@ impl From<&str> for Hash {
     /// Converts the given string reference to a hash.
     fn from(s: &str) -> Self {
         Self::new(hex::decode(s).unwrap_or_default())
+    }
+}
+
+struct HashVisitor;
+
+impl<'de> Visitor<'de> for HashVisitor {
+    type Value = Hash;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a 32-character hex-encoded string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        // Convert the hex string into a vector of bytes
+        if let Ok(dec) = hex::decode(value) {
+            Ok(Hash::new(dec))
+        } else {
+            Err(E::custom(format!("invalid hex string: {}", value)))
+        }
+    }
+}
+
+impl Serialize for Hash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Always serialize hashes as hex strings
+        serializer.serialize_str(&hex::encode(self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for Hash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(HashVisitor)
     }
 }
 
