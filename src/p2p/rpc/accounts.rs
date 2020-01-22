@@ -442,7 +442,7 @@ impl Client {
     ) -> std::result::Result<(), failure::Error> {
         self.do_request::<()>(
             "delete_account",
-            &format!("[{}, \"{}\"]", address, data_dir),
+            &format!("[{}, \"{}\"]", serde_json::to_string(&address)?, data_dir),
         )
         .await
     }
