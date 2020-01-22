@@ -149,7 +149,7 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
 /// any libp2p transport, but any transport used with this behavior must implement
 /// asynchronous reading & writing capabilities.
 #[derive(NetworkBehaviour)]
-pub struct ClientBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Some pubsub mechanism bound to the above transport
     pub floodsub: Floodsub<TSubstream>,
 
@@ -160,12 +160,10 @@ pub struct ClientBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin 
     pub kad_dht: Kademlia<TSubstream, MemoryStore>,
 
     /// Allow for a state to be maintained inside the client behavior
-    pub runtime: state::RuntimeBehavior<'a, TSubstream>,
+    pub runtime: state::RuntimeBehavior<TSubstream>,
 }
 
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    ClientBehavior<'a, TSubstream>
-{
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
     /// Adds the given peer with a particular ID & multi address to the behavior.
     pub fn add_address(&mut self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
@@ -195,7 +193,7 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 }
 
 impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<()> for ClientBehavior<'a, TSubstream>
+    NetworkBehaviourEventProcess<()> for ClientBehavior<TSubstream>
 {
     fn inject_event(&mut self, _event: ()) {}
 }
@@ -203,7 +201,7 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 /// A network client.
 pub struct Client {
     /// The active SummerCash runtime environment
-    pub runtime: system::System,
+    pub runtime: Arc<RwLock<system::System>>,
 
     /// The list of accounts used to vote on proposals
     pub voting_accounts: Vec<account::Account>,
@@ -224,12 +222,13 @@ impl Into<String> for &Client {
         // Iterate through the accounts in the client configuration
         for i in 0..self.voting_accounts.len() {
             if let Ok(addr) = self.voting_accounts[i].address() {
-                accounts_string += hex::encode(addr).as_ref();
+                accounts_string +=
+                    &format!("{}{}", if i > 0 { ", " } else { "" }, hex::encode(addr));
             }
         }
 
         format!(
-            "primary voting account: {},\npeer ID: {}",
+            "primary voting accounts: {},\npeer ID: {}",
             accounts_string,
             self.peer_id.to_base58(),
         )
@@ -318,9 +317,9 @@ impl Client {
     ) -> Client {
         // Return the initialized client inside a result
         Client {
-            runtime: system::System::with_data_dir(cfg, data_dir), // Set runtime
-            voting_accounts,                                       // Set voters
-            peer_id: PeerId::from_public_key(keypair.public()),    // Set peer id
+            runtime: Arc::new(RwLock::new(system::System::with_data_dir(cfg, data_dir))), // Set runtime
+            voting_accounts,                                    // Set voters
+            peer_id: PeerId::from_public_key(keypair.public()), // Set peer id
             keypair,
         }
     }
@@ -372,8 +371,16 @@ impl Client {
         // The current nonce
         let mut i = 1;
 
+        // Get a writing lock on the runtime for the client
+        let mut runtime = if let Ok(rt) = self.runtime.write() {
+            rt
+        } else {
+            // Return an error
+            return Err(CommunicationError::MutexFailure.into());
+        };
+
         // Update the global state to reflect the increase in balance
-        self.runtime.ledger.push(root_tx, Some(Entry::new(state)));
+        runtime.ledger.push(root_tx, Some(Entry::new(state)));
 
         // Get the value of each account in the genesis allocation
         for (address, value) in genesis.alloc.iter() {
@@ -412,10 +419,10 @@ impl Client {
             let proposal_id = proposal.proposal_id.clone();
 
             // Add the transaction to the runtime's list of proposals, so we can use it to execute the transaction more efficiently
-            self.runtime.register_proposal(proposal);
+            runtime.register_proposal(proposal);
 
             // Now execute the proposal
-            self.runtime.execute_proposal(proposal_id)?;
+            runtime.execute_proposal(proposal_id)?;
 
             i += 1;
         }
@@ -435,17 +442,13 @@ impl Client {
     ) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
-        // Get a reference to the local runtime instance. This is necessary, as we need to maintain a state between both the manager process, and the worker
-        // process.
-        let rt = Arc::new(RwLock::new(&mut self.runtime));
-
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
         // an mDNS service handler as well as a floodsub instance targeted at the given peer
         let mut behavior = ClientBehavior {
             floodsub: Floodsub::new(self.peer_id.clone()),
             mdns: Mdns::new().await?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
-            runtime: state::RuntimeBehavior::new(rt.clone()),
+            runtime: state::RuntimeBehavior::new(self.runtime.clone()),
         };
 
         // Log the pending bootstrap operation
@@ -501,7 +504,7 @@ impl Client {
             let q: Quorum = swarm.active_subset_quorum();
 
             // Try to get a lock on the runtime ref that we generated earlier, so we can kick off synchronization
-            if let Ok(runtime) = rt.read() {
+            if let Ok(runtime) = self.runtime.read() {
                 // If there aren't any nodes in the runtime's ledger instance, we'll have to start synchronizing from the very beginning
                 if runtime.ledger.nodes.len() == 0 {
                     debug!("Synchronizing root transaction");
@@ -617,6 +620,9 @@ mod tests {
             super::super::super::common::io::DATA_DIR,
         )
         .unwrap(); // Initialize client
-        assert_eq!(client.runtime.config.network_name, "olympia"); // Ensure client has correct net
+        assert_eq!(
+            client.runtime.read().unwrap().config.network_name,
+            "olympia"
+        ); // Ensure client has correct net
     }
 }

@@ -15,6 +15,7 @@ use super::{
     super::super::{
         accounts::account::{self, Account},
         common::address::Address,
+        core::sys::system::System,
         crypto::blake3,
     },
     error,
@@ -24,6 +25,7 @@ use std::{
     collections::HashMap,
     fs,
     io::{Read, Seek, SeekFrom, Write},
+    sync::{Arc, RwLock},
 };
 
 /// Defines the standard SummerCash accounts RPC API.
@@ -56,10 +58,16 @@ pub trait Accounts {
     /// Gets a list of unlocked accounts on the disk.
     #[rpc(name = "list_accounts")]
     fn list(&self, data_dir: String) -> Result<Vec<Address>>;
+
+    /// Gets the balance of an account with the given address.
+    #[rpc(name = "get_account_balance")]
+    fn balance(&self, address: Address) -> Result<num::BigUint>;
 }
 
 /// An implementation of the accounts API.
-pub struct AccountsImpl;
+pub struct AccountsImpl {
+    pub(crate) runtime: Arc<RwLock<System>>,
+}
 
 impl Accounts for AccountsImpl {
     /// Generates a new account and returns the account's address and private key
@@ -316,13 +324,93 @@ impl Accounts for AccountsImpl {
             &data_dir,
         ))
     }
+
+    /// Gets the balance of the account.
+    fn balance(&self, address: Address) -> Result<num::BigUint> {
+        // Get a runtime that we can use to get the balances at the last transaction
+        let mut rt = if let Ok(runtime) = self.runtime.write() {
+            runtime
+        } else {
+            // Return an error communicating the inability to obtain a read lock
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_OBTAIN_LOCK,
+            )));
+        };
+
+        // If there are no nodes, return a zero balance
+        if rt.ledger.nodes.len() == 0 {
+            // Return a zero balance
+            Ok(num::BigUint::default())
+        } else {
+            // The index of the last node in the ledger
+            let head_index = rt.ledger.nodes.len() - 1;
+
+            // The head of the graph, where its state has been executed properly
+            let mut working_state = if let Ok(n) = rt.ledger.get(head_index) {
+                if let Some(node) = n {
+                    node
+                } else {
+                    // Return a zero balance, since this node doesn't really exist
+                    return Ok(num::BigUint::default());
+                }
+            } else {
+                // Return an error communicating the inability to read the node
+                return Err(Error::new(ErrorCode::from(
+                    error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
+                )));
+            };
+
+            // The current index in the set of nodes in the ledger graph
+            let mut i = head_index;
+
+            // Keep getting the previous state until we have a tx with a valid state
+            while working_state.state_entry.is_none() {
+                // Set the current tx to the node at the current index
+                working_state = if let Ok(n) = rt.ledger.get(i) {
+                    if let Some(node) = n {
+                        node
+                    } else {
+                        // Return a zero balance, since this node doesn't really exist
+                        return Ok(num::BigUint::default());
+                    }
+                } else {
+                    // Return an error containing the inability to read this node
+                    return Err(Error::new(ErrorCode::from(
+                        error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
+                    )));
+                };
+
+                // Only go down to the previous node if we're not already at the root node
+                if i == 0 {
+                    break;
+                } else {
+                    i -= 1;
+                }
+            }
+
+            // Try to get the balance of the user from the state entry data, and return it
+            if let Some(state) = &working_state.state_entry {
+                Ok(state
+                    .data
+                    .balances
+                    .get(&address.to_str())
+                    .unwrap_or(&num::BigUint::default())
+                    .clone())
+            } else {
+                // Return an error
+                return Err(Error::new(ErrorCode::from(
+                    error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
+                )));
+            }
+        }
+    }
 }
 
 impl AccountsImpl {
     /// Registers the accounts service on the given IoHandler server.
-    pub fn register(io: &mut IoHandler) {
+    pub fn register(io: &mut IoHandler, runtime: Arc<RwLock<System>>) {
         // Register this service on the IO handler
-        io.extend_with(Self.to_delegate());
+        io.extend_with(Self { runtime }.to_delegate());
     }
 }
 
@@ -457,5 +545,17 @@ impl Client {
     pub async fn list(&self, data_dir: &str) -> std::result::Result<Vec<Address>, failure::Error> {
         self.do_request::<Vec<Address>>("list_accounts", &format!("[\"{}\"]", data_dir))
             .await
+    }
+
+    /// Gets the balance of a particular account.
+    pub async fn balance(
+        &self,
+        address: Address,
+    ) -> std::result::Result<num::BigUint, failure::Error> {
+        self.do_request::<num::BigUint>(
+            "get_account_balance",
+            &format!("[{}]", serde_json::to_string(&address)?),
+        )
+        .await
     }
 }

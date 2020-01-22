@@ -73,6 +73,9 @@ enum Create {
 enum Get {
     /// Gets a particular account with the given address.
     Account(Account),
+
+    /// Gets the balance of a particular account.
+    Balance(Account),
 }
 
 #[derive(Clap, Clone)]
@@ -164,6 +167,19 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
             {
                 Ok(acc) => info!("Found account: {}", acc),
                 Err(e) => error!("Failed to load the account: {}", e),
+            }
+        }
+        Get::Balance(acc) => {
+            // Make a client for the accounts API
+            let client = accounts::Client::new(&opts.rpc_host_url);
+
+            // Get the account
+            match client
+                .balance(Address::from(Hash::from_str(&acc.address)?))
+                .await
+            {
+                Ok(balance) => info!("Balance: {}", balance),
+                Err(e) => error!("Failed to calculate the account's balance: {}", e),
             }
         }
     };

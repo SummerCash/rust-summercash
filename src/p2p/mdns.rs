@@ -3,8 +3,8 @@ use futures::{AsyncRead, AsyncWrite};
 use libp2p::{mdns::MdnsEvent, swarm::NetworkBehaviourEventProcess};
 
 /// Discovery via mDNS events.
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<'a, TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior<TSubstream>
 {
     /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
     fn inject_event(&mut self, event: MdnsEvent) {

@@ -100,7 +100,7 @@ async fn main() -> Result<(), Error> {
         let mut io = IoHandler::new();
 
         // Register the accounts API
-        AccountsImpl::register(&mut io);
+        AccountsImpl::register(&mut io, c.runtime.clone());
 
         // Create an HTTP server for the RPC API
         let server = ServerBuilder::new(io)

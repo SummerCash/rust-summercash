@@ -22,3 +22,9 @@ pub const ERROR_DECRYPTION_FAILED: i64 = 6;
 
 /// An error code representing the inability of the executor to delete an account.
 pub const ERROR_UNABLE_TO_DELETE_ACCOUNT: i64 = 7;
+
+/// An error code representing the inabiliity of the executor to obtain a reading lock.
+pub const ERROR_UNABLE_TO_OBTAIN_LOCK: i64 = 8;
+
+/// An error code representing the inability of the executor to get a lock on the last valid state entry.
+pub const ERROR_UNABLE_TO_OBTAIN_STATE_REF: i64 = 9;

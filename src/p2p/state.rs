@@ -25,17 +25,15 @@ use libp2p::{
 }; // Import the libp2p library
 
 /// A behavior for the Runtime network primitive.
-pub struct RuntimeBehavior<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
-    pub runtime: Arc<RwLock<&'a mut System>>,
+pub struct RuntimeBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+    pub runtime: Arc<RwLock<System>>,
 
     stream: PhantomData<TSubstream>,
 }
 
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    RuntimeBehavior<'a, TSubstream>
-{
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> RuntimeBehavior<TSubstream> {
     /// Gets a writing lock to the state's system.
-    pub fn write(&mut self) -> Result<RwLockWriteGuard<&'a mut System>, failure::Error> {
+    pub fn write(&mut self) -> Result<RwLockWriteGuard<System>, failure::Error> {
         // Try to get a writing lock on the runtime
         if let Ok(rt) = self.runtime.write() {
             // Return the runtime
@@ -47,7 +45,7 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     }
 
     /// Gets a reading lock on the state's system.
-    pub fn read(&mut self) -> Result<RwLockReadGuard<&'a mut System>, failure::Error> {
+    pub fn read(&mut self) -> Result<RwLockReadGuard<System>, failure::Error> {
         // Try to get a reading lock on the runtime
         if let Ok(rt) = self.runtime.read() {
             // Return the runtime
@@ -59,8 +57,8 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     }
 }
 
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
-    for RuntimeBehavior<'a, TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehaviour
+    for RuntimeBehavior<TSubstream>
 {
     // This behaviour isn't really doing anything, so we don't need to spec out any types
     type ProtocolsHandler = Handler<TSubstream>;
@@ -91,11 +89,9 @@ fn poll(&mut self, _cx: &mut Context, _params: &mut impl PollParameters) -> Poll
     }
 }
 
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    RuntimeBehavior<'a, TSubstream>
-{
+impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> RuntimeBehavior<TSubstream> {
     /// Initializes a new RuntimeBehavior with the given runtime reference.
-    pub fn new(runtime: std::sync::Arc<std::sync::RwLock<&'a mut System>>) -> Self {
+    pub fn new(runtime: std::sync::Arc<std::sync::RwLock<System>>) -> Self {
         // Initialize a new runtime behavior with the given runtime reference
         Self {
             runtime,

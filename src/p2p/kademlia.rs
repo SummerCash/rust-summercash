@@ -22,8 +22,8 @@ use libp2p::{
 /// Network synchronization via KAD DHT events.
 /// Synchronization of network proposals, for example, is done in this manner.
 /// TODO: Not implemented
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<'a, TSubstream>
+impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
+    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior<TSubstream>
 {
     // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
     fn inject_event(&mut self, event: KademliaEvent) {
