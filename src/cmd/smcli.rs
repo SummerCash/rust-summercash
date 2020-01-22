@@ -57,6 +57,10 @@ enum SubCommand {
     /// Deletes a SummerCash object of a given type.
     #[clap(name = "delete")]
     Delete(Delete),
+
+    /// Gets a list of SummerCash objects of a given type.
+    #[clap(name = "list")]
+    List(List),
 }
 
 #[derive(Clap, Clone)]
@@ -90,6 +94,12 @@ enum Delete {
 }
 
 #[derive(Clap, Clone)]
+enum List {
+    /// Gets a list of accounts stored on the disk.
+    Accounts(UnitAccount),
+}
+
+#[derive(Clap, Clone)]
 struct Account {
     /// The address of the account
     address: String,
@@ -104,6 +114,9 @@ struct CryptoAccount {
     key: String,
 }
 
+#[derive(Clap, Clone)]
+struct UnitAccount {}
+
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
     // Get the options that the user passed to the program
@@ -115,6 +128,7 @@ async fn main() -> Result<(), failure::Error> {
         SubCommand::Lock(l) => lock(opts, l).await,
         SubCommand::Unlock(u) => unlock(opts, u).await,
         SubCommand::Delete(d) => delete(opts, d).await,
+        SubCommand::List(l) => list(opts, l).await,
     }
 }
 
@@ -224,6 +238,50 @@ async fn delete(opts: Opts, d: Delete) -> Result<(), failure::Error> {
             }
         }
     };
+
+    Ok(())
+}
+
+/// Lists the objects with the given type.
+async fn list(opts: Opts, l: List) -> Result<(), failure::Error> {
+    match l {
+        List::Accounts(_) => {
+            // Make a client for the accounts API
+            let client = accounts::Client::new(&opts.rpc_host_url);
+
+            // List all of the accounts on the disk
+            match client.list(&opts.data_dir).await {
+                // Print out each of the accounts' addresses
+                Ok(accounts) => {
+                    // The collective addresses of each of the accounts, in one string
+                    let mut accounts_string = String::new();
+
+                    // The current index in the addr collection process
+                    let mut i = 0;
+
+                    // Put each of the addresses into the overall string
+                    let _: Vec<()> = accounts
+                        .iter()
+                        .map(|addr| {
+                            // Append the address to the overall string (+ a separator, if need be)
+                            accounts_string +=
+                                &format!("{}{}", if i > 0 { ", " } else { "" }, addr.to_str());
+
+                            // Increment the current index
+                            i += 1;
+
+                            ()
+                        })
+                        .collect();
+
+                    info!("Found accounts: {}", accounts_string);
+                }
+
+                // Log the error
+                Err(e) => error!("Failed to locate all of the accounts in dir: {}", e),
+            }
+        }
+    }
 
     Ok(())
 }

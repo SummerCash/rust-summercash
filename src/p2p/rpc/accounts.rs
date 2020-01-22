@@ -12,7 +12,11 @@ use serde::Deserialize;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 use super::{
-    super::super::{accounts::account::Account, common::address::Address, crypto::blake3},
+    super::super::{
+        accounts::account::{self, Account},
+        common::address::Address,
+        crypto::blake3,
+    },
     error,
 };
 
@@ -48,6 +52,10 @@ pub trait Accounts {
     /// Deletes the account with the corresponding address.
     #[rpc(name = "delete_account")]
     fn delete(&self, address: Address, data_dir: String) -> Result<()>;
+
+    /// Gets a list of unlocked accounts on the disk.
+    #[rpc(name = "list_accounts")]
+    fn list(&self, data_dir: String) -> Result<Vec<Address>>;
 }
 
 /// An implementation of the accounts API.
@@ -294,6 +302,14 @@ impl Accounts for AccountsImpl {
             ))),
         }
     }
+
+    /// Gets a list of unlocked accounts on the disk.
+    fn list(&self, data_dir: String) -> Result<Vec<Address>> {
+        // Return a list of unlocked accounts
+        Ok(account::get_all_unlocked_accounts_in_data_directory(
+            &data_dir,
+        ))
+    }
 }
 
 impl AccountsImpl {
@@ -429,5 +445,11 @@ impl Client {
             &format!("[{}, \"{}\"]", address, data_dir),
         )
         .await
+    }
+
+    /// Gets a list of accounts stored on the disk in a given directory.
+    pub async fn list(&self, data_dir: &str) -> std::result::Result<Vec<Address>, failure::Error> {
+        self.do_request::<Vec<Address>>("list_accounts", &format!("[\"{}\"]", data_dir))
+            .await
     }
 }

@@ -9,7 +9,7 @@ use std::{fmt, fs, io, io::Write}; // Import the io library
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::{common, common::address, crypto::blake3}; // Import the address module
+use super::super::{common, common::address::Address, crypto::blake3}; // Import the address module
 
 /// A SummerCash account.
 #[derive(Serialize, Deserialize)]
@@ -35,8 +35,8 @@ impl Account {
     }
 
     /// Get the address of a particular account.
-    pub fn address(&self) -> Result<address::Address, ed25519_dalek::SignatureError> {
-        Ok(address::Address::from_public_key(&self.keypair()?.public)) // Return address
+    pub fn address(&self) -> Result<Address, ed25519_dalek::SignatureError> {
+        Ok(Address::from_public_key(&self.keypair()?.public)) // Return address
     }
 
     pub fn keypair(&self) -> Result<ed25519_dalek::Keypair, ed25519_dalek::SignatureError> {
@@ -121,7 +121,7 @@ impl Account {
 
     /// Read an account from the disk at a given data directory.
     pub fn read_from_disk_at_data_directory(
-        address: address::Address,
+        address: Address,
         data_dir: &str,
     ) -> io::Result<Account> {
         // Open the file holding the account details corresponding to the address
@@ -131,7 +131,7 @@ impl Account {
     }
 
     /// Read an account from the disk.
-    pub fn read_from_disk(address: address::Address) -> io::Result<Account> {
+    pub fn read_from_disk(address: Address) -> io::Result<Account> {
         let file = fs::File::open(common::io::format_keystore_dir(&format!(
             "{}.json",
             address.to_str()
@@ -173,6 +173,37 @@ impl fmt::Display for Account {
             serde_json::to_string_pretty(&acc_hex).unwrap_or_default()
         )
     }
+}
+
+/// Gets a list of unlocked, localized accounts in a given directory.
+pub fn get_all_unlocked_accounts_in_data_directory(data_dir: &str) -> Vec<Address> {
+    // Initialize a buffer that we'll each of the account addresses in
+    let mut accounts: Vec<Address> = vec![];
+
+    // Collect a list of addresses from each of the file names
+    for e in WalkDir::new(format!("{}/keystore", data_dir))
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if let Ok(metadata) = e.metadata() {
+            if metadata.is_file() {
+                if let Some(path_str) = e.path().to_str() {
+                    accounts.push(Address::from(
+                        path_str
+                            .split(".json")
+                            .map(|s| {
+                                let split = s.split("/").collect::<Vec<&str>>();
+                                split[split.len() - 1]
+                            })
+                            .collect::<Vec<&str>>()[0],
+                    ));
+                }
+            }
+        }
+    }
+
+    // Return the list of addresses
+    accounts
 }
 
 /// Get a list of unlocked, localized accounts.
