@@ -83,12 +83,12 @@ impl Node {
     /// let node = graph::Node::new(tx, None); // Initialize node
     /// ```
     pub fn new(transaction: transaction::Transaction, state_entry: Option<state::Entry>) -> Node {
-        let transaction_hash = transaction.hash.clone(); // Clone transaction hash
+        let transaction_hash = transaction.hash; // Clone transaction hash
 
         Node {
-            transaction: transaction, // Set transaction
-            state_entry: state_entry, // Set state entry
-            hash: transaction_hash,   // Set transaction hash
+            transaction,            // Set transaction
+            state_entry,            // Set state entry
+            hash: transaction_hash, // Set transaction hash
         } // Return initialized node
     }
 
@@ -161,12 +161,7 @@ impl Node {
     /// let is_valid = node.perform_validity_checks(); // False, since state entry is None
     /// ```
     pub fn perform_validity_checks(&self) -> bool {
-        let contents_valid = self.verify_contents(); // Verify contents of self
-
-        match contents_valid {
-            true => self.transaction.verify_signature(),
-            false => false,
-        }
+        self.verify_contents() && self.transaction.verify_signature() // Verify contents of self
     }
 
     /// Serialize a graph node instance to vector.
@@ -177,6 +172,18 @@ impl Node {
     /// Deserialize a graph node instance from a vector.
     pub fn from_bytes(b: &[u8]) -> Node {
         bincode::deserialize(b).unwrap()
+    }
+}
+
+/// We'll want to make sure everything has been closed before the Graph can be deallocated.
+impl Drop for Graph {
+    /// Deallocates the graph.
+    fn drop(&mut self) {
+        // Save the graph
+        self.write_to_disk().unwrap();
+
+        // Deallocate the db
+        self.db.take();
     }
 }
 
@@ -253,7 +260,7 @@ impl Graph {
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn new_with_db_path(root_transaction: transaction::Transaction, db_path: &str) -> Graph {
-        let root_transaction_hash = root_transaction.hash.clone(); // Clone transaction hash
+        let root_transaction_hash = root_transaction.hash; // Clone transaction hash
         let root_transaction_state_entry = root_transaction.execute(None); // Execute root transaction
 
         let mut hash_routes = collections::HashMap::new(); // Initialize address routes map
@@ -265,7 +272,7 @@ impl Graph {
                 state_entry: Some(root_transaction_state_entry), // Set state entry
                 hash: root_transaction_hash,                     // Set hash
             }], // Set nodes
-            hash_routes: hash_routes,                   // Set address routes
+            hash_routes,                                // Set address routes
             node_children: collections::HashMap::new(), // Set node children
             db: Some(sled::open(db_path).unwrap()),     // Set db
         } // Return initialized dag
@@ -310,7 +317,7 @@ impl Graph {
         transaction: transaction::Transaction,
         state_entry: Option<state::Entry>,
     ) -> usize {
-        let transaction_hash = transaction.hash.clone(); // Clone transaction hash value
+        let transaction_hash = transaction.hash; // Clone transaction hash value
         let transaction_parents = transaction.transaction_data.parents.clone(); // Clone transaction parents
 
         self.nodes.push(Node::new(transaction, state_entry)); // Push node to graph
@@ -318,17 +325,9 @@ impl Graph {
             .insert(transaction_hash, self.nodes.len() - 1); // Set route to node
 
         for parent in transaction_parents {
-            // Iterate through transaction parents
-            if !self.node_children.contains_key(&parent) {
-                // Check parent does not already exist in list of child routes from parent
-                self.node_children.insert(parent, vec![transaction_hash]); // Set transaction hash as child of parent in graph
-
-                continue; // Break loop
-            }
-
             self.node_children
-                .get_mut(&parent)
-                .unwrap()
+                .entry(parent)
+                .or_insert_with(Vec::new)
                 .push(transaction_hash); // Add transaction as child of parent in graph
         }
 
@@ -534,45 +533,36 @@ impl Graph {
         let iter = db.iter(); // Get iterator (start at genesis transaction)
 
         iter.for_each(|key_val_pair| {
-            match key_val_pair {
-                // Make sure we're not getting a zero value
-                // Value exists, could be collected
-                Ok(val) => {
-                    let mut current_node: Node = Node::from_bytes(&val.1.to_vec()[..]); // Deserialize node
+            if let Ok(val) = key_val_pair {
+                let mut current_node: Node = Node::from_bytes(&val.1.to_vec()[..]); // Deserialize node
 
-                    if !read_all {
-                        // Check should disregard state data
-                        current_node.state_entry = None; // Set state entry to nil
-                    }
-
-                    hash_routes.insert(current_node.hash.clone(), nodes.len()); // Insert route to node
-
-                    for parent in current_node.transaction.transaction_data.clone().parents {
-                        // Iterate through parents
-                        if !node_children.contains_key(&parent.clone()) {
-                            // Check parent routes not initialized
-                            node_children.insert(parent.clone(), vec![current_node.hash.clone()]);
-                            // Insert route to child
-                        }
-
-                        node_children
-                            .get_mut(&parent.clone())
-                            .unwrap()
-                            .push(current_node.hash.clone()); // Insert route to child
-                    }
-
-                    nodes.push(current_node); // Add current node to nodes list
+                if !read_all {
+                    // Check should disregard state data
+                    current_node.state_entry = None; // Set state entry to nil
                 }
-                // Could not be collected
-                _ => (),
+
+                hash_routes.insert(current_node.hash.clone(), nodes.len()); // Insert route to node
+
+                for parent in current_node.transaction.transaction_data.clone().parents {
+                    node_children
+                        .entry(parent)
+                        .or_insert_with(|| vec![current_node.hash]);
+
+                    node_children
+                        .get_mut(&parent.clone())
+                        .unwrap()
+                        .push(current_node.hash.clone()); // Insert route to child
+                }
+
+                nodes.push(current_node); // Add current node to nodes list
             }
         }); // Add nodes to graph vars
 
         Graph {
-            nodes: nodes,                 // Set nodes
-            hash_routes: hash_routes,     // Set address routes
-            node_children: node_children, // Set node children
-            db: Some(db),                 // Set db to none until we initialize our graph
+            nodes,         // Set nodes
+            hash_routes,   // Set address routes
+            node_children, // Set node children
+            db: Some(db),  // Set db to none until we initialize our graph
         } // Return initialized graph
     }
 
@@ -663,7 +653,7 @@ impl Graph {
                     }; // Check for errors while setting in db
                 }
 
-                i = i + 1; // Increment
+                i += 1; // Increment
             }
 
             db.flush()?; // Close db
@@ -724,8 +714,7 @@ impl Graph {
                         .transaction
                         .transaction_data
                         .parents
-                        .len()
-                        == 0
+                        .is_empty()
                     {
                         // Check no parents
                         self.nodes[*index].state_entry =

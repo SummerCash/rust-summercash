@@ -116,12 +116,12 @@ impl Transaction {
         parents: Vec<hash::Hash>,
     ) -> Transaction {
         let transaction_data: TransactionData = TransactionData {
-            nonce: nonce,                  // Set nonce
-            sender: sender,                // Set sender
-            recipient: recipient,          // Set recipient
+            nonce,                         // Set nonce
+            sender,                        // Set sender
+            recipient,                     // Set recipient
             value: value_finks,            // Set value (in finks)
             payload: payload.to_vec(),     // Set payload
-            parents: parents,              // Set parents
+            parents,                       // Set parents
             parent_receipts: None,         // Set parent receipts
             parent_state_hash: None,       // Set parent state hash
             timestamp: chrono::Utc::now(), // Set timestamp
@@ -132,7 +132,7 @@ impl Transaction {
         transaction_data_bytes.clone_from_slice(transaction_data.to_bytes().as_slice()); // Copy into buffer
 
         Transaction {
-            transaction_data: transaction_data, // Set transaction data
+            transaction_data, // Set transaction data
             hash: blake3::hash_slice(transaction_data_bytes.as_slice()),
             signature: None, // Set signature
             deployed_contract_address: None,
@@ -212,12 +212,11 @@ impl Transaction {
         match prev_entry {
             Some(entry) => {
                 // Execute the transaction, but with no entry data, since there isn't anything in the entry in the first place
-                if entry.data.balances.len() == 0 {
+                if entry.data.balances.is_empty() {
                     return self.execute(None);
                 }
 
-                let mut balances: collections::HashMap<String, BigUint> =
-                    entry.data.balances.clone(); // Initialize balances map
+                let mut balances: collections::HashMap<String, BigUint> = entry.data.balances; // Initialize balances map
 
                 balances.insert(
                     self.transaction_data.sender.to_str(),

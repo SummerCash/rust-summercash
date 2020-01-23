@@ -1,10 +1,10 @@
 use super::super::super::common::address::Address;
 use num::{BigUint, FromPrimitive, Zero};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::File, io::BufReader};
+use std::{collections::HashMap, default::Default, fs::File, io::BufReader};
 
 /// The configuration for the network's genesis.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Config {
     /// The capital allocated to each user
     pub(crate) alloc: HashMap<Address, BigUint>,
@@ -14,15 +14,6 @@ pub struct Config {
 }
 
 impl Config {
-    /// Initializes a new configuration.
-    pub fn new() -> Config {
-        // Just initialize an empty configuration, and return it
-        Config {
-            alloc: HashMap::new(),
-            total_value: BigUint::zero(),
-        }
-    }
-
     /// Allocates the given amount to a particular address.
     ///
     /// # Arguments
@@ -71,14 +62,14 @@ impl Config {
         let raw_cfg: RawConfig = serde_json::from_reader(reader)?;
 
         // We'll convert all of the strings into their address representations
-        let mut final_cfg: Self = Self::new();
+        let mut final_cfg: Self = Self::default();
 
         // Go through each address, and its corresponding value. Put these values & addrs into the final configuration obj.
         for (address, value) in raw_cfg.alloc.iter() {
             // Put the key pair into the final configuration
             final_cfg.allocate_to_address(
-                Address::from_str(address)?,
-                BigUint::from_i128(value.clone()).unwrap_or_default(),
+                Address::from(address.as_ref()),
+                BigUint::from_i128(*value).unwrap_or_default(),
             );
         }
 

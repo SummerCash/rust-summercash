@@ -34,7 +34,7 @@ impl Entry {
     /// Initialize a new Entry instance.
     pub fn new(balances: collections::HashMap<String, BigUint>) -> Entry {
         let entry_data: EntryData = EntryData {
-            balances: balances, // Set balances
+            balances, // Set balances
         }; // Initialize entry data
 
         let mut entry_data_bytes = vec![0; entry_data.to_bytes().len()]; // Initialize entry data buffer
