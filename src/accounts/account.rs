@@ -20,6 +20,20 @@ pub struct Account {
     p2p_keypair: Vec<u8>,
 }
 
+impl Default for Account {
+    /// Generates a new account.
+    fn default() -> Self {
+        let mut csprng = OsRng {};
+
+        Account {
+            keypair: ed25519_dalek::Keypair::generate(&mut csprng)
+                .to_bytes()
+                .to_vec(), // Generate keypair
+            p2p_keypair: Keypair::generate().encode().to_vec(), // Generate p2p keypair
+        } // Return account
+    }
+}
+
 /// Implement a set of account helper methods.
 impl Account {
     /// Initialize a new account from a generated keypair.
@@ -193,7 +207,7 @@ pub fn get_all_unlocked_accounts_in_data_directory(data_dir: &str) -> Vec<Addres
                         path_str
                             .split(".json")
                             .map(|s| {
-                                let split = s.split("/").collect::<Vec<&str>>();
+                                let split = s.split('/').collect::<Vec<&str>>();
                                 split[split.len() - 1]
                             })
                             .collect::<Vec<&str>>()[0],
