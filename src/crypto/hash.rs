@@ -12,18 +12,10 @@ use std::{
 pub const HASH_SIZE: usize = 32;
 
 // A standard 32-byte blake3 hash.
-#[derive(Clone, Copy, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Hash([u8; HASH_SIZE]);
 
 /* BEGIN HASH TYPE METHODS */
-
-/// Implement the hash partial equality checker.
-impl PartialEq for Hash {
-    /// Check if self is equivalent to a given hash, other.
-    fn eq(&self, other: &Hash) -> bool {
-        self.iter().zip(other.iter()).all(|(a, b)| a == b) // Check each byte equal
-    }
-}
 
 /// Implement the std deref op.
 impl Deref for Hash {
@@ -145,23 +137,6 @@ impl Hash {
         buffer // Return contents of buffer
     }
 
-    /// Convert a given hex-encoded hash string to an hash instance.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use summercash::crypto::hash; // Import the hash utility
-    ///
-    /// let hash = hash::Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Some hash instance
-    pub fn from_str(s: &str) -> Result<Hash, hex::FromHexError> {
-        let b = hex::decode(s); // Decode hex hash value
-
-        match b {
-            Ok(bytes) => return Ok(Hash::new(bytes)), // Return hash value
-            Err(error) => return Err(error),          // Return result containing error
-        }; // Handle errors
-    }
-
     /// Convert a hash to a hex-encoded string.
     ///
     /// # Example
@@ -175,25 +150,6 @@ impl Hash {
     /// ```
     pub fn to_str(&self) -> String {
         hex::encode(self) // Return string val
-    }
-
-    /// Initialize and return a new hash instance derived from self.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use summercash::crypto::blake3; // Import the blake3 hashing utility
-    ///
-    /// let hash = blake3::hash_slice(b"hello world!"); // Some hash vector
-    ///
-    /// let hash2 = hash.clone(); // Copy value from first hash instance
-    /// ```
-    pub fn clone(&self) -> Hash {
-        let mut hash = Hash::new(vec![0; HASH_SIZE]); // Initialize hash buffer
-
-        hash.copy_from_slice(&**self); // Copy into buffer
-
-        return hash; // Return cloned hash
     }
 }
 
@@ -239,9 +195,7 @@ mod tests {
 
     #[test]
     fn test_from_str() {
-        let hash =
-            Hash::from_str("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
-                .unwrap(); // Convert a known safe hash hex encoding to a hash instance
+        let hash = Hash::from("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Convert a known safe hash hex encoding to a hash instance
 
         assert_eq!(
             hash.to_str(),
