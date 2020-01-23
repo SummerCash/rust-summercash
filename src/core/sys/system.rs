@@ -175,16 +175,16 @@ impl System {
 
                             self.ledger.push(tx.clone(), None); // Add tx to ledger
 
-                            if let Ok(prev_state_entry) = self
-                                .ledger
-                                .execute_parent_nodes(self.ledger.nodes.len() - 1)
-                            {
-                                let index = self.ledger.nodes.len() - 1; // Get index of pushed tx
+                            //if let Ok(prev_state_entry) = self
+                            //    .ledger
+                            //    .execute_parent_nodes(self.ledger.nodes.len() - 1)
+                            //{
+                            //    let index = self.ledger.nodes.len() - 1; // Get index of pushed tx
 
-                                // Get previous state entry
-                                self.ledger.nodes[index].state_entry =
-                                    Some(tx.execute(Some(prev_state_entry))); // Set node state entry
-                            }
+                            // Get previous state entry
+                            //self.ledger.nodes[index].state_entry =
+                            //Some(tx.execute(Some(prev_state_entry))); // Set node state entry
+                            //}
 
                             let write_result = self.ledger.write_to_disk(); // Write ledger to disk
                                                                             // Check for errors

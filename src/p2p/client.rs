@@ -1,17 +1,19 @@
-use super::super::accounts::account; // Import the account module
-use super::super::accounts::account::Account;
 use super::super::core::{
     sys::{
         config::{self, Config},
-        proposal::{Operation, Proposal, ProposalData},
         system,
     },
-    types::{genesis, state::Entry, transaction::Transaction},
+    types::{genesis, transaction::Transaction},
 }; // Import the system module
 use super::super::crypto::blake3; // Import the blake3 hashing module
+use super::super::{
+    accounts::account::{self, Account},
+    common::address::Address,
+};
 use super::{network, state, sync};
+use num::Zero;
 use std::{
-    collections::HashMap,
+    convert::TryInto,
     error::Error,
     io, str,
     sync::{Arc, RwLock},
@@ -347,6 +349,20 @@ impl Client {
             genesis_account.address()?.to_str()
         );
 
+        // Print the value of the genesisi fund
+        info!(
+            "Constructing a genesis state worth {} SMC",
+            super::super::common::fink::convert_finks_to_smc(genesis.issuance().clone())
+        );
+
+        // Get a writing lock on the runtime for the client
+        let mut runtime = if let Ok(rt) = self.runtime.write() {
+            rt
+        } else {
+            // Return an error
+            return Err(CommunicationError::MutexFailure.into());
+        };
+
         // Make the genesis transaction
         let root_tx = Transaction::new(
             0,
@@ -357,37 +373,20 @@ impl Client {
             vec![],
         );
 
-        // Print the hash of the transaction, as well as the value of it
-        info!(
-            "Constructing a genesis state from root tx '{}' worth {} SMC",
-            root_tx.hash.to_str(),
-            super::super::common::fink::convert_finks_to_smc(
-                root_tx.transaction_data.value.clone()
-            )
-        );
-
-        // The state at the root transaction
-        let mut state = HashMap::new();
-
-        // Allocate the total issuace to the generated account
-        state.insert(genesis_account.address()?.to_str(), genesis.issuance());
+        // Execute the root transaction
+        let root_state = root_tx.execute(None);
 
         // The hash of the root transaction. We'll update this each time we add a genesis child transaction.
-        let mut last_hash = root_tx.hash.clone();
-
-        // The current nonce
-        let mut i = 1;
-
-        // Get a writing lock on the runtime for the client
-        let mut runtime = if let Ok(rt) = self.runtime.write() {
-            rt
-        } else {
-            // Return an error
-            return Err(CommunicationError::MutexFailure.into());
-        };
+        let (mut last_hash, mut last_state_hash) = (root_tx.hash.clone(), root_state.hash);
 
         // Update the global state to reflect the increase in balance
-        runtime.ledger.push(root_tx, Some(Entry::new(state)));
+        runtime.ledger.push(root_tx, Some(root_state));
+
+        // The current nonce
+        let mut i: usize = 1;
+
+        // The number of addresses included in the allocation
+        let n_alloc_addresses = genesis.alloc.len();
 
         // Get the value of each account in the genesis allocation
         for (address, value) in genesis.alloc.iter() {
@@ -399,8 +398,8 @@ impl Client {
             );
 
             // Make a transaction worth the value allocated to the address
-            let tx = Transaction::new(
-                i,
+            let mut tx = Transaction::new(
+                (i as i64).try_into().unwrap(),
                 genesis_account.address()?,
                 address.clone(),
                 value.clone(),
@@ -408,32 +407,43 @@ impl Client {
                 vec![last_hash],
             );
 
+            // We should be mentioning the last state hash in this tx, since we know it already
+            tx.transaction_data.parent_state_hash = Some(last_state_hash);
+
+            // Execute the transaction, and collect its state
+            let state = tx.execute(runtime.ledger.get(i - 1)?.unwrap().state_entry.clone());
+
             // Since we might need to make more transactions, we'll want to keep them as children of this transaction.
-            // Update the last_hash to reflect this.
+            // Update the last_hash & last_state_hash to reflect this.
             last_hash = tx.hash;
+            last_state_hash = state.hash;
 
-            // Make a proposal storing a copy of the transaction, so we can put the proposal into the runtime's proposal execution engine
-            let proposal = Proposal::new(
-                format!("genesis child: {}", tx.hash),
-                ProposalData::new(
-                    "ledger::transactions".to_owned(),
-                    Operation::Append {
-                        value_to_append: bincode::serialize(&tx)?,
-                    },
-                ),
+            // Instantly resolve the state for this transaction, but only if we're not the last TX
+            runtime.ledger.push(
+                tx,
+                if i < n_alloc_addresses - 1 {
+                    Some(state)
+                } else {
+                    None
+                },
             );
-
-            // Once we register the proposal with the runtime, its ID gets consumed. Let's store a copy of it.
-            let proposal_id = proposal.proposal_id.clone();
-
-            // Add the transaction to the runtime's list of proposals, so we can use it to execute the transaction more efficiently
-            runtime.register_proposal(proposal);
-
-            // Now execute the proposal
-            runtime.execute_proposal(proposal_id)?;
 
             i += 1;
         }
+
+        // Make a transaction to wrap up the genesis creation process
+        let mut finalization = Transaction::new(
+            ((i + 1) as i64).try_into().unwrap(),
+            genesis_account.address()?,
+            Address::default(),
+            num::BigUint::zero(),
+            b"genesis_finalization",
+            vec![last_hash],
+        );
+        finalization.transaction_data.parent_state_hash = Some(last_state_hash);
+
+        // Put the transaction in the ledger. This means we're done!
+        runtime.ledger.push(finalization, None);
 
         // Yay!
         info!("Finished constructing the genesis state!");
