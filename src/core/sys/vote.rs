@@ -27,7 +27,7 @@ impl Vote {
     ) -> Vote {
         let mut vote: Vote = Vote {
             target_proposal: proposal_id, // Set proposal ID
-            in_favor: in_favor,           // Set in favor of proposal
+            in_favor,                     // Set in favor of proposal
             signature: None,              // No signature yet
         }; // Initialize vote
 

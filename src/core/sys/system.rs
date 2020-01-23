@@ -61,7 +61,7 @@ impl System {
         let network_name = &config.network_name.clone();
 
         System {
-            config: config,                                             // Set config
+            config,                                                     // Set config
             pending_proposals: collections::HashMap::new(), // set pending proposals to empty initialized hash map
             ledger: graph::Graph::read_partial_from_disk(network_name), // Set ledger
         } // Return initialized system
@@ -73,7 +73,7 @@ impl System {
         let network_name = &config.network_name.clone();
 
         System {
-            config: config,
+            config,
             pending_proposals: collections::HashMap::new(),
             ledger: graph::Graph::read_partial_from_disk_with_data_dir(data_dir, network_name),
         }
@@ -82,10 +82,9 @@ impl System {
     /// Add a given proposal to the system's pending proposals list.
     pub fn register_proposal(&mut self, proposal: proposal::Proposal) {
         // Check proposal not already registered
-        if !self.pending_proposals.contains_key(&proposal.proposal_id) {
-            self.pending_proposals
-                .insert(proposal.proposal_id, proposal); // Add proposal
-        }
+        self.pending_proposals
+            .entry(proposal.proposal_id)
+            .or_insert(proposal); // Add proposal
     }
 
     /// Execute a proposal in the pending proposals set with the given hash.
@@ -124,9 +123,9 @@ impl System {
 
                     let operation_result = self.config.write_to_disk(); // Write config to disk
                                                                         // Check for errors
-                    if operation_result.is_err() {
+                    if let Err(e) = operation_result {
                         Err(ExecutionError::Miscellaneous {
-                            error: operation_result.unwrap_err().to_string(),
+                            error: e.to_string(),
                         })
                     } else {
                         Ok(()) // Mhm
@@ -154,10 +153,10 @@ impl System {
                     }
 
                     let operation_result = self.config.write_to_disk(); // Write config to disk
-                    if operation_result.is_err() {
+                    if let Err(e) = operation_result {
                         // Check for errors
                         Err(ExecutionError::Miscellaneous {
-                            error: operation_result.unwrap_err().to_string(),
+                            error: e.to_string(),
                         }) // Return error
                     } else {
                         Ok(()) // Mhm
@@ -168,7 +167,7 @@ impl System {
                     // Handle different operations
                     match target_proposal.proposal_data.operation {
                         // Targeted amend, despite the fact that ledger operations cannot be reverted
-                        proposal::Operation::Amend { amended_value: _ } => {
+                        proposal::Operation::Amend { .. } => {
                             Err(ExecutionError::InvalidOperation {
                                 operation: "amend".to_owned(),
                                 proposal_param: "ledger::transactions".to_owned(),
@@ -228,9 +227,9 @@ impl System {
 
                             let write_result = self.ledger.write_to_disk(); // Write ledger to disk
                                                                             // Check for errors
-                            if write_result.is_err() {
+                            if let Err(e) = write_result {
                                 Err(ExecutionError::Miscellaneous {
-                                    error: write_result.unwrap_err().to_string(),
+                                    error: e.to_string(),
                                 }) // Return error
                             } else {
                                 Ok(()) // Mhm
