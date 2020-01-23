@@ -4,7 +4,10 @@ use jsonrpc_derive::rpc;
 use serde::Deserialize;
 
 use super::{
-    super::super::core::{sys::system::System, types::graph::Node},
+    super::super::{
+        core::{sys::system::System, types::graph::Node},
+        crypto::hash::Hash,
+    },
     error,
 };
 
@@ -19,6 +22,10 @@ pub trait Dag {
     /// Gets a list of nodes contained in the currently attached network's DAG.
     #[rpc(name = "get_dag")]
     fn get(&self) -> Result<Vec<Node>>;
+
+    /// Gets a list of transaction hashes stored in the currently attached DAG.
+    #[rpc(name = "list_transactions")]
+    fn list(&self) -> Result<Vec<Hash>>;
 }
 
 /// An implementation of the DAG API.
@@ -34,9 +41,22 @@ impl Dag for DagImpl {
             Ok(rt.ledger.nodes.clone())
         } else {
             // Return the corresponding error
-            return Err(Error::new(ErrorCode::from(
+            Err(Error::new(ErrorCode::from(
                 error::ERROR_UNABLE_TO_OBTAIN_LOCK,
-            )));
+            )))
+        }
+    }
+
+    /// Gets a list of transaction hashes stored in the currently attached DAG.
+    fn list(&self) -> Result<Vec<Hash>> {
+        if let Ok(rt) = self.runtime.read() {
+            // Return all of the keys, which are the node hashes, stored in the DAG
+            Ok(rt.ledger.hash_routes.keys().map(|hash| *hash).collect())
+        } else {
+            // Return the corresponding error
+            Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_OBTAIN_LOCK,
+            )))
         }
     }
 }
@@ -63,7 +83,7 @@ impl Client {
     pub fn new(server_addr: &str) -> Self {
         // Initialize and return the client
         Self {
-            server: server_addr.trim_end_matches("/").to_owned(),
+            server: server_addr.trim_end_matches('/').to_owned(),
             client: reqwest::Client::new(),
         }
     }
@@ -107,5 +127,11 @@ impl Client {
     /// Gets a list of nodes in the working graph.
     pub async fn get(&self) -> std::result::Result<Vec<Node>, failure::Error> {
         self.do_request::<Vec<Node>>("get_dag", "[]").await
+    }
+
+    /// Gets a list of transaction hashes contained in the working DAG.
+    pub async fn list(&self) -> std::result::Result<Vec<Hash>, failure::Error> {
+        self.do_request::<Vec<Hash>>("list_transactions", "[]")
+            .await
     }
 }

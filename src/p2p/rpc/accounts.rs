@@ -171,7 +171,7 @@ impl Accounts for AccountsImpl {
                     .take_read_buffer()
                     .take_remaining()
                     .iter()
-                    .map(|&i| i),
+                    .copied(),
             );
 
             // Handle some bad stuff...
@@ -266,7 +266,7 @@ impl Accounts for AccountsImpl {
                     .take_read_buffer()
                     .take_remaining()
                     .iter()
-                    .map(|&i| i),
+                    .copied(),
             );
 
             match result {
@@ -338,7 +338,7 @@ impl Accounts for AccountsImpl {
         };
 
         // If there are no nodes, return a zero balance
-        if rt.ledger.nodes.len() == 0 {
+        if rt.ledger.nodes.is_empty() {
             // Return a zero balance
             Ok(num::BigUint::default())
         } else {
@@ -398,9 +398,9 @@ impl Accounts for AccountsImpl {
                     .clone())
             } else {
                 // Return an error
-                return Err(Error::new(ErrorCode::from(
+                Err(Error::new(ErrorCode::from(
                     error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
-                )));
+                )))
             }
         }
     }
@@ -428,7 +428,7 @@ impl Client {
     pub fn new(server_addr: &str) -> Self {
         // Initialize and return the client
         Self {
-            server: server_addr.trim_end_matches("/").to_owned(),
+            server: server_addr.trim_end_matches('/').to_owned(),
             client: reqwest::Client::new(),
         }
     }
