@@ -10,7 +10,7 @@ use super::super::super::common; // Import the io module
 pub const NODE_VERSION: &str = "v0.1.0";
 
 /// The default amount of finks per gas.
-pub const DEFAULT_REWARD_PER_GAS: u32 = 1000000;
+pub const DEFAULT_REWARD_PER_GAS: u32 = 1_000_000;
 
 /// A container specifying a set of SummerCash protocol constants.
 #[derive(Serialize, Deserialize, Clone)]
