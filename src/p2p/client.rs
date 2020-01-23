@@ -189,7 +189,7 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
         // Construct a quorum for at least 1/2 of the network
         Quorum::N(
             std::num::NonZeroUsize::new(n_peers / 2)
-                .unwrap_or(std::num::NonZeroUsize::new(1).unwrap()),
+                .unwrap_or_else(|| std::num::NonZeroUsize::new(1).unwrap()),
         )
     }
 }
@@ -352,7 +352,7 @@ impl Client {
         // Print the value of the genesisi fund
         info!(
             "Constructing a genesis state worth {} SMC",
-            super::super::common::fink::convert_finks_to_smc(genesis.issuance().clone())
+            super::super::common::fink::convert_finks_to_smc(genesis.issuance())
         );
 
         // Get a writing lock on the runtime for the client
@@ -363,8 +363,13 @@ impl Client {
             return Err(CommunicationError::MutexFailure.into());
         };
 
+        // Make sure that we're really starting at the beginning
+        if !runtime.ledger.nodes.is_empty() {
+            return Err(CommunicationError::Custom{error: "DAG is not empty; must not contain any nodes in order to properly generate a genesis block.".to_owned()}.into());
+        }
+
         // Make the genesis transaction
-        let root_tx = Transaction::new(
+        let mut root_tx = Transaction::new(
             0,
             Default::default(),
             genesis_account.address()?,
@@ -373,20 +378,20 @@ impl Client {
             vec![],
         );
 
+        // Since this is a root transaction, it should be labeled as the genesis.
+        root_tx.genesis = true;
+
         // Execute the root transaction
         let root_state = root_tx.execute(None);
 
         // The hash of the root transaction. We'll update this each time we add a genesis child transaction.
-        let (mut last_hash, mut last_state_hash) = (root_tx.hash.clone(), root_state.hash);
+        let (mut last_hash, mut last_state_hash) = (root_tx.hash, root_state.hash);
 
         // Update the global state to reflect the increase in balance
         runtime.ledger.push(root_tx, Some(root_state));
 
         // The current nonce
         let mut i: usize = 1;
-
-        // The number of addresses included in the allocation
-        let n_alloc_addresses = genesis.alloc.len();
 
         // Get the value of each account in the genesis allocation
         for (address, value) in genesis.alloc.iter() {
@@ -401,7 +406,7 @@ impl Client {
             let mut tx = Transaction::new(
                 (i as i64).try_into().unwrap(),
                 genesis_account.address()?,
-                address.clone(),
+                *address,
                 value.clone(),
                 b"genesis_child",
                 vec![last_hash],
@@ -418,15 +423,8 @@ impl Client {
             last_hash = tx.hash;
             last_state_hash = state.hash;
 
-            // Instantly resolve the state for this transaction, but only if we're not the last TX
-            runtime.ledger.push(
-                tx,
-                if i < n_alloc_addresses - 1 {
-                    Some(state)
-                } else {
-                    None
-                },
-            );
+            // Instantly resolve the state for this transaction, since we'll add a finalizing tx next
+            runtime.ledger.push(tx, Some(state));
 
             i += 1;
         }
@@ -472,11 +470,8 @@ impl Client {
         // Log the pending bootstrap operation
         info!("Bootstrapping a network DHT & behavior to existing bootstrap nodes...");
 
-        // The current bp #
-        let mut i: usize = 0;
-
         // Iterate through bootstrap addresses
-        for bootstrap_peer in bootstrap_addresses {
+        for (i, bootstrap_peer) in bootstrap_addresses.into_iter().enumerate() {
             // Log the pending connection op
             info!(
                 "Connecting to bootstrap node {} ({})...",
@@ -484,9 +479,6 @@ impl Client {
             );
 
             behavior.add_address(&bootstrap_peer.0, bootstrap_peer.1); // Add the bootstrap peer to the DHT
-
-            // Next bp...
-            i += 1;
         }
 
         // Start bootstrapping the DHT to the peers we've connected to
@@ -524,7 +516,7 @@ impl Client {
             // Try to get a lock on the runtime ref that we generated earlier, so we can kick off synchronization
             if let Ok(runtime) = self.runtime.read() {
                 // If there aren't any nodes in the runtime's ledger instance, we'll have to start synchronizing from the very beginning
-                if runtime.ledger.nodes.len() == 0 {
+                if runtime.ledger.nodes.is_empty() {
                     debug!("Synchronizing root transaction");
 
                     // Fetch the hash of the first node from the network
@@ -592,11 +584,9 @@ impl Client {
                     SwarmEvent::ExpiredListenAddr(e_addr) => {
                         info!("Listener address {} expired", e_addr)
                     }
-                    SwarmEvent::UnreachableAddr {
-                        peer_id: _,
-                        address,
-                        error,
-                    } => debug!("Failed to connect to peer at addr {}: {}", address, error),
+                    SwarmEvent::UnreachableAddr { address, error, .. } => {
+                        debug!("Failed to connect to peer at addr {}: {}", address, error)
+                    }
                     SwarmEvent::StartConnect(peer_id) => debug!(
                         "Starting connection process with peer: {}",
                         peer_id.to_base58()
@@ -611,7 +601,7 @@ impl Client {
             let e: std::io::Error = io::ErrorKind::AddrNotAvailable.into();
 
             // Return an error that says we can't listen on this address
-            return Err(e.into());
+            Err(e.into())
         }
     }
 }

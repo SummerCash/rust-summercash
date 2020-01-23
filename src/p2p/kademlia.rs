@@ -90,7 +90,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                     );
 
                                     // The ID of the proposal. We need to copy this, since we'll move it into the system through registration
-                                    let id = proposal.proposal_id.clone();
+                                    let id = proposal.proposal_id;
 
                                     // Put the proposal in the system, so we can execute it
                                     rt.register_proposal(proposal);
