@@ -5,7 +5,6 @@ extern crate log;
 use clap::Clap;
 
 use summercash::{
-    common::address::Address,
     crypto::hash::Hash,
     p2p::rpc::{accounts, dag},
 };
@@ -107,6 +106,9 @@ enum Delete {
 enum List {
     /// Gets a list of accounts stored on the disk.
     Accounts(UnitAccount),
+
+    /// Gets a list of transactions stored in the working DAG.
+    Transactions(UnitTransaction),
 }
 
 #[derive(Clap, Clone)]
@@ -129,6 +131,9 @@ struct UnitAccount {}
 
 #[derive(Clap, Clone)]
 struct UnitDag {}
+
+#[derive(Clap, Clone)]
+struct UnitTransaction {}
 
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
@@ -172,7 +177,7 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
 
             // Get the account
             match client
-                .get(Address::from(Hash::from_str(&acc.address)?), &opts.data_dir)
+                .get(Hash::from(acc.address.as_ref()), &opts.data_dir)
                 .await
             {
                 Ok(acc) => info!("Found account: {}", acc),
@@ -184,11 +189,11 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
             let client = accounts::Client::new(&opts.rpc_host_url);
 
             // Get the account
-            match client
-                .balance(Address::from(Hash::from_str(&acc.address)?))
-                .await
-            {
-                Ok(balance) => info!("Balance: {} SMC", balance.clone(),),
+            match client.balance(Hash::from(acc.address.as_ref())).await {
+                Ok(balance) => info!(
+                    "Balance: {} SMC",
+                    summercash::common::fink::convert_finks_to_smc(balance),
+                ),
                 Err(e) => error!("Failed to calculate the account's balance: {}", e),
             }
         }
@@ -222,11 +227,7 @@ async fn lock(opts: Opts, l: Lock) -> Result<(), failure::Error> {
 
             // Lock the account
             match client
-                .lock(
-                    Address::from(Hash::from_str(&acc.address)?),
-                    &acc.key,
-                    &opts.data_dir,
-                )
+                .lock(Hash::from(acc.address.as_ref()), &acc.key, &opts.data_dir)
                 .await
             {
                 Ok(_) => info!("Locked account '{}' successfully", acc.address),
@@ -247,11 +248,7 @@ async fn unlock(opts: Opts, u: Unlock) -> Result<(), failure::Error> {
 
             // Lock the account
             match client
-                .unlock(
-                    Address::from(Hash::from_str(&acc.address)?),
-                    &acc.key,
-                    &opts.data_dir,
-                )
+                .unlock(Hash::from(acc.address.as_ref()), &acc.key, &opts.data_dir)
                 .await
             {
                 Ok(acc) => info!("Unlocked account successfully: {}", acc),
@@ -272,7 +269,7 @@ async fn delete(opts: Opts, d: Delete) -> Result<(), failure::Error> {
 
             // Delete the account
             match client
-                .delete(Address::from(Hash::from_str(&acc.address)?), &opts.data_dir)
+                .delete(Hash::from(acc.address.as_ref()), &opts.data_dir)
                 .await
             {
                 Ok(_) => info!("Deleted account '{}' successfully", acc.address),
@@ -311,8 +308,6 @@ async fn list(opts: Opts, l: List) -> Result<(), failure::Error> {
 
                             // Increment the current index
                             i += 1;
-
-                            ()
                         })
                         .collect();
 
@@ -321,6 +316,38 @@ async fn list(opts: Opts, l: List) -> Result<(), failure::Error> {
 
                 // Log the error
                 Err(e) => error!("Failed to locate all of the accounts in dir: {}", e),
+            }
+        }
+        List::Transactions(_) => {
+            // Make a client for the DAG API
+            let client = dag::Client::new(&opts.rpc_host_url);
+
+            // List all of the transactions on the disk
+            match client.list().await {
+                Ok(transactions) => {
+                    // The collective hashes of each transaction, in one string
+                    let mut transactions_string = String::new();
+
+                    // The current index in the hash collection process
+                    let mut i = 0;
+
+                    // Put each of the hashes into the overall string
+                    let _: Vec<()> = transactions
+                        .iter()
+                        .map(|hash| {
+                            // Append the hash to the overall string (+ a separator, if need be)
+                            transactions_string +=
+                                &format!("{}{}", if i > 0 { ", " } else { "" }, hash.to_str());
+
+                            i += 1;
+                        })
+                        .collect();
+
+                    info!("Found transactions: {}", transactions_string);
+                }
+
+                // Log the error
+                Err(e) => error!("Failed to locate all of the transactions in the DAG: {}", e),
             }
         }
     }
