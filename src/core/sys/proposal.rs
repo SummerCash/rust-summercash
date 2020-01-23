@@ -59,8 +59,8 @@ impl Proposal {
     /// ```
     pub fn new(proposal_name: String, proposal_data: ProposalData) -> Proposal {
         let mut proposal = Proposal {
-            proposal_name: proposal_name, // Set proposal name
-            proposal_data: proposal_data, // Set proposal data
+            proposal_name,                                          // Set proposal name
+            proposal_data,                                          // Set proposal data
             proposal_id: hash::Hash::new(vec![0; hash::HASH_SIZE]), // Set id to empty hash
         }; // Initialize proposal
 
@@ -98,8 +98,8 @@ impl ProposalData {
     /// ```
     pub fn new(param_name: String, operation: Operation) -> ProposalData {
         ProposalData {
-            param_name: param_name, // Set param name
-            operation: operation,   // Set operation
+            param_name, // Set param name
+            operation,  // Set operation
         } // Return initialized proposal data
     }
 }
