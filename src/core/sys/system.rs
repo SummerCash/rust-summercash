@@ -1,4 +1,4 @@
-use std::collections; // Import collections
+use std::{collections, error::Error}; // Import collections
 
 use num::bigint; // Add support for large unsigned integers
 
@@ -31,6 +31,16 @@ pub enum ExecutionError {
     Miscellaneous {
         error: String, // The error lol
     },
+}
+
+impl From<sled::Error> for ExecutionError {
+    /// Converts the given sled error into an ExecutionError.
+    fn from(e: sled::Error) -> Self {
+        // Return a miscellaneous error
+        Self::Miscellaneous {
+            error: e.description().to_owned(),
+        }
+    }
 }
 
 /// System is a virtual proposal execution machine.
@@ -173,7 +183,37 @@ impl System {
                         proposal::Operation::Append { value_to_append } => {
                             let tx = transaction::Transaction::from_bytes(&value_to_append); // Deserialize transaction
 
-                            self.ledger.push(tx.clone(), None); // Add tx to ledger
+                            // Get the index of the submitted transaction entry
+                            let entry_index = self.ledger.push(tx.clone(), None);
+
+                            // Execute the parent transactions, get the overall hash
+                            let parent_tx_hash =
+                                self.ledger.execute_parent_nodes(entry_index)?.hash;
+
+                            // Get the hash of the parent state that the transaction THINKS is right
+                            let asserted_parent_state_hash = if let Some(parent_state_hash) =
+                                tx.transaction_data.parent_state_hash
+                            {
+                                parent_state_hash
+                            } else {
+                                // Remove the head tx, since it's invalid
+                                self.ledger.rollback_head();
+
+                                // Return the error
+                                return Err(ExecutionError::Miscellaneous {
+                                    error: "Invalid transaction: must have parent state hash."
+                                        .to_owned(),
+                                });
+                            };
+
+                            // UWU WHAT'S THIS I SEE?
+                            if parent_tx_hash != asserted_parent_state_hash {
+                                // Remove the head tx, since it's invalid
+                                self.ledger.rollback_head();
+
+                                // Return the error
+                                return Err(ExecutionError::Miscellaneous{error: "Invalid transaction: merged parent states must have a hash matching that which is asserted by the transaction.".to_owned()});
+                            };
 
                             //if let Ok(prev_state_entry) = self
                             //    .ledger

@@ -565,7 +565,7 @@ impl Client {
                                 Key::new(&sync::transaction_with_hash_key(
                                     runtime.ledger.nodes[i].hash,
                                 )),
-                                runtime.ledger.nodes[i].to_bytes(),
+                                runtime.ledger.nodes[i].transaction.to_bytes(),
                             ),
                             q,
                         );

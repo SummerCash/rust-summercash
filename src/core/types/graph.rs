@@ -323,7 +323,7 @@ impl Graph {
                 // Check parent does not already exist in list of child routes from parent
                 self.node_children.insert(parent, vec![transaction_hash]); // Set transaction hash as child of parent in graph
 
-                break; // Break loop
+                continue; // Break loop
             }
 
             self.node_children
@@ -674,6 +674,30 @@ impl Graph {
         }
 
         Ok(()) // Done!
+    }
+
+    /// Removes the head transaction, and rolls back its direct parents. If there is no head, no computation occurs.
+    pub fn rollback_head(&mut self) {
+        // Remove the head from the nodes list
+        if let Some(removed_node) = self.nodes.pop() {
+            // Remove the route to the transaction by its hash
+            self.hash_routes.remove(&removed_node.hash);
+
+            // Remove the child from each parent
+            for parent in removed_node.transaction.transaction_data.parents {
+                // Remove the child from the parent, if it has any children it can remember
+                if let Some(children) = self.node_children.get_mut(&parent) {
+                    // Remove the child from the parent's memory
+                    children.pop();
+                }
+
+                // If the parent exists, remove the state, since we gotta roll back
+                if let Some(parent_node) = self.hash_routes.get(&parent) {
+                    // Reset the node's state
+                    self.nodes[*parent_node].state_entry = None;
+                }
+            }
+        }
     }
 
     /// Resolve states for all parent nodes, direct or indirect.
