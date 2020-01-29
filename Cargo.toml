@@ -3,7 +3,7 @@ name = "summercash"
 version = "0.1.0"
 authors = ["Dowland Aiello <dowlandaiello@gmail.com>"]
 edition = "2018"
-license = "Apache-2.0"
+license = "MIT"
 
 [dependencies]
 num = { version = "0.2.1", features = ["serde"] }
