@@ -70,6 +70,9 @@ enum SubCommand {
 enum Create {
     /// Creates a new account.
     Account,
+
+    /// Creates a new transaction.
+    Transaction,
 }
 
 #[derive(Clap, Clone)]
@@ -127,6 +130,21 @@ struct CryptoAccount {
 }
 
 #[derive(Clap, Clone)]
+struct Transaction {
+    /// The address of the account that the transaction will be sent from
+    sender: String,
+
+    /// The address of the account that the transaction will be sent to
+    recipient: String,
+
+    /// The number of finks sent along with the transaction
+    value: u64,
+
+    /// The data sent alongside the transaction
+    payload: String,
+}
+
+#[derive(Clap, Clone)]
 struct UnitAccount {}
 
 #[derive(Clap, Clone)]
@@ -161,6 +179,16 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
             match client.generate(&opts.data_dir).await {
                 Ok(acc) => info!("Successfully generated account: {}", acc),
                 Err(e) => error!("Failed to generate account: {}", e),
+            }
+        }
+        Create::Transaction(transaction) => {
+            // Make a client for the DAG API
+            let client = dag::Client::new(&opts.rpc_host_url);
+
+            // Generate the account
+            match client.create_tx(transaction.sender, transaction.recipient, transaction.value, transaction.payload).await {
+                Ok(tx) => info!("Successfully created transaction (use publish command to add to DAG): {}", tx),
+                Err(e) => error!("Failed to create transaction: {}", e),
             }
         }
     };
