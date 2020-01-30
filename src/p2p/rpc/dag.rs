@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use super::{
     super::super::{
-        core::{sys::system::System, types::{graph::Node, transaction::Transaction}},
+        core::{sys::system::System, types::graph::Node},
         crypto::hash::Hash,
     },
     error,
@@ -26,9 +26,6 @@ pub trait Dag {
     /// Gets a list of transaction hashes stored in the currently attached DAG.
     #[rpc(name = "list_transactions")]
     fn list(&self) -> Result<Vec<Hash>>;
-
-    /// Creates a new transaction with the provided sender, recipient, value, and payload.
-    fn create_tx(&mut self, sender: String, recipient: String, value: u64, payload: String) -> Result<Transaction>;
 }
 
 /// An implementation of the DAG API.
@@ -61,11 +58,6 @@ impl Dag for DagImpl {
                 error::ERROR_UNABLE_TO_OBTAIN_LOCK,
             )))
         }
-    }
-
-    /// Creates a new transaction with the provided sender, recipient, value, and payload.
-    fn create_tx(&mut self, sender: String, recipient: String, value: u64, payload: String) -> Result<Transaction> {
-        let transaction = Transaction::new(e) 
     }
 }
 
