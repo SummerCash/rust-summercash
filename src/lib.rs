@@ -1,32 +1,32 @@
-pub mod accounts; // Export the accounts module
+pub mod accounts;
 pub mod cmd;
-pub mod common; // Export the common module
-pub mod core; // Export the core module
-pub mod crypto; // Export the crypto module
-pub mod p2p; // Export the p2p module
+pub mod common;
+pub mod core;
+pub mod crypto;
+pub mod p2p;
 pub mod validator;
 
 #[macro_use]
-extern crate failure; // Link failure crate
+extern crate failure;
 
-extern crate bincode; // Link bincode crate
-extern crate blake3; // Link blake3 hashing library
-extern crate chrono; // Link chrono library
-extern crate ed25519_dalek; // Link edwards25519 library
+extern crate bincode;
+extern crate blake3;
+extern crate chrono;
+extern crate ed25519_dalek;
 
 #[macro_use]
 extern crate log;
 
-extern crate libp2p; // Link libp2p library
+extern crate libp2p;
 
 extern crate crypto as cryptolib;
-extern crate num; // Link num library
-extern crate path_clean; // Link path clean crate
-extern crate rand; // Link rand library
-extern crate serde; // Link serde
-extern crate serde_json; // Link serde
-extern crate sled; // Link sled crate
-extern crate walkdir; // Link directory walk crate
+extern crate num;
+extern crate path_clean;
+extern crate rand;
+extern crate serde;
+extern crate serde_json;
+extern crate sled;
+extern crate walkdir;
 
 extern crate async_std;
 extern crate tokio_01;
