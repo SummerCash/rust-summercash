@@ -12,7 +12,7 @@ extern crate tokio;
 use failure::Error;
 use libp2p::{Multiaddr, PeerId};
 use summercash::{
-    core::types::genesis::Config,
+    core::{sys::system::System, types::genesis::Config},
     p2p::{
         client::Client,
         network, peers,
@@ -20,7 +20,13 @@ use summercash::{
     },
 };
 
-use std::thread;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
+    thread,
+};
 
 use jsonrpc_core::IoHandler;
 use jsonrpc_http_server::ServerBuilder;
@@ -125,8 +131,31 @@ async fn main() -> Result<(), Error> {
         thread::spawn(move || server.wait());
     }
 
+    // A context buffer indicating the state of the server. Used to handle ^c.
+    let server_ctx: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
+
+    // Get a reference to the client's runtime so that we can stop all operations on ^c if necessary
+    let runtime_ctx: Arc<RwLock<System>> = c.runtime.clone();
+    let server_ctx_cl = server_ctx.clone();
+    let persistence_dir = opts.data_dir.clone();
+
+    ctrlc::set_handler(move || {
+        // Get a runtime that we can actually close
+        if let Ok(rt) = runtime_ctx.write() {
+            // Save everything up
+            rt.config
+                .write_to_disk_at_data_directory(&persistence_dir)
+                .expect("Error writing the runtime config to the disk");
+            rt.ledger
+                .write_to_disk()
+                .expect("Error writing the ledger to the disk");
+            server_ctx_cl.store(false, Ordering::SeqCst);
+        }
+    })
+    .expect("Error setting Ctrl-C handler");
+
     // Start the client
-    c.start(bootstrap_nodes, opts.node_port).await?;
+    c.start(server_ctx, bootstrap_nodes, opts.node_port).await?;
 
     // We're done!
     Ok(())

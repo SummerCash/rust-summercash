@@ -16,7 +16,10 @@ use std::{
     convert::TryInto,
     error::Error,
     io, str,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
@@ -464,6 +467,7 @@ impl Client {
     /// Starts the client.
     pub async fn start(
         &mut self,
+        server_ctx: Arc<AtomicBool>,
         bootstrap_addresses: Vec<(PeerId, Multiaddr)>,
         port: u16,
     ) -> Result<(), failure::Error> {
@@ -576,7 +580,8 @@ impl Client {
                 }
             }
 
-            loop {
+            // Keep serving until we're directed to stop by a client
+            while server_ctx.load(Ordering::SeqCst) {
                 // Poll the swarm
                 match swarm.next_event().await {
                     // Info from the swarm is really all we care about
@@ -604,6 +609,8 @@ impl Client {
                     ),
                 };
             }
+
+            Ok(())
         } else {
             // Log the error
             error!("Swarm failed to bind to listening address");

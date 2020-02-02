@@ -38,6 +38,21 @@ impl Config {
         Ok(()) // All good!
     }
 
+    /// Persist a given config to the disk.
+    pub fn write_to_disk_at_data_directory(&self, data_dir: &str) -> io::Result<()> {
+        // Make the config file
+        fs::create_dir_all(format!("{}/config", data_dir))?;
+
+        let mut file = fs::File::create(format!(
+            "{}/config/network_{}.json",
+            data_dir, self.network_name
+        ))?; // Initialize file
+
+        file.write_all(serde_json::to_vec_pretty(self)?.as_slice())?; // Serialize
+
+        Ok(()) // All good!
+    }
+
     /// Read a persisted config form the disk.
     pub fn read_from_disk(network_name: &str) -> io::Result<Config> {
         let file = fs::File::open(common::io::format_config_dir(&format!(

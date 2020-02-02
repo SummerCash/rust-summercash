@@ -33,3 +33,5 @@ extern crate tokio_compat;
 
 extern crate clap;
 extern crate reqwest;
+
+extern crate ctrlc;
