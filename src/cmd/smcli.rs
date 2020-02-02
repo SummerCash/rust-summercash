@@ -130,21 +130,6 @@ struct CryptoAccount {
 }
 
 #[derive(Clap, Clone)]
-struct Transaction {
-    /// The address of the account that the transaction will be sent from
-    sender: String,
-
-    /// The address of the account that the transaction will be sent to
-    recipient: String,
-
-    /// The number of finks sent along with the transaction
-    value: u64,
-
-    /// The data sent alongside the transaction
-    payload: String,
-}
-
-#[derive(Clap, Clone)]
 struct UnitAccount {}
 
 #[derive(Clap, Clone)]
