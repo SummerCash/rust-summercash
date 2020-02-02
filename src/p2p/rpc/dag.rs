@@ -99,22 +99,23 @@ impl Dag for DagImpl {
         };
 
         // Get a head from the DAG. This is necessary, as we need to determine what nonce we can use for the tx.
-        let head: &Entry = if let Some(h) = runtime.ledger.obtain_executed_head() {
-            // Load the entry's state data
-            if let Some(state_entry) = &h.state_entry {
-                state_entry
+        let (head, head_entry): (Node, Entry) =
+            if let Some(h) = runtime.ledger.obtain_executed_head() {
+                // Load the entry's state data
+                if let Some(state_entry) = h.state_entry.clone() {
+                    (h, state_entry)
+                } else {
+                    // Return a state ref error
+                    return Err(Error::new(ErrorCode::from(
+                        error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
+                    )));
+                }
             } else {
                 // Return a state ref error
                 return Err(Error::new(ErrorCode::from(
                     error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
                 )));
-            }
-        } else {
-            // Return a state ref error
-            return Err(Error::new(ErrorCode::from(
-                error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
-            )));
-        };
+            };
 
         // Get a list of children associated with the last cleared node.
         let head_children_opt = runtime.ledger.node_children.get(&head.hash);
@@ -140,7 +141,11 @@ impl Dag for DagImpl {
 
         // Create a new transaction using the last defined nonce in the global state
         let mut transaction = Transaction::new(
-            *head.data.nonces.get(&sender_address.to_str()).unwrap_or(&0),
+            *head_entry
+                .data
+                .nonces
+                .get(&sender_address.to_str())
+                .unwrap_or(&0),
             sender_address,
             recipient_address,
             BigUint::from(value),

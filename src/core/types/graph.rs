@@ -582,12 +582,8 @@ impl Graph {
                 for parent in current_node.transaction.transaction_data.clone().parents {
                     node_children
                         .entry(parent)
-                        .or_insert_with(|| vec![current_node.hash]);
-
-                    node_children
-                        .get_mut(&parent.clone())
-                        .unwrap()
-                        .push(current_node.hash.clone()); // Insert route to child
+                        .or_insert_with(|| vec![])
+                        .push(current_node.hash.clone());
                 }
 
                 nodes.push(current_node); // Add current node to nodes list
@@ -685,7 +681,10 @@ impl Graph {
                         // Returned error
                         Err(error) => return Err(error),
                         // No errors, carry on
-                        _ => continue,
+                        _ => {
+                            i += 1;
+                            continue;
+                        }
                     }; // Check for errors while setting in db
                 }
 
@@ -703,15 +702,15 @@ impl Graph {
     }
 
     /// Gets a reference to the head node in the graph--that which contains a resolved state.
-    pub fn obtain_executed_head(&self) -> Option<&Node> {
+    pub fn obtain_executed_head(&self) -> Option<Node> {
         // Start with the last node added to the graph, and move backwards.
         // We're looking for a node that contains a non-empty state
-        for i in self.nodes.len() - 1..0 {
+        for i in (0..self.nodes.len()).rev() {
             // Check that we can find a valid state entry for this node
-            if let Some(node) = self.nodes.get(i) {
+            if let Ok(Some(node)) = self.get_pure(i) {
                 if node.state_entry.is_some() {
                     // Return the state
-                    return Some(&node);
+                    return Some(node);
                 }
             }
         }
@@ -751,7 +750,7 @@ impl Graph {
     ) -> Result<(Entry, Vec<(Hash, Entry)>), sled::Error> {
         // The set of states resulting from the execution of each of the provided nodes
         let mut merged_state: Entry = Default::default();
-        let individual_states: Vec<(Hash, Entry)> = Vec::new();
+        let mut individual_states: Vec<(Hash, Entry)> = Vec::new();
 
         // Execute each of the provided nodes, and collect a state entry describing such an execution
         for node_hash in parents {
@@ -772,6 +771,7 @@ impl Graph {
             // If the node already has a state entry, we should be able to continue on without executing it
             if let Some(entry) = node.state_entry.clone() {
                 // Just use the entry that the node already has
+                individual_states.push((node_hash, entry.clone()));
                 merged_state = state::merge_entries(vec![merged_state, entry]);
 
                 continue;
@@ -780,8 +780,11 @@ impl Graph {
             // If the transaction doesn't have any parents, we can just execute it without any params
             if node.transaction.transaction_data.parents.is_empty() {
                 // Execute the transaction
-                merged_state =
-                    state::merge_entries(vec![merged_state, node.transaction.execute(None)]);
+                individual_states.push((node_hash, node.transaction.execute(None)));
+                merged_state = state::merge_entries(vec![
+                    merged_state,
+                    individual_states[individual_states.len() - 1].1.clone(),
+                ]);
 
                 continue;
             }
@@ -791,9 +794,10 @@ impl Graph {
                 self.resolve_parent_nodes(node.transaction.transaction_data.parents.clone())
             {
                 // Execute the transaction, and merge it back on to the overall state
+                individual_states.push((node_hash, node.transaction.execute(Some(prev_state.0))));
                 merged_state = state::merge_entries(vec![
                     merged_state,
-                    node.transaction.execute(Some(prev_state.0)),
+                    individual_states[individual_states.len() - 1].1.clone(),
                 ]);
             }
         }

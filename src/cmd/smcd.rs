@@ -150,6 +150,9 @@ async fn main() -> Result<(), Error> {
                 .write_to_disk()
                 .expect("Error writing the ledger to the disk");
             server_ctx_cl.store(false, Ordering::SeqCst);
+
+            // Stop running
+            std::process::exit(0);
         }
     })
     .expect("Error setting Ctrl-C handler");

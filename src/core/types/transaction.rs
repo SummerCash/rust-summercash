@@ -1,6 +1,10 @@
 use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
 
-use std::{collections, fs::OpenOptions, io}; // Import the collections library
+use std::{
+    collections,
+    fs::{self, OpenOptions},
+    io,
+}; // Import the collections library
 
 use chrono; // Import time library
 
@@ -294,6 +298,9 @@ impl Transaction {
 
     /// Persists the transaction to a mem dir in the given data directory.
     pub fn to_disk_at_data_directory(&self, data_dir: &str) -> io::Result<()> {
+        // Make a data dir
+        fs::create_dir_all(format!("{}/mem", data_dir))?;
+
         // Open a mem tx json file corresponding to our hash
         let file = OpenOptions::new()
             .create(true)

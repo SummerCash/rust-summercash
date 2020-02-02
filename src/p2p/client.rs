@@ -363,7 +363,7 @@ impl Client {
             genesis_account.address()?.to_str()
         );
 
-        // Print the value of the genesisi fund
+        // Print the value of the genesis fund
         info!(
             "Constructing a genesis state worth {} SMC",
             super::super::common::fink::convert_finks_to_smc(genesis.issuance())
