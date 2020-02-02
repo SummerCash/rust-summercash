@@ -311,7 +311,18 @@ impl Client {
 
     /// Initialize a new client with the given network_name, peer_id, and config.
     pub fn with_config(keypair: identity::Keypair, cfg: config::Config, data_dir: &str) -> Client {
-        let voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
+        let mut voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
+
+        // Make a voting account if we don't already have one
+        if voting_accounts.len() == 0 {
+            // Generate a new account to use for voting
+            let acc: Account = Account::new();
+
+            // Save the voting account
+            if acc.write_to_disk_at_data_directory(data_dir).is_ok() {
+                voting_accounts.push(acc);
+            };
+        }
 
         // Initialize a client with the given keypair, configuration & voting accounts
         Client::with_voting_accounts(keypair, cfg, voting_accounts, data_dir)

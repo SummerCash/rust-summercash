@@ -140,14 +140,14 @@ struct UnitTransaction {}
 
 #[derive(Clap, Clone)]
 struct Transaction {
-    /// The number of finks sent through the transaction
-    amount: u64,
-
     /// A hex-encoded string representing the address of the sender of the transaction
     sender: String,
 
     /// A hex-encoded string representing the address of the recipient of the transaction
     recipient: String,
+
+    /// The number of finks sent through the transaction
+    amount: u64,
 
     /// A UTF-8-encoded payload sent along with the transaction
     payload: String,
@@ -195,10 +195,15 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
                 )
                 .await
             {
-                Ok(tx) => info!(
-                    "Successfully created transaction (use publish command to add to DAG): {}",
-                    serde_json::to_string_pretty(&tx)?
-                ),
+                Ok(tx) => {
+                    // Persist the tx first
+                    tx.to_disk_at_data_directory(&opts.data_dir)?;
+
+                    info!(
+                        "Successfully created transaction (use publish command to add to DAG): {}",
+                        serde_json::to_string_pretty(&tx)?
+                    );
+                }
                 Err(e) => error!("Failed to create transaction: {}", e),
             }
         }

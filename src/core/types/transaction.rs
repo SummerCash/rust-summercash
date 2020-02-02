@@ -1,6 +1,6 @@
 use ed25519_dalek::Keypair; // Import the edwards25519 digital signature library
 
-use std::collections; // Import the collections library
+use std::{collections, fs::OpenOptions, io}; // Import the collections library
 
 use chrono; // Import time library
 
@@ -290,6 +290,21 @@ impl Transaction {
 
         // Use the generated receipts map as the parental receipts list
         self.transaction_data.parent_receipts = Some(receipts);
+    }
+
+    /// Persists the transaction to a mem dir in the given data directory.
+    pub fn to_disk_at_data_directory(&self, data_dir: &str) -> io::Result<()> {
+        // Open a mem tx json file corresponding to our hash
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(format!("{}/mem/{}.json", data_dir, self.hash.to_str()))?;
+
+        // Write the tx to the file
+        serde_json::to_writer_pretty(file, self)?;
+
+        Ok(())
     }
 
     /// Serialize a given transaction instance into a byte vector.
