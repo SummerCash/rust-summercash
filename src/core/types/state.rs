@@ -82,7 +82,7 @@ pub fn merge_entries(entries: Vec<Entry>) -> Entry {
                 && nonces.get(k).unwrap_or(&0) < entry.data.nonces.get(k).unwrap_or(&0)
             {
                 // Update the nonce
-                nonces.insert(*k, *entry.data.nonces.get(k).unwrap_or(&0));
+                nonces.insert(k.clone(), *entry.data.nonces.get(k).unwrap_or(&0));
             }
         }
     }
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     pub fn test_new() {
         let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balances hash map
-        let mut nonces: collections::HashMap<String, u64> = collections::HashMap::new();
+        let nonces: collections::HashMap<String, u64> = collections::HashMap::new();
 
         balances.insert(
             blake3::hash_slice(b"test").to_str(),

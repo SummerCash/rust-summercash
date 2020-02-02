@@ -34,8 +34,9 @@ pub trait Dag {
     fn list(&self) -> Result<Vec<Hash>>;
 
     /// Creates a new transaction with the provided sender, recipient, value, and payload.
+    #[rpc(name = "create_transaction")]
     fn create_tx(
-        &mut self,
+        &self,
         sender: String,
         recipient: String,
         value: u64,
@@ -77,7 +78,7 @@ impl Dag for DagImpl {
 
     /// Creates a new transaction with the provided sender, recipient, value, and payload.
     fn create_tx(
-        &mut self,
+        &self,
         sender: String,
         recipient: String,
         value: u64,
@@ -98,9 +99,9 @@ impl Dag for DagImpl {
         };
 
         // Get a head from the DAG. This is necessary, as we need to determine what nonce we can use for the tx.
-        let head: Entry = if let Some(h) = runtime.ledger.obtain_executed_head() {
+        let head: &Entry = if let Some(h) = runtime.ledger.obtain_executed_head() {
             // Load the entry's state data
-            if let Some(state_entry) = h.state_entry {
+            if let Some(state_entry) = &h.state_entry {
                 state_entry
             } else {
                 // Return a state ref error
@@ -116,31 +117,30 @@ impl Dag for DagImpl {
         };
 
         // Get a list of children associated with the last cleared node.
-        let head_children = runtime
-            .ledger
-            .node_children
-            .get(&head.hash)
-            .unwrap_or(&Vec::new());
+        let head_children_opt = runtime.ledger.node_children.get(&head.hash);
 
         // The parents of the transaction we're about to generate
-        let parent_hashes: Vec<Hash> = Vec::new();
+        let mut parent_hashes: Vec<Hash> = Vec::new();
 
-        // We're going to try to resolve each of the children associated with the last cleared transaction
-        for child in head_children {
-            // Only use the child as a parent of the new transaction if it unresolved.
-            if runtime.ledger.hash_routes.contains_key(child)
-                && runtime.ledger.nodes[*runtime.ledger.hash_routes.get(child).unwrap()]
-                    .state_entry
-                    .is_none()
-            {
-                // Add the child as a parent of the new transaction
-                parent_hashes.push(*child);
+        // Only collect the head children if they actually exist
+        if let Some(head_children) = head_children_opt {
+            // We're going to try to resolve each of the children associated with the last cleared transaction
+            for child in head_children {
+                // Only use the child as a parent of the new transaction if it unresolved.
+                if runtime.ledger.hash_routes.contains_key(child)
+                    && runtime.ledger.nodes[*runtime.ledger.hash_routes.get(child).unwrap()]
+                        .state_entry
+                        .is_none()
+                {
+                    // Add the child as a parent of the new transaction
+                    parent_hashes.push(*child);
+                }
             }
         }
 
         // Create a new transaction using the last defined nonce in the global state
-        let transaction = Transaction::new(
-            *head.data.nonces.get(&sender).unwrap_or(&0),
+        let mut transaction = Transaction::new(
+            *head.data.nonces.get(&sender_address.to_str()).unwrap_or(&0),
             sender_address,
             recipient_address,
             BigUint::from(value),
@@ -149,14 +149,23 @@ impl Dag for DagImpl {
         );
 
         // Calculate a merged state entry for each of the parents of the transaction. We can use this to provide a proof of correctness for this tx.
-        let merged_state_entry = runtime
+        let (merged_state_entry, parent_entries) = if let Ok(res) = runtime
             .ledger
-            .resolve_parent_nodes(transaction.transaction_data.parents);
+            .resolve_parent_nodes(transaction.transaction_data.parents.clone())
+        {
+            res
+        } else {
+            // Return a state error
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
+            )));
+        };
 
-        transaction.register_parental_state(
-            merged_parental_state: Entry,
-            parent_entries: Vec<(Hash, Entry)>,
-        )
+        // Register the parent states
+        transaction.register_parental_state(merged_state_entry, parent_entries);
+
+        // Return the transaction
+        Ok(transaction)
     }
 }
 
@@ -232,5 +241,26 @@ impl Client {
     pub async fn list(&self) -> std::result::Result<Vec<Hash>, failure::Error> {
         self.do_request::<Vec<Hash>>("list_transactions", "[]")
             .await
+    }
+
+    /// Creates a new transaction with the provided parameters.
+    pub async fn create_tx(
+        &self,
+        sender: String,
+        recipient: String,
+        amount: u64,
+        payload: String,
+    ) -> std::result::Result<Transaction, failure::Error> {
+        self.do_request::<Transaction>(
+            "create_transaction",
+            &format!(
+                "[{}, {}, {}, {}]",
+                serde_json::to_string(&sender)?,
+                serde_json::to_string(&recipient)?,
+                amount,
+                serde_json::to_string(&payload)?
+            ),
+        )
+        .await
     }
 }

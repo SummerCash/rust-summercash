@@ -197,7 +197,7 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
             {
                 Ok(tx) => info!(
                     "Successfully created transaction (use publish command to add to DAG): {}",
-                    tx
+                    serde_json::to_string_pretty(&tx)?
                 ),
                 Err(e) => error!("Failed to create transaction: {}", e),
             }

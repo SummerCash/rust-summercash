@@ -398,6 +398,39 @@ impl Graph {
         self.nodes[index] = Node::new(transaction, state_entry); // Set node in graph
     }
 
+    /// Gets a copy of the node at a given index without modifying the graph's state.
+    pub fn get_pure(&self, index: usize) -> Result<Option<Node>, sled::Error> {
+        // Get a copy of the node
+        let mut node = self.nodes[index].clone();
+
+        // Fill the node's state
+        match node.state_entry {
+            Some(_) => Ok(Some(node)),
+            None => {
+                // Check db opened
+                if let Some(db) = &self.db {
+                    let node_query_result = db.get(index.to_string().as_bytes())?; // Query db for node
+
+                    // Handle different result types
+                    match node_query_result {
+                        // Success!
+                        Some(bytes_encoded_node) => {
+                            let deserialized_node: Node =
+                                Node::from_bytes(&bytes_encoded_node.to_vec()[..]); // Deserialize node
+                            node.state_entry = deserialized_node.state_entry; // Set state entry
+
+                            return Ok(Some(node)); // Return deserialized node
+                        }
+                        // Couldn't find node in db
+                        None => return Ok(Some(node)),
+                    };
+                }
+
+                Ok(Some(node)) // Return node, since we can't do a full load anyway
+            }
+        }
+    }
+
     /// Get a reference to the node at a given index.
     ///
     /// # Example
@@ -675,9 +708,11 @@ impl Graph {
         // We're looking for a node that contains a non-empty state
         for i in self.nodes.len() - 1..0 {
             // Check that we can find a valid state entry for this node
-            if let Some(state) = self.nodes[i].state_entry {
-                // Return the state
-                return Some(&self.nodes[i]);
+            if let Some(node) = self.nodes.get(i) {
+                if node.state_entry.is_some() {
+                    // Return the state
+                    return Some(&node);
+                }
             }
         }
 
@@ -720,38 +755,46 @@ impl Graph {
 
         // Execute each of the provided nodes, and collect a state entry describing such an execution
         for node_hash in parents {
-            if let Some(index) = self.hash_routes.get(&node_hash) {
-                if let Ok(Some(node)) = self.get(*index) {
-                    // If the node already has a state entry, we should be able to continue on without executing it
-                    if let Some(entry) = node.state_entry {
-                        // Just use the entry that the node already has
-                        merged_state = state::merge_entries(vec![merged_state, entry]);
+            // Get the index of this node
+            let index = if let Some(i) = self.hash_routes.get(&node_hash) {
+                i.clone()
+            } else {
+                continue;
+            };
 
-                        continue;
-                    }
+            // Get the actual node at the index
+            let node = if let Ok(Some(n)) = self.get_pure(index) {
+                n
+            } else {
+                continue;
+            };
 
-                    // If the transaction doesn't have any parents, we can just execute it without any params
-                    if node.transaction.transaction_data.parents.is_empty() {
-                        // Execute the transaction
-                        merged_state = state::merge_entries(vec![
-                            merged_state,
-                            node.transaction.execute(None),
-                        ]);
+            // If the node already has a state entry, we should be able to continue on without executing it
+            if let Some(entry) = node.state_entry.clone() {
+                // Just use the entry that the node already has
+                merged_state = state::merge_entries(vec![merged_state, entry]);
 
-                        continue;
-                    }
+                continue;
+            }
 
-                    // Try to execute the parents of this transaction. If this succeeds, we can resolve the immediate state.
-                    if let Ok(prev_state) =
-                        self.resolve_parent_nodes(node.transaction.transaction_data.parents)
-                    {
-                        // Execute the transaction, and merge it back on to the overall state
-                        merged_state = state::merge_entries(vec![
-                            merged_state,
-                            node.transaction.execute(Some(prev_state.0)),
-                        ]);
-                    }
-                }
+            // If the transaction doesn't have any parents, we can just execute it without any params
+            if node.transaction.transaction_data.parents.is_empty() {
+                // Execute the transaction
+                merged_state =
+                    state::merge_entries(vec![merged_state, node.transaction.execute(None)]);
+
+                continue;
+            }
+
+            // Try to execute the parents of this transaction. If this succeeds, we can resolve the immediate state.
+            if let Ok(prev_state) =
+                self.resolve_parent_nodes(node.transaction.transaction_data.parents.clone())
+            {
+                // Execute the transaction, and merge it back on to the overall state
+                merged_state = state::merge_entries(vec![
+                    merged_state,
+                    node.transaction.execute(Some(prev_state.0)),
+                ]);
             }
         }
 

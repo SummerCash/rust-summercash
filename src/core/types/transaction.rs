@@ -271,16 +271,16 @@ impl Transaction {
     pub fn register_parental_state(
         &mut self,
         merged_parental_state: Entry,
-        parent_entries: Vec<(Hash, Entry)>,
+        parent_entries: Vec<(hash::Hash, Entry)>,
     ) {
         // Set the transaction's parent state hash so that our peers can verify that we've done some work to get this far
         self.transaction_data.parent_state_hash = Some(merged_parental_state.hash);
 
         // We'll want to store each of the provided states in some kind of map. A ReceiptMap can be used for this purpose.
-        let receipts: ReceiptMap = Default::default();
+        let mut receipts: ReceiptMap = Default::default();
 
         // Use each of the provided state entries in the transaction
-        for (tx_hash, entry) in individual_entries {
+        for (tx_hash, entry) in parent_entries {
             receipts.associated_transactions.push(tx_hash);
             receipts.receipts.push(Receipt {
                 state_hash: entry.hash,
@@ -289,7 +289,7 @@ impl Transaction {
         }
 
         // Use the generated receipts map as the parental receipts list
-        self.transaction_data.parent_receipts.push(receipts);
+        self.transaction_data.parent_receipts = Some(receipts);
     }
 
     /// Serialize a given transaction instance into a byte vector.
