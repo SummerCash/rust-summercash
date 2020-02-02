@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 use super::super::super::crypto::hash; // Import the address utility
 
 /// A receipt of a transaction's execution.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct Receipt {
     /// Hash of state at transaction
     pub state_hash: hash::Hash,
@@ -14,7 +14,7 @@ pub struct Receipt {
 }
 
 /// A mapping between a set of tx hashes and transaction receipts.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ReceiptMap {
     /// All transactions affected by the grouped state change
     pub associated_transactions: Vec<hash::Hash>,

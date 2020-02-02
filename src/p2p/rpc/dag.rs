@@ -88,7 +88,7 @@ impl Dag for DagImpl {
         let recipient_address = Address::from(recipient);
 
         // Get a lock on the client's runtime
-        let runtime = if let Ok(rt) = self.runtime.read() {
+        let runtime = if let Ok(rt) = self.runtime.write() {
             rt
         } else {
             // Return a mutex error
@@ -148,7 +148,15 @@ impl Dag for DagImpl {
             parent_hashes,
         );
 
-        let merged_state_entry = runtime.ledger.execute_parent_nodes()
+        // Calculate a merged state entry for each of the parents of the transaction. We can use this to provide a proof of correctness for this tx.
+        let merged_state_entry = runtime
+            .ledger
+            .resolve_parent_nodes(transaction.transaction_data.parents);
+
+        transaction.register_parental_state(
+            merged_parental_state: Entry,
+            parent_entries: Vec<(Hash, Entry)>,
+        )
     }
 }
 

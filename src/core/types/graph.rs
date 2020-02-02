@@ -1,11 +1,14 @@
-use super::state; // Import state module
+use super::state::{self, Entry}; // Import state module
 use super::transaction; // Import transaction types
 
 use std::collections; // Import collections, io modules
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::{common::io, crypto::hash}; // Import address, hash types
+use super::super::super::{
+    common::io,
+    crypto::hash::{self, Hash},
+}; // Import address, hash types
 
 /// An error encountered while signing a tx.
 #[derive(Debug, Fail)]
@@ -704,6 +707,56 @@ impl Graph {
                 }
             }
         }
+    }
+
+    /// Executes each of the parent nodes with the provided hashes, merging their resultant states. NOTE: This method is pure.
+    pub fn resolve_parent_nodes(
+        &self,
+        parents: Vec<Hash>,
+    ) -> Result<(Entry, Vec<(Hash, Entry)>), sled::Error> {
+        // The set of states resulting from the execution of each of the provided nodes
+        let mut merged_state: Entry = Default::default();
+        let individual_states: Vec<(Hash, Entry)> = Vec::new();
+
+        // Execute each of the provided nodes, and collect a state entry describing such an execution
+        for node_hash in parents {
+            if let Some(index) = self.hash_routes.get(&node_hash) {
+                if let Ok(Some(node)) = self.get(*index) {
+                    // If the node already has a state entry, we should be able to continue on without executing it
+                    if let Some(entry) = node.state_entry {
+                        // Just use the entry that the node already has
+                        merged_state = state::merge_entries(vec![merged_state, entry]);
+
+                        continue;
+                    }
+
+                    // If the transaction doesn't have any parents, we can just execute it without any params
+                    if node.transaction.transaction_data.parents.is_empty() {
+                        // Execute the transaction
+                        merged_state = state::merge_entries(vec![
+                            merged_state,
+                            node.transaction.execute(None),
+                        ]);
+
+                        continue;
+                    }
+
+                    // Try to execute the parents of this transaction. If this succeeds, we can resolve the immediate state.
+                    if let Ok(prev_state) =
+                        self.resolve_parent_nodes(node.transaction.transaction_data.parents)
+                    {
+                        // Execute the transaction, and merge it back on to the overall state
+                        merged_state = state::merge_entries(vec![
+                            merged_state,
+                            node.transaction.execute(Some(prev_state.0)),
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // Combine each of the states that the parent nodes produced into one gigantic state entry
+        Ok((merged_state, individual_states))
     }
 
     /// Resolve states for all parent nodes, direct or indirect. NOTE: This method is not pure.

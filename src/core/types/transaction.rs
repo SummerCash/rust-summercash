@@ -10,9 +10,9 @@ use bincode;
 use serde::{Deserialize, Serialize}; // Import serde serialization
 use serde_json; // Import serde json // Import serde bincode
 
-use super::receipt; // Import receipt types
+use super::receipt::{self, Receipt, ReceiptMap}; // Import receipt types
 use super::signature; // Import signature type
-use super::state; // Import the state entry types
+use super::state::{self, Entry}; // Import the state entry types
 
 use super::super::super::{common::address, crypto::blake3, crypto::hash}; // Import the hash & address modules
 
@@ -260,6 +260,36 @@ impl Transaction {
                 state::Entry::new(nonces, balances) // Return state entry
             }
         }
+    }
+
+    /// Registers the provided state entry as a parental state for the transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `merged_parental_state` - A combined state entry representing the total past state
+    /// * `individual_entires` - A list of the transaction's parental state entries
+    pub fn register_parental_state(
+        &mut self,
+        merged_parental_state: Entry,
+        parent_entries: Vec<(Hash, Entry)>,
+    ) {
+        // Set the transaction's parent state hash so that our peers can verify that we've done some work to get this far
+        self.transaction_data.parent_state_hash = Some(merged_parental_state.hash);
+
+        // We'll want to store each of the provided states in some kind of map. A ReceiptMap can be used for this purpose.
+        let receipts: ReceiptMap = Default::default();
+
+        // Use each of the provided state entries in the transaction
+        for (tx_hash, entry) in individual_entries {
+            receipts.associated_transactions.push(tx_hash);
+            receipts.receipts.push(Receipt {
+                state_hash: entry.hash,
+                logs: Vec::new(),
+            });
+        }
+
+        // Use the generated receipts map as the parental receipts list
+        self.transaction_data.parent_receipts.push(receipts);
     }
 
     /// Serialize a given transaction instance into a byte vector.

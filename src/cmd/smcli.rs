@@ -138,6 +138,21 @@ struct UnitDag {}
 #[derive(Clap, Clone)]
 struct UnitTransaction {}
 
+#[derive(Clap, Clone)]
+struct Transaction {
+    /// The number of finks sent through the transaction
+    amount: u64,
+
+    /// A hex-encoded string representing the address of the sender of the transaction
+    sender: String,
+
+    /// A hex-encoded string representing the address of the recipient of the transaction
+    recipient: String,
+
+    /// A UTF-8-encoded payload sent along with the transaction
+    payload: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
     // Get the options that the user passed to the program
@@ -175,7 +190,7 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
                 .create_tx(
                     transaction.sender,
                     transaction.recipient,
-                    transaction.value,
+                    transaction.amount,
                     transaction.payload,
                 )
                 .await

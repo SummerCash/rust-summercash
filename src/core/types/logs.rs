@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
 /// A log emitted during contract execution.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct Log {
     /// The topics of the log
     pub topics: Vec<String>,
