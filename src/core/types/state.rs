@@ -11,6 +11,7 @@ use num::bigint::BigUint; // Add support for large unsigned integers
 pub struct Entry {
     /// Body of the state entry
     pub data: EntryData,
+
     /// Hash of the state entry
     pub hash: hash::Hash,
 }
@@ -19,6 +20,9 @@ pub struct Entry {
 pub struct EntryData {
     /// Balances of every account at a certain point in time
     pub balances: collections::HashMap<String, BigUint>,
+
+    /// The last recorded index of each account
+    pub nonces: collections::HashMap<String, u64>,
 }
 
 /// Implement a set of state entry serialization helper methods.
@@ -32,9 +36,13 @@ impl EntryData {
 /// Implement a set of state helper methods.
 impl Entry {
     /// Initialize a new Entry instance.
-    pub fn new(balances: collections::HashMap<String, BigUint>) -> Entry {
+    pub fn new(
+        nonces: collections::HashMap<String, u64>,
+        balances: collections::HashMap<String, BigUint>,
+    ) -> Entry {
         let entry_data: EntryData = EntryData {
             balances, // Set balances
+            nonces,   // Set nonces
         }; // Initialize entry data
 
         let mut entry_data_bytes = vec![0; entry_data.to_bytes().len()]; // Initialize entry data buffer
@@ -51,6 +59,7 @@ impl Entry {
 /// Merge multiple state entires into one batch state entry.
 pub fn merge_entries(entries: Vec<Entry>) -> Entry {
     let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balances map
+    let mut nonces: collections::HashMap<String, u64> = collections::HashMap::new(); // Initialize a collections map
 
     for entry in entries {
         // Iterate through entries
@@ -67,10 +76,18 @@ pub fn merge_entries(entries: Vec<Entry>) -> Entry {
             } else {
                 balances.insert(k.to_string(), v.clone()); // Set balance
             }
+
+            // Update the nonces of each account. Use the latest one available
+            if nonces.contains_key(k)
+                && nonces.get(k).unwrap_or(&0) < entry.data.nonces.get(k).unwrap_or(&0)
+            {
+                // Update the nonce
+                nonces.insert(*k, *entry.data.nonces.get(k).unwrap_or(&0));
+            }
         }
     }
 
-    Entry::new(balances) // Return initialized state entry
+    Entry::new(nonces, balances) // Return initialized state entry
 }
 
 #[cfg(test)]
@@ -84,13 +101,14 @@ mod tests {
     #[test]
     pub fn test_new() {
         let mut balances: collections::HashMap<String, BigUint> = collections::HashMap::new(); // Initialize balances hash map
+        let mut nonces: collections::HashMap<String, u64> = collections::HashMap::new();
 
         balances.insert(
             blake3::hash_slice(b"test").to_str(),
             BigUint::from_i64(1).unwrap(),
         ); // Balance of 1 fink
 
-        let entry: Entry = Entry::new(balances); // Initialize state entry
+        let entry: Entry = Entry::new(nonces, balances); // Initialize state entry
 
         assert_eq!(
             *entry

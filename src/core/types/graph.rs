@@ -666,6 +666,22 @@ impl Graph {
         Ok(()) // Done!
     }
 
+    /// Gets a reference to the head node in the graph--that which contains a resolved state.
+    pub fn obtain_executed_head(&self) -> Option<&Node> {
+        // Start with the last node added to the graph, and move backwards.
+        // We're looking for a node that contains a non-empty state
+        for i in self.nodes.len() - 1..0 {
+            // Check that we can find a valid state entry for this node
+            if let Some(state) = self.nodes[i].state_entry {
+                // Return the state
+                return Some(&self.nodes[i]);
+            }
+        }
+
+        // We couldn't find a state
+        None
+    }
+
     /// Removes the head transaction, and rolls back its direct parents. If there is no head, no computation occurs.
     pub fn rollback_head(&mut self) {
         // Remove the head from the nodes list
@@ -690,7 +706,7 @@ impl Graph {
         }
     }
 
-    /// Resolve states for all parent nodes, direct or indirect.
+    /// Resolve states for all parent nodes, direct or indirect. NOTE: This method is not pure.
     pub fn execute_parent_nodes(
         &mut self,
         child_index: usize,

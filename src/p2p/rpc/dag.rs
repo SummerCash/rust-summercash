@@ -5,11 +5,17 @@ use serde::Deserialize;
 
 use super::{
     super::super::{
-        core::{sys::system::System, types::{graph::Node, transaction::Transaction}},
+        common::address::Address,
+        core::{
+            sys::system::System,
+            types::{graph::Node, state::Entry, transaction::Transaction},
+        },
         crypto::hash::Hash,
     },
     error,
 };
+
+use num::BigUint;
 
 use std::{
     collections::HashMap,
@@ -28,7 +34,13 @@ pub trait Dag {
     fn list(&self) -> Result<Vec<Hash>>;
 
     /// Creates a new transaction with the provided sender, recipient, value, and payload.
-    fn create_tx(&mut self, sender: String, recipient: String, value: u64, payload: String) -> Result<Transaction>;
+    fn create_tx(
+        &mut self,
+        sender: String,
+        recipient: String,
+        value: u64,
+        payload: String,
+    ) -> Result<Transaction>;
 }
 
 /// An implementation of the DAG API.
@@ -64,8 +76,79 @@ impl Dag for DagImpl {
     }
 
     /// Creates a new transaction with the provided sender, recipient, value, and payload.
-    fn create_tx(&mut self, sender: String, recipient: String, value: u64, payload: String) -> Result<Transaction> {
-        let transaction = Transaction::new(e) 
+    fn create_tx(
+        &mut self,
+        sender: String,
+        recipient: String,
+        value: u64,
+        payload: String,
+    ) -> Result<Transaction> {
+        // Convert the provided sender and recipient values to addresses
+        let sender_address = Address::from(sender);
+        let recipient_address = Address::from(recipient);
+
+        // Get a lock on the client's runtime
+        let runtime = if let Ok(rt) = self.runtime.read() {
+            rt
+        } else {
+            // Return a mutex error
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_OBTAIN_LOCK,
+            )));
+        };
+
+        // Get a head from the DAG. This is necessary, as we need to determine what nonce we can use for the tx.
+        let head: Entry = if let Some(h) = runtime.ledger.obtain_executed_head() {
+            // Load the entry's state data
+            if let Some(state_entry) = h.state_entry {
+                state_entry
+            } else {
+                // Return a state ref error
+                return Err(Error::new(ErrorCode::from(
+                    error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
+                )));
+            }
+        } else {
+            // Return a state ref error
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
+            )));
+        };
+
+        // Get a list of children associated with the last cleared node.
+        let head_children = runtime
+            .ledger
+            .node_children
+            .get(&head.hash)
+            .unwrap_or(&Vec::new());
+
+        // The parents of the transaction we're about to generate
+        let parent_hashes: Vec<Hash> = Vec::new();
+
+        // We're going to try to resolve each of the children associated with the last cleared transaction
+        for child in head_children {
+            // Only use the child as a parent of the new transaction if it unresolved.
+            if runtime.ledger.hash_routes.contains_key(child)
+                && runtime.ledger.nodes[*runtime.ledger.hash_routes.get(child).unwrap()]
+                    .state_entry
+                    .is_none()
+            {
+                // Add the child as a parent of the new transaction
+                parent_hashes.push(*child);
+            }
+        }
+
+        // Create a new transaction using the last defined nonce in the global state
+        let transaction = Transaction::new(
+            *head.data.nonces.get(&sender).unwrap_or(&0),
+            sender_address,
+            recipient_address,
+            BigUint::from(value),
+            payload.as_bytes(),
+            parent_hashes,
+        );
+
+        let merged_state_entry = runtime.ledger.execute_parent_nodes()
     }
 }
 

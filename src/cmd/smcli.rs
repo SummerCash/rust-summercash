@@ -72,7 +72,7 @@ enum Create {
     Account,
 
     /// Creates a new transaction.
-    Transaction,
+    Transaction(Transaction),
 }
 
 #[derive(Clap, Clone)]
@@ -186,8 +186,19 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
             let client = dag::Client::new(&opts.rpc_host_url);
 
             // Generate the account
-            match client.create_tx(transaction.sender, transaction.recipient, transaction.value, transaction.payload).await {
-                Ok(tx) => info!("Successfully created transaction (use publish command to add to DAG): {}", tx),
+            match client
+                .create_tx(
+                    transaction.sender,
+                    transaction.recipient,
+                    transaction.value,
+                    transaction.payload,
+                )
+                .await
+            {
+                Ok(tx) => info!(
+                    "Successfully created transaction (use publish command to add to DAG): {}",
+                    tx
+                ),
                 Err(e) => error!("Failed to create transaction: {}", e),
             }
         }

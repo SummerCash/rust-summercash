@@ -217,6 +217,7 @@ impl Transaction {
                 }
 
                 let mut balances: collections::HashMap<String, BigUint> = entry.data.balances; // Initialize balances map
+                let mut nonces: collections::HashMap<String, u64> = entry.data.nonces;
 
                 balances.insert(
                     self.transaction_data.sender.to_str(),
@@ -233,17 +234,30 @@ impl Transaction {
                         + self.transaction_data.value.clone(),
                 ); // Add transaction value to recipient balance
 
-                state::Entry::new(balances) // Return state entry
+                // Put the new nonce into the transaction's state
+                nonces.insert(
+                    self.transaction_data.sender.to_str(),
+                    self.transaction_data.nonce,
+                );
+
+                state::Entry::new(nonces, balances) // Return state entry
             }
             None => {
                 let mut balances: collections::HashMap<String, BigUint> =
                     collections::HashMap::new(); // Initialize balance map
+                let mut nonces: collections::HashMap<String, u64> = collections::HashMap::new();
+
                 balances.insert(
                     self.transaction_data.recipient.to_str(),
                     self.transaction_data.value.clone(),
                 ); // Set recipient balance to tx value
 
-                state::Entry::new(balances) // Return state entry
+                nonces.insert(
+                    self.transaction_data.sender.to_str(),
+                    self.transaction_data.nonce,
+                );
+
+                state::Entry::new(nonces, balances) // Return state entry
             }
         }
     }
