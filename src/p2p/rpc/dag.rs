@@ -1,6 +1,8 @@
 use jsonrpc_core::{response::Output, Error, ErrorCode, IoHandler, Result};
 use jsonrpc_derive::rpc;
 
+use walkdir::WalkDir;
+
 use serde::Deserialize;
 
 use super::{
@@ -52,6 +54,10 @@ pub trait Dag {
     /// Signs the transaction with the provided hash.
     #[rpc(name = "sign_transaction")]
     fn sign_tx(&self, hash: String, account: String, data_dir: String) -> Result<Signature>;
+
+    /// Gets a list of transactions contained in the transaction cache.
+    #[rpc(name = "get_mem_transactions")]
+    fn get_mem_txs(&self, data_dir: String) -> Result<Vec<Hash>>;
 }
 
 /// An implementation of the DAG API.
@@ -241,6 +247,40 @@ impl Dag for DagImpl {
             ))),
         }
     }
+
+    /// Gets a list of transactions contained in the transaction cache.
+    fn get_mem_txs(&self, data_dir: String) -> Result<Vec<Hash>> {
+        // Make an instance of a directory walker so that we can collect a list of memory-bound transactions
+        let wk = WalkDir::new(format!("{}/mem", data_dir));
+
+        // Make an empty list that we can store each of the hashes
+        let mut transactions: Vec<Hash> = Vec::new();
+
+        // Go through each of the transaction files
+        for file in wk.into_iter().filter_map(|e| e.ok()) {
+            // Get the name of the file so that we can determine its hash
+            if let Ok(meta) = file.metadata() {
+                // Only use the file's info if it isn't a directory
+                if !meta.is_file() {
+                } else {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            // Try to derive a hash from the file's name
+            if let Some(f_name) = file.path().to_str() {
+                if let Some(tx_hash) = f_name.split(".json").collect::<Vec<&str>>().get(0) {
+                    // Add the transaction hash to the list of hashes
+                    transactions.push(Hash::from(*tx_hash));
+                }
+            }
+        }
+
+        // Return the list of tx hashes
+        Ok(transactions)
+    }
 }
 
 impl DagImpl {
@@ -353,6 +393,18 @@ impl Client {
                 &serde_json::to_string(&account)?,
                 &serde_json::to_string(&data_dir)?
             ),
+        )
+        .await
+    }
+
+    /// Gets a list of pending transactions stored on the disk.
+    pub async fn get_mem_txs(
+        &self,
+        data_dir: String,
+    ) -> std::result::Result<Vec<Hash>, failure::Error> {
+        self.do_request::<Vec<Hash>>(
+            "get_mem_transactions",
+            &format!("[{}]", &serde_json::to_string(&data_dir)?),
         )
         .await
     }

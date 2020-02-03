@@ -89,6 +89,9 @@ enum Get {
 
     /// Gets a list of nodes contained in the working dag.
     Dag(UnitObject),
+
+    /// Gets a list of transactions contained in the transaction cache.
+    TransactionMemory(UnitObject),
 }
 
 #[derive(Clap, Clone)]
@@ -269,6 +272,19 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
                     }
                 }
                 Err(e) => error!("Failed to load the DAG: {}", e),
+            }
+        }
+        Get::TransactionMemory(_) => {
+            // Make a client for the DAG API
+            let client = dag::Client::new(&opts.rpc_host_url);
+
+            match client.get_mem_txs(opts.data_dir).await {
+                Ok(txs) => info!(
+                    "{}",
+                    txs.iter()
+                        .fold(String::new(), |acc, &arg| acc + &arg.to_str())
+                ),
+                Err(e) => error!("Failed to load transactions stored in memory: {}", e),
             }
         }
     };
