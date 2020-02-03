@@ -64,6 +64,10 @@ enum SubCommand {
     /// Gets a list of SummerCash objects of a given type.
     #[clap(name = "list")]
     List(List),
+
+    /// Signs a SummerCash object of a given type using a provided key.
+    #[clap(name = "sign")]
+    Sign(Sign),
 }
 
 #[derive(Clap, Clone)]
@@ -84,7 +88,7 @@ enum Get {
     Balance(Account),
 
     /// Gets a list of nodes contained in the working dag.
-    Dag(UnitDag),
+    Dag(UnitObject),
 }
 
 #[derive(Clap, Clone)]
@@ -108,10 +112,16 @@ enum Delete {
 #[derive(Clap, Clone)]
 enum List {
     /// Gets a list of accounts stored on the disk.
-    Accounts(UnitAccount),
+    Accounts(UnitObject),
 
     /// Gets a list of transactions stored in the working DAG.
-    Transactions(UnitTransaction),
+    Transactions(UnitObject),
+}
+
+#[derive(Clap, Clone)]
+enum Sign {
+    /// Signs the provided transaction with a given account
+    Transaction(SignableTransaction),
 }
 
 #[derive(Clap, Clone)]
@@ -130,13 +140,7 @@ struct CryptoAccount {
 }
 
 #[derive(Clap, Clone)]
-struct UnitAccount {}
-
-#[derive(Clap, Clone)]
-struct UnitDag {}
-
-#[derive(Clap, Clone)]
-struct UnitTransaction {}
+struct UnitObject {}
 
 #[derive(Clap, Clone)]
 struct Transaction {
@@ -153,6 +157,15 @@ struct Transaction {
     payload: String,
 }
 
+#[derive(Clap, Clone)]
+struct SignableTransaction {
+    /// The hash of the transaction
+    hash: String,
+
+    /// The address of the account that will be used to sign the transaction
+    account: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
     // Get the options that the user passed to the program
@@ -165,6 +178,7 @@ async fn main() -> Result<(), failure::Error> {
         SubCommand::Unlock(u) => unlock(opts, u).await,
         SubCommand::Delete(d) => delete(opts, d).await,
         SubCommand::List(l) => list(opts, l).await,
+        SubCommand::Sign(s) => sign(opts, s).await,
     }
 }
 
@@ -392,6 +406,30 @@ async fn list(opts: Opts, l: List) -> Result<(), failure::Error> {
 
                 // Log the error
                 Err(e) => error!("Failed to locate all of the transactions in the DAG: {}", e),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Signs the object with the provided keypair and options.
+async fn sign(opts: Opts, s: Sign) -> Result<(), failure::Error> {
+    match s {
+        Sign::Transaction(signable) => {
+            // Make a client for the DAG API
+            let client = dag::Client::new(&opts.rpc_host_url);
+
+            // Sign the transaction
+            match client
+                .sign_tx(signable.hash, signable.account, opts.data_dir)
+                .await
+            {
+                Ok(signature) => info!(
+                    "Signed tx (publish with publish command): {}",
+                    serde_json::to_string(&signature)?
+                ),
+                Err(e) => error!("Failed to sign tx: {}", e),
             }
         }
     }

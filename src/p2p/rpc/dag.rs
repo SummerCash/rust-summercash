@@ -5,10 +5,16 @@ use serde::Deserialize;
 
 use super::{
     super::super::{
+        accounts::account::Account,
         common::address::Address,
         core::{
             sys::system::System,
-            types::{graph::Node, state::Entry, transaction::Transaction},
+            types::{
+                graph::Node,
+                signature::Signature,
+                state::Entry,
+                transaction::{self, Transaction},
+            },
         },
         crypto::hash::Hash,
     },
@@ -42,6 +48,10 @@ pub trait Dag {
         value: u64,
         payload: String,
     ) -> Result<Transaction>;
+
+    /// Signs the transaction with the provided hash.
+    #[rpc(name = "sign_transaction")]
+    fn sign_tx(&self, hash: String, account: String, data_dir: String) -> Result<Signature>;
 }
 
 /// An implementation of the DAG API.
@@ -172,6 +182,65 @@ impl Dag for DagImpl {
         // Return the transaction
         Ok(transaction)
     }
+
+    /// Signs the transaction with the provided hash.
+    fn sign_tx(&self, hash: String, account: String, data_dir: String) -> Result<Signature> {
+        // Read the account from the disk
+        let acc = if let Ok(a) =
+            Account::read_from_disk_at_data_directory(Address::from(account), &data_dir)
+        {
+            a
+        } else {
+            // Return an error
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_OPEN_ACCOUNT,
+            )));
+        };
+
+        // Try to get a keypair for the account that we've opened
+        let keypair = if let Ok(k) = acc.keypair() {
+            k
+        } else {
+            // Return an error
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_SIGNATURE_UNDEFINED,
+            )));
+        };
+
+        // Read the transaction from the disk
+        let mut tx: Transaction =
+            if let Ok(tx) = Transaction::from_disk_at_data_directory(&data_dir, Hash::from(hash)) {
+                tx
+            } else {
+                // Return an error representing the inabiility of the tx to be opened
+                return Err(Error::new(ErrorCode::from(
+                    error::ERROR_UNABLE_TO_OPEN_TRANSACTION,
+                )));
+            };
+
+        // Sign the transaction, and return it
+        match transaction::sign_transaction(keypair, &mut tx) {
+            Ok(_) => Ok(if let Some(sig) = tx.signature.clone() {
+                // Persist the tx to the disk, now that it's been signed
+                match tx.to_disk_at_data_directory(&data_dir) {
+                    Ok(_) => sig,
+                    Err(_) => {
+                        // Return an I/O error
+                        return Err(Error::new(ErrorCode::from(
+                            error::ERROR_UNABLE_TO_WRITE_TRANSACTION,
+                        )));
+                    }
+                }
+            } else {
+                return Err(Error::new(ErrorCode::from(
+                    error::ERROR_SIGNATURE_UNDEFINED,
+                )));
+            }),
+            Err(_) => Err(Error::new(ErrorCode::from(
+                error::ERROR_SIGNATURE_UNDEFINED,
+            ))),
+        }
+    }
 }
 
 impl DagImpl {
@@ -264,6 +333,25 @@ impl Client {
                 serde_json::to_string(&recipient)?,
                 amount,
                 serde_json::to_string(&payload)?
+            ),
+        )
+        .await
+    }
+
+    /// Signs the transaction with the provided account.
+    pub async fn sign_tx(
+        &self,
+        hash: String,
+        account: String,
+        data_dir: String,
+    ) -> std::result::Result<Signature, failure::Error> {
+        self.do_request::<Signature>(
+            "sign_transaction",
+            &format!(
+                "[{}, {}, {}]",
+                &serde_json::to_string(&hash)?,
+                &serde_json::to_string(&account)?,
+                &serde_json::to_string(&data_dir)?
             ),
         )
         .await

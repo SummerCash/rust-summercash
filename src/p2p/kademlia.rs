@@ -139,7 +139,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
             }
 
             // An error occurred while fetching the record; print it
-            KademliaEvent::GetRecordResult(Err(e)) => info!("Failed to load record: {:?}", e),
+            KademliaEvent::GetRecordResult(Err(e)) => debug!("Failed to load record: {:?}", e),
 
             // The record was successfully set; print out the record name
             KademliaEvent::PutRecordResult(Ok(result)) => {
@@ -151,7 +151,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
             }
 
             // An error occurred while fetching the record; print it
-            KademliaEvent::PutRecordResult(Err(e)) => info!("Failed to set key: {:?}", e),
+            KademliaEvent::PutRecordResult(Err(e)) => debug!("Failed to set key: {:?}", e),
 
             _ => {}
         }

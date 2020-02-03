@@ -34,8 +34,11 @@ impl Vote {
         if let Ok(serialized_vote) = bincode::serialize(&vote) {
             // Serialize vote
             vote.signature = Some(signature::Signature {
-                public_key: signature_keypair.public,
-                signature: signature_keypair.sign(serialized_vote.as_slice()),
+                public_key_bytes: bincode::serialize(&signature_keypair.public).unwrap_or_default(),
+                signature_bytes: bincode::serialize(
+                    &signature_keypair.sign(serialized_vote.as_slice()),
+                )
+                .unwrap_or_default(),
             }); // Set signature
         }
 

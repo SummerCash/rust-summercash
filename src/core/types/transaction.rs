@@ -18,7 +18,11 @@ use super::receipt::{self, Receipt, ReceiptMap}; // Import receipt types
 use super::signature; // Import signature type
 use super::state::{self, Entry}; // Import the state entry types
 
-use super::super::super::{common::address, crypto::blake3, crypto::hash}; // Import the hash & address modules
+use super::super::super::{
+    common::address,
+    crypto::blake3,
+    crypto::hash::{self, Hash},
+}; // Import the hash & address modules
 
 /// An error encountered while signing a tx.
 #[derive(Debug, Fail)]
@@ -30,6 +34,8 @@ pub enum SignatureError {
     InvalidAddressPublicKeyCombination {
         address_hex: String, // The hex-encoded sender address
     },
+    #[fail(display = "a serialization action failed")]
+    SerializationFailure,
 }
 
 /// A transaction between two different addresses on the SummerCash network.
@@ -323,6 +329,18 @@ impl Transaction {
     pub fn from_bytes(b: &[u8]) -> Transaction {
         bincode::deserialize(b).unwrap() // Deserialize
     }
+
+    /// Deserialize a transaction from a file stored on the disk.
+    pub fn from_disk_at_data_directory(data_dir: &str, hash: Hash) -> io::Result<Self> {
+        // Open a mem tx json file corresponding to our hash
+        let file = OpenOptions::new().read(true).open(format!(
+            "{}/mem/{}.json",
+            data_dir,
+            hash.to_str()
+        ))?;
+
+        Ok(serde_json::from_reader(file)?)
+    }
 }
 
 /// Sign a given transaction with the provided ed25519 keypair.
@@ -368,8 +386,8 @@ pub fn sign_transaction(
     }
 
     let signature = signature::Signature {
-        public_key: keypair.public,
-        signature: keypair.sign(&*transaction.hash),
+        public_key_bytes: bincode::serialize(&keypair.public).unwrap_or_default(),
+        signature_bytes: bincode::serialize(&keypair.sign(&*transaction.hash)).unwrap_or_default(),
     }; // Initialize signature
 
     transaction.signature = Some(signature); // Set signature

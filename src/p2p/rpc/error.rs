@@ -37,3 +37,9 @@ pub const ERROR_UNABLE_TO_CREATE_GENESIS: i64 = 11;
 
 /// An error code representing the inability of the executor to serialize some SummerCash object.
 pub const ERROR_SERIALIZATION_FAILED: i64 = 12;
+
+/// An error code representing the inability of the executor to open a SummerCash transaction.
+pub const ERROR_UNABLE_TO_OPEN_TRANSACTION: i64 = 13;
+
+/// An error code representing the inability of the executor to persist the SummerCash transaction to the disk.
+pub const ERROR_UNABLE_TO_WRITE_TRANSACTION: i64 = 14;
