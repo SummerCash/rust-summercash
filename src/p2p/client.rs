@@ -229,8 +229,11 @@ impl Into<String> for &Client {
             if let Ok(addr) = self.voting_accounts[i].address() {
                 // Ensure that the account can be used to vote, and isn't a duplicate
                 if addr != blake3::hash_slice(b"p2p_identity") {
-                    accounts_string +=
-                        &format!("{}{}", if i > 0 { ", " } else { "" }, hex::encode(addr));
+                    accounts_string += &format!(
+                        "{}{}",
+                        if i > 0 { ", " } else { "" },
+                        bs58::encode(addr).into_string()
+                    );
                 }
             }
         }

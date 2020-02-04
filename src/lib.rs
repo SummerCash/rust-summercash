@@ -11,7 +11,6 @@ extern crate bincode; // Link bincode crate
 extern crate blake3; // Link blake3 hashing library
 extern crate chrono; // Link chrono library
 extern crate ed25519_dalek; // Link edwards25519 library
-extern crate hex; // Link hex encoding library
 
 #[macro_use]
 extern crate log;
@@ -35,3 +34,5 @@ extern crate clap;
 extern crate reqwest;
 
 extern crate ctrlc;
+
+extern crate bs58;

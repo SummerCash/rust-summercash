@@ -85,33 +85,31 @@ mod tests {
     fn test_default() {
         let default_address = Address::default(); // Get default address val
 
-        assert_eq!(
-            default_address.to_str(),
-            "0000000000000000000000000000000000000000000000000000000000000000"
-        ); // Ensure default address is all zeros
+        assert_eq!(default_address.to_str(), "11111111111111111111111111111111");
+        // Ensure default address is all zeros
     }
 
     #[test]
     fn test_new() {
         let address = Address::new(
-            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+            bs58::decode("FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf")
+                .into_vec()
                 .unwrap(),
         ); // Construct an address from a pre-determined hex value
 
         assert_eq!(
             address.to_str(),
-            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
+            "FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf"
         ); // Ensure address was constructed properly, and that to_str() works
     }
 
     #[test]
     fn test_from_str() {
-        let address =
-            Address::from("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Convert a known safe address hex value to an address instance
+        let address = Address::from("FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf"); // Convert a known safe address hex value to an address instance
 
         assert_eq!(
             address.to_str(),
-            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
+            "FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf"
         ); // Ensure our original input was preserved
     }
 

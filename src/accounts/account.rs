@@ -167,14 +167,14 @@ impl fmt::Display for Account {
         let acc_hex = HexRepresentation {
             private_key: {
                 if let Ok(kp) = self.keypair() {
-                    hex::encode(kp.secret)
+                    bs58::encode(kp.secret).into_string()
                 } else {
                     "invalid_key".to_owned()
                 }
             },
             address: {
                 if let Ok(addr) = self.address() {
-                    hex::encode(addr)
+                    bs58::encode(addr).into_string()
                 } else {
                     "invalid_key".to_owned()
                 }

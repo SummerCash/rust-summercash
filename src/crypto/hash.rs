@@ -46,7 +46,7 @@ impl AsRef<[u8]> for Hash {
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Convert the slice to a hex string
-        write!(f, "{}", hex::encode(self))
+        write!(f, "{}", bs58::encode(self).into_string())
     }
 }
 
@@ -61,14 +61,14 @@ impl Default for Hash {
 impl From<String> for Hash {
     /// Converts the given owned string to a hash.
     fn from(s: String) -> Self {
-        Self::new(hex::decode(s).unwrap_or_default())
+        Self::new(bs58::decode(s).into_vec().unwrap_or_default())
     }
 }
 
 impl From<&str> for Hash {
     /// Converts the given string reference to a hash.
     fn from(s: &str) -> Self {
-        Self::new(hex::decode(s).unwrap_or_default())
+        Self::new(bs58::decode(s).into_vec().unwrap_or_default())
     }
 }
 
@@ -78,7 +78,7 @@ impl<'de> Visitor<'de> for HashVisitor {
     type Value = Hash;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a 32-character hex-encoded string")
+        formatter.write_str("a base58-encoded string")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -86,7 +86,7 @@ impl<'de> Visitor<'de> for HashVisitor {
         E: de::Error,
     {
         // Convert the hex string into a vector of bytes
-        if let Ok(dec) = hex::decode(value) {
+        if let Ok(dec) = bs58::decode(value).into_vec() {
             Ok(Hash::new(dec))
         } else {
             Err(E::custom(format!("invalid hex string: {}", value)))
@@ -100,7 +100,7 @@ impl Serialize for Hash {
         S: Serializer,
     {
         // Always serialize hashes as hex strings
-        serializer.serialize_str(&hex::encode(self.0))
+        serializer.serialize_str(&bs58::encode(self.0).into_string())
     }
 }
 
@@ -149,7 +149,7 @@ impl Hash {
     /// let hex_encoded = hash.to_str(); // 9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b
     /// ```
     pub fn to_str(&self) -> String {
-        hex::encode(self) // Return string val
+        bs58::encode(self).into_string() // Return string val
     }
 }
 
@@ -171,13 +171,14 @@ mod tests {
     #[test]
     fn test_to_str() {
         let hash = Hash::new(
-            hex::decode("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b")
+            bs58::decode("FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf")
+                .into_vec()
                 .unwrap(),
         ); // Construct a hash from a pre-determined hex value
 
         assert_eq!(
             hash.to_str(),
-            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
+            "FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf"
         ); // Ensure properly constructed, and that to_string() is equivalent to our original input
     }
 
@@ -195,11 +196,11 @@ mod tests {
 
     #[test]
     fn test_from_str() {
-        let hash = Hash::from("9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"); // Convert a known safe hash hex encoding to a hash instance
+        let hash = Hash::from("FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf"); // Convert a known safe hash hex encoding to a hash instance
 
         assert_eq!(
             hash.to_str(),
-            "9aec6806794561107e594b1f6a8a6b0c92a0cba9acf5e5e93cca06f781813b0b"
+            "FVPfbg9bK7mj7jnaSRXhuVcVakkXcjMPgSwxmauUofYf"
         ); // Ensure our original input was preserved
     }
 }
