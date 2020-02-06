@@ -19,24 +19,9 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 
                     // Register the discovered peer in the localized KAD DHT service instance
                     self.kad_dht.add_address(&peer, addr);
-
-                    // Register the discovered peer in the localized pubsub service instance
-                    self.floodsub.add_node_to_partial_view(peer)
                 }
             }
-            MdnsEvent::Expired(list) =>
-            // Go through each of the peers we were able to connect to, and remove them from the localized node registry
-            {
-                for (peer, _) in list {
-                    if self.mdns.has_node(&peer) {
-                        // Log the peer that will be removed
-                        info!("Peer {} dead; removing", peer);
-
-                        // Oops, rent is up, and the bourgeoisie haven't given up their power. I guess it's time to die, poor person. Sad proletariat.
-                        self.floodsub.remove_node_from_partial_view(&peer);
-                    }
-                }
-            }
+            _ => (),
         }
     }
 }

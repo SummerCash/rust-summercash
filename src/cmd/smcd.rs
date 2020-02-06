@@ -21,10 +21,7 @@ use summercash::{
 };
 
 use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
-    },
+    sync::{Arc, RwLock},
     thread,
 };
 
@@ -131,12 +128,8 @@ async fn main() -> Result<(), Error> {
         thread::spawn(move || server.wait());
     }
 
-    // A context buffer indicating the state of the server. Used to handle ^c.
-    let server_ctx: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
-
     // Get a reference to the client's runtime so that we can stop all operations on ^c if necessary
     let runtime_ctx: Arc<RwLock<System>> = c.runtime.clone();
-    let server_ctx_cl = server_ctx.clone();
     let persistence_dir = opts.data_dir.clone();
 
     ctrlc::set_handler(move || {
@@ -149,7 +142,6 @@ async fn main() -> Result<(), Error> {
             rt.ledger
                 .write_to_disk()
                 .expect("Error writing the ledger to the disk");
-            server_ctx_cl.store(false, Ordering::SeqCst);
 
             // Stop running
             std::process::exit(0);
@@ -158,7 +150,7 @@ async fn main() -> Result<(), Error> {
     .expect("Error setting Ctrl-C handler");
 
     // Start the client
-    c.start(server_ctx, bootstrap_nodes, opts.node_port).await?;
+    c.start(bootstrap_nodes, opts.node_port).await?;
 
     // We're done!
     Ok(())

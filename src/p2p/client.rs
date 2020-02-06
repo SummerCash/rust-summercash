@@ -16,14 +16,11 @@ use std::{
     convert::TryInto,
     error::Error,
     io, str,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
-    },
+    sync::{Arc, RwLock},
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    floodsub::Floodsub,
+    gossipsub::Gossipsub,
     identity, kad,
     kad::{
         record::{store::MemoryStore, Key},
@@ -156,7 +153,7 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
 #[derive(NetworkBehaviour)]
 pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Some pubsub mechanism bound to the above transport
-    pub floodsub: Floodsub<TSubstream>,
+    pub gossipsub: Gossipsub<TSubstream>,
 
     /// Some mDNS service bound to the above transport
     pub mdns: Mdns<TSubstream>,
@@ -173,9 +170,6 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
     pub fn add_address(&mut self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
         self.kad_dht.add_address(id, multi_address);
-
-        // Add the peer to the list of floodsub peers to message
-        self.floodsub.add_node_to_partial_view(id.clone());
     }
 
     /// Gets the number of active, connected peers.
@@ -320,7 +314,7 @@ impl Client {
         let mut voting_accounts = account::get_all_unlocked_accounts(); // Get unlocked accounts
 
         // Make a voting account if we don't already have one
-        if voting_accounts.len() == 0 {
+        if voting_accounts.is_empty() {
             // Generate a new account to use for voting
             let acc: Account = Account::new();
 
@@ -470,17 +464,16 @@ impl Client {
     /// Starts the client.
     pub async fn start(
         &mut self,
-        server_ctx: Arc<AtomicBool>,
         bootstrap_addresses: Vec<(PeerId, Multiaddr)>,
         port: u16,
     ) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
-        // an mDNS service handler as well as a floodsub instance targeted at the given peer
+        // an mDNS service handler as well as a gossipsub instance targeted at the given peer
         let mut behavior = ClientBehavior {
-            floodsub: Floodsub::new(self.peer_id.clone()),
-            mdns: Mdns::new().await?,
+            gossipsub: Gossipsub::new(self.peer_id.clone(), Default::default()),
+            mdns: Mdns::new()?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
             runtime: state::RuntimeBehavior::new(self.runtime.clone()),
         };
@@ -583,8 +576,7 @@ impl Client {
                 }
             }
 
-            // Keep serving until we're directed to stop by a client
-            while server_ctx.load(Ordering::SeqCst) {
+            loop {
                 // Poll the swarm
                 match swarm.next_event().await {
                     // Info from the swarm is really all we care about
@@ -612,8 +604,6 @@ impl Client {
                     ),
                 };
             }
-
-            Ok(())
         } else {
             // Log the error
             error!("Swarm failed to bind to listening address");

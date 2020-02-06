@@ -756,7 +756,7 @@ impl Graph {
         for node_hash in parents {
             // Get the index of this node
             let index = if let Some(i) = self.hash_routes.get(&node_hash) {
-                i.clone()
+                *i
             } else {
                 continue;
             };

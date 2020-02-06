@@ -10,7 +10,10 @@ use super::{
         accounts::account::Account,
         common::address::Address,
         core::{
-            sys::system::System,
+            sys::{
+                proposal::{Operation, Proposal, ProposalData},
+                system::System,
+            },
             types::{
                 graph::Node,
                 signature::Signature,
@@ -27,7 +30,7 @@ use num::BigUint;
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
 /// Defines the standard SummerCash DAG RPC API.
@@ -58,6 +61,9 @@ pub trait Dag {
     /// Gets a list of transactions contained in the transaction cache.
     #[rpc(name = "get_mem_transactions")]
     fn get_mem_txs(&self, data_dir: String) -> Result<Vec<Hash>>;
+
+    /// Signs a transaction with the provided hash in the provided data directory.
+    fn publish_tx(&self, hash: String, data_dir: String) -> Result<()>;
 }
 
 /// An implementation of the DAG API.
@@ -83,7 +89,7 @@ impl Dag for DagImpl {
     fn list(&self) -> Result<Vec<Hash>> {
         if let Ok(rt) = self.runtime.read() {
             // Return all of the keys, which are the node hashes, stored in the DAG
-            Ok(rt.ledger.hash_routes.keys().map(|hash| *hash).collect())
+            Ok(rt.ledger.hash_routes.keys().copied().collect())
         } else {
             // Return the corresponding error
             Err(Error::new(ErrorCode::from(
@@ -280,6 +286,45 @@ impl Dag for DagImpl {
 
         // Return the list of tx hashes
         Ok(transactions)
+    }
+
+    /// Signs the transaction with the provided hash in the given data directory.
+    fn publish_tx(&self, hash: String, data_dir: String) -> Result<()> {
+        // Open the transaction so that we can use it to publish a proposal derived from it on the network
+        let tx: Transaction =
+            if let Ok(t) = Transaction::from_disk_at_data_directory(&data_dir, Hash::from(hash)) {
+                t
+            } else {
+                // Return an error reflecting the inability of the executor to generate this proposal
+                return Err(Error::new(ErrorCode::from(
+                    error::ERROR_UNABLE_TO_OPEN_TRANSACTION,
+                )));
+            };
+
+        // Make a proposal to submit the provided transaction
+        let proposal_data = ProposalData::new(
+            "ledger::transactions".to_owned(),
+            Operation::Append {
+                value_to_append: tx.to_bytes(),
+            },
+        );
+
+        // Make a proposal for the transaction
+        let proposal = Proposal::new(format!("new_tx: {}", tx.hash.to_str()), proposal_data);
+
+        // Try to get a lock on the server's runtime
+        let mut rt: RwLockWriteGuard<System> = if let Ok(rt) = self.runtime.write() {
+            rt
+        } else {
+            return Err(Error::new(ErrorCode::from(
+                error::ERROR_UNABLE_TO_OBTAIN_LOCK,
+            )));
+        };
+
+        // Register the proposal
+        rt.register_proposal(proposal);
+
+        Ok(())
     }
 }
 

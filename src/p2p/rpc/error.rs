@@ -43,3 +43,6 @@ pub const ERROR_UNABLE_TO_OPEN_TRANSACTION: i64 = 13;
 
 /// An error code representing the inability of the executor to persist the SummerCash transaction to the disk.
 pub const ERROR_UNABLE_TO_WRITE_TRANSACTION: i64 = 14;
+
+/// An error code representing the inability of the executor to create a proposal from the given SummerCash object.
+pub const ERROR_UNABLE_TO_CREATE_PROPOSAL: i64 = 15;
