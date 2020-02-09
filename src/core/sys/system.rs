@@ -112,6 +112,13 @@ impl System {
         self.new_tx_ctx.store(true, Ordering::SeqCst);
     }
 
+    /// Add a given proposal to the system's pending proposals list without alerting any listeners to this change.
+    pub fn push_proposal(&mut self, proposal: Proposal) {
+        // Register the proposal without altering the new_tx context
+        self.pending_proposals
+            .insert(proposal.proposal_id, proposal);
+    }
+
     /// Clears the list of localized proposals contained inside the system.
     pub fn clear_localized_proposals(&mut self) {
         // Reset both state measures of localized prop.

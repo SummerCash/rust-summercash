@@ -2,6 +2,8 @@ use super::super::super::crypto::{blake3, hash}; // Import the blake3 hashing mo
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
+use std::fmt;
+
 /// A proposal regarding a network-wide action.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Proposal {
@@ -34,6 +36,21 @@ pub enum Operation {
     Remove,
     /// Add a value to a particular attribute or set of events
     Append { value_to_append: Vec<u8> },
+}
+
+impl fmt::Display for Operation {
+    /// Formats the Operation according to the operation's type (i.e. amend, remove, append).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Amend { .. } => "amend",
+                Self::Remove => "remove",
+                Self::Append { .. } => "append",
+            }
+        )
+    }
 }
 
 /// A vector of proposals.

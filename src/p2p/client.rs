@@ -10,19 +10,17 @@ use super::super::{
     accounts::account::{self, Account},
     common::address::Address,
 };
-use super::{network, state, sync, gossipsub};
+use super::{floodsub, network, state, sync};
 use num::Zero;
 use std::{
     convert::TryInto,
     error::Error,
     io, str,
     sync::{Arc, RwLock},
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher}
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    gossipsub::{Gossipsub, GossipsubConfig, GossipsubMessage, Topic, protocol::MessageId},
+    floodsub::{Floodsub, TopicBuilder},
     identity, kad,
     kad::{
         record::{store::MemoryStore, Key},
@@ -155,7 +153,7 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
 #[derive(NetworkBehaviour)]
 pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Some pubsub mechanism bound to the above transport
-    pub gossipsub: Gossipsub<TSubstream>,
+    pub gossipsub: Floodsub<TSubstream>,
 
     /// Some mDNS service bound to the above transport
     pub mdns: Mdns<TSubstream>,
@@ -471,19 +469,8 @@ impl Client {
     ) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
-        // Make a gossipsub subscription service instance for messagein
-        let mut sub_cfg: GossipsubConfig = Default::default();
-
-        // Make sure that each message sent through gossipsub is hashed. This prevents duplicate
-        // messages from being sent.
-        sub_cfg.message_id_fn = |message: &GossipsubMessage| {
-            let mut s = DefaultHasher::new();
-            message.data.hash(&mut s);
-            MessageId(s.finish().to_string())
-        };
-
-        let mut sub = Gossipsub::new(self.peer_id.clone(), sub_cfg);
-        sub.subscribe(Topic::new(gossipsub::TRANSACTIONS_TOPIC.to_owned()));
+        let mut sub = Floodsub::new(self.peer_id.clone());
+        sub.subscribe(TopicBuilder::new(floodsub::PROPOSALS_TOPIC.to_owned()).build());
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
         // an mDNS service handler as well as a gossipsub instance targeted at the given peer
@@ -502,7 +489,6 @@ impl Client {
 
         // Log the pending bootstrap operation
         info!("Bootstrapping a network DHT & behavior to existing bootstrap nodes...");
-        
         // Iterate through bootstrap addresses
         for (i, bootstrap_peer) in bootstrap_addresses.into_iter().enumerate() {
             // Log the pending connection op

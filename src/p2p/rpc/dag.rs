@@ -311,7 +311,7 @@ impl Dag for DagImpl {
         );
 
         // Make a proposal for the transaction
-        let proposal = Proposal::new(format!("new_tx: {}", tx.hash.to_str()), proposal_data);
+        let proposal = Proposal::new(format!("new_tx({})", tx.hash.to_str()), proposal_data);
 
         // Try to get a lock on the server's runtime
         let mut rt: RwLockWriteGuard<System> = if let Ok(rt) = self.runtime.write() {
@@ -456,7 +456,19 @@ impl Client {
     }
 
     /// Publishes a transaction stored on the disk.
-    pub async fn publish_tx(&self, hash: String, data_dir: String) -> std::result::Result<(), failure::Error> {
-        self.do_request::<()>("publish_transaction", &format!("[{}, {}]", &serde_json::to_string(&hash)?, serde_json::to_string(&data_dir)?)).await
+    pub async fn publish_tx(
+        &self,
+        hash: String,
+        data_dir: String,
+    ) -> std::result::Result<(), failure::Error> {
+        self.do_request::<()>(
+            "publish_transaction",
+            &format!(
+                "[{}, {}]",
+                &serde_json::to_string(&hash)?,
+                serde_json::to_string(&data_dir)?
+            ),
+        )
+        .await
     }
 }

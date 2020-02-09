@@ -1,5 +1,5 @@
 pub mod client; // Export the client module
-mod gossipsub;
+mod floodsub;
 mod kademlia;
 mod mdns;
 pub mod message; // Export the message module

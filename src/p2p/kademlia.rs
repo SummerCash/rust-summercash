@@ -92,7 +92,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                     let id = proposal.proposal_id;
 
                                     // Put the proposal in the system, so we can execute it
-                                    rt.register_proposal(proposal);
+                                    rt.push_proposal(proposal);
 
                                     // Execute the proposal so it gets added to the dag
                                     match rt.execute_proposal(id) {
