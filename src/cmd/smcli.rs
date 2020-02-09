@@ -1,4 +1,5 @@
 /// SMCli is the SummerCash command-line interface.
+extern crate console;
 extern crate clap;
 #[macro_use]
 extern crate log;
@@ -7,9 +8,11 @@ use clap::Clap;
 use summercash::{
     crypto::hash::Hash,
     p2p::rpc::{accounts, dag},
+    cmd::commands::*
 };
 
 use std::clone::Clone;
+use console::Emoji;
 
 /// The SummerCash command-line interface.
 #[derive(Clap)]
@@ -68,105 +71,10 @@ enum SubCommand {
     /// Signs a SummerCash object of a given type using a provided key.
     #[clap(name = "sign")]
     Sign(Sign),
-}
 
-#[derive(Clap, Clone)]
-enum Create {
-    /// Creates a new account.
-    Account,
-
-    /// Creates a new transaction.
-    Transaction(Transaction),
-}
-
-#[derive(Clap, Clone)]
-enum Get {
-    /// Gets a particular account with the given address.
-    Account(Account),
-
-    /// Gets the balance of a particular account.
-    Balance(Account),
-
-    /// Gets a list of nodes contained in the working dag.
-    Dag(UnitObject),
-
-    /// Gets a list of transactions contained in the transaction cache.
-    TransactionMemory(UnitObject),
-}
-
-#[derive(Clap, Clone)]
-enum Lock {
-    /// Locks a particular account with the given address.
-    Account(CryptoAccount),
-}
-
-#[derive(Clap, Clone)]
-enum Unlock {
-    /// Unlocks a particular account with the given address.
-    Account(CryptoAccount),
-}
-
-#[derive(Clap, Clone)]
-enum Delete {
-    /// Deletes an account with the given address.
-    Account(Account),
-}
-
-#[derive(Clap, Clone)]
-enum List {
-    /// Gets a list of accounts stored on the disk.
-    Accounts(UnitObject),
-
-    /// Gets a list of transactions stored in the working DAG.
-    Transactions(UnitObject),
-}
-
-#[derive(Clap, Clone)]
-enum Sign {
-    /// Signs the provided transaction with a given account
-    Transaction(SignableTransaction),
-}
-
-#[derive(Clap, Clone)]
-struct Account {
-    /// The address of the account
-    address: String,
-}
-
-#[derive(Clap, Clone)]
-struct CryptoAccount {
-    /// The address of the account
-    address: String,
-
-    /// The encryption / decryption key used to unlock or lock the account
-    key: String,
-}
-
-#[derive(Clap, Clone)]
-struct UnitObject {}
-
-#[derive(Clap, Clone)]
-struct Transaction {
-    /// A hex-encoded string representing the address of the sender of the transaction
-    sender: String,
-
-    /// A hex-encoded string representing the address of the recipient of the transaction
-    recipient: String,
-
-    /// The number of finks sent through the transaction
-    amount: u64,
-
-    /// A UTF-8-encoded payload sent along with the transaction
-    payload: String,
-}
-
-#[derive(Clap, Clone)]
-struct SignableTransaction {
-    /// The hash of the transaction
-    hash: String,
-
-    /// The address of the account that will be used to sign the transaction
-    account: String,
+    /// Publishes a SummerCash object of a given type using a provided hash.
+    #[clap(name = "publish")]
+    Publish(Publish),
 }
 
 #[tokio::main]
@@ -182,6 +90,7 @@ async fn main() -> Result<(), failure::Error> {
         SubCommand::Delete(d) => delete(opts, d).await,
         SubCommand::List(l) => list(opts, l).await,
         SubCommand::Sign(s) => sign(opts, s).await,
+        SubCommand::Publish(p) => publish(opts, p).await,
     }
 }
 
@@ -446,6 +355,23 @@ async fn sign(opts: Opts, s: Sign) -> Result<(), failure::Error> {
                     serde_json::to_string(&signature)?
                 ),
                 Err(e) => error!("Failed to sign tx: {}", e),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Publishes the object with the provided hash.
+async fn publish(opts: Opts, p: Publish) -> Result<(), failure::Error> {
+    match p {
+        Publish::Transaction(publishable) => {
+            // Make a client for the DAG API
+            let client = dag::Client::new(&opts.rpc_host_url);
+
+            match client.publish_tx(publishable.hash, opts.data_dir).await {
+                Ok(_) => info!("{}Publishing transaction!", Emoji("🚚 ", "")),
+                Err(e) => error!("Failed to publish tx: {}", e),
             }
         }
     }

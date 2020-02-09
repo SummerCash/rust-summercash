@@ -10,17 +10,19 @@ use super::super::{
     accounts::account::{self, Account},
     common::address::Address,
 };
-use super::{network, state, sync};
+use super::{network, state, sync, gossipsub};
 use num::Zero;
 use std::{
     convert::TryInto,
     error::Error,
     io, str,
     sync::{Arc, RwLock},
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher}
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    gossipsub::Gossipsub,
+    gossipsub::{Gossipsub, GossipsubConfig, GossipsubMessage, Topic, protocol::MessageId},
     identity, kad,
     kad::{
         record::{store::MemoryStore, Key},
@@ -469,18 +471,38 @@ impl Client {
     ) -> Result<(), failure::Error> {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
+        // Make a gossipsub subscription service instance for messagein
+        let mut sub_cfg: GossipsubConfig = Default::default();
+
+        // Make sure that each message sent through gossipsub is hashed. This prevents duplicate
+        // messages from being sent.
+        sub_cfg.message_id_fn = |message: &GossipsubMessage| {
+            let mut s = DefaultHasher::new();
+            message.data.hash(&mut s);
+            MessageId(s.finish().to_string())
+        };
+
+        let mut sub = Gossipsub::new(self.peer_id.clone(), sub_cfg);
+        sub.subscribe(Topic::new(gossipsub::TRANSACTIONS_TOPIC.to_owned()));
+
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
         // an mDNS service handler as well as a gossipsub instance targeted at the given peer
-        let mut behavior = ClientBehavior {
-            gossipsub: Gossipsub::new(self.peer_id.clone(), Default::default()),
+        let behavior = ClientBehavior {
+            gossipsub: sub,
             mdns: Mdns::new()?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
             runtime: state::RuntimeBehavior::new(self.runtime.clone()),
         };
 
+        let mut swarm = Swarm::new(
+            libp2p::build_tcp_ws_secio_mplex_yamux(self.keypair.clone())?,
+            behavior,
+            self.peer_id.clone(),
+        ); // Initialize a swarm
+
         // Log the pending bootstrap operation
         info!("Bootstrapping a network DHT & behavior to existing bootstrap nodes...");
-
+        
         // Iterate through bootstrap addresses
         for (i, bootstrap_peer) in bootstrap_addresses.into_iter().enumerate() {
             // Log the pending connection op
@@ -489,20 +511,20 @@ impl Client {
                 i, bootstrap_peer.1
             );
 
-            behavior.add_address(&bootstrap_peer.0, bootstrap_peer.1); // Add the bootstrap peer to the DHT
+            swarm.add_address(&bootstrap_peer.0, bootstrap_peer.1.clone()); // Add the bootstrap peer to the DHT
+
+            // Connect to the peer
+            match Swarm::dial_addr(&mut swarm, bootstrap_peer.1) {
+                Ok(_) => info!("Connected to bootstrap node {} successfully!", i),
+                Err(e) => warn!("Failed to connect to bootstrap node {}: {}", i, e),
+            }
         }
 
         // Start bootstrapping the DHT to the peers we've connected to
         info!("Bootstrapping the network DHT to the connected peers");
 
         // Bootstrap the behavior's DHT
-        behavior.kad_dht.bootstrap();
-
-        let mut swarm = Swarm::new(
-            libp2p::build_tcp_ws_secio_mplex_yamux(self.keypair.clone())?,
-            behavior,
-            self.peer_id.clone(),
-        ); // Initialize a swarm
+        swarm.kad_dht.bootstrap();
 
         // Try to get the address we'll listen on
         if let Ok(addr) = format!("/ip4/0.0.0.0/tcp/{}", port).parse::<Multiaddr>() {

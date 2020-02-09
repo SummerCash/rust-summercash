@@ -1,4 +1,5 @@
 pub mod accounts; // Export the accounts module
+pub mod cmd;
 pub mod common; // Export the common module
 pub mod core; // Export the core module
 pub mod crypto; // Export the crypto module

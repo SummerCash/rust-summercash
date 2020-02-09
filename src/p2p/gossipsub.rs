@@ -6,14 +6,23 @@ use libp2p::{
 };
 
 /// A topic for all transactions in a network.
-const TRANSACTIONS_TOPIC: &str = "transactions";
+pub const TRANSACTIONS_TOPIC: &str = "transactions";
 
 impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     NetworkBehaviourEventProcess<GossipsubEvent> for ClientBehavior<TSubstream>
 {
     /// Wait for an incoming gossipsub message from a known peer. Handle it somehow.
-    fn inject_event(&mut self, _message: GossipsubEvent) {
-        // TODO: Unimplemented
+    fn inject_event(&mut self, message: GossipsubEvent) {
+        info!("esjoawejfoawejf");
+        match message {
+            GossipsubEvent::Message(peer_id, message_id, message) => {
+                info!(
+                    "received message from peer {} with id {}: {:?}",
+                    peer_id, message_id, message
+                );
+            }
+            _ => (),
+        }
     }
 }
 

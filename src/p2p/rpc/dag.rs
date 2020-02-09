@@ -63,6 +63,7 @@ pub trait Dag {
     fn get_mem_txs(&self, data_dir: String) -> Result<Vec<Hash>>;
 
     /// Signs a transaction with the provided hash in the provided data directory.
+    #[rpc(name = "publish_transaction")]
     fn publish_tx(&self, hash: String, data_dir: String) -> Result<()>;
 }
 
@@ -452,5 +453,10 @@ impl Client {
             &format!("[{}]", &serde_json::to_string(&data_dir)?),
         )
         .await
+    }
+
+    /// Publishes a transaction stored on the disk.
+    pub async fn publish_tx(&self, hash: String, data_dir: String) -> std::result::Result<(), failure::Error> {
+        self.do_request::<()>("publish_transaction", &format!("[{}, {}]", &serde_json::to_string(&hash)?, serde_json::to_string(&data_dir)?)).await
     }
 }

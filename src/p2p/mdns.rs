@@ -15,6 +15,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 
                 // Register the discovered peer in the localized KAD DHT service instance
                 self.kad_dht.add_address(&peer, addr);
+
+                self.dial_addr();
             }
         }
     }
