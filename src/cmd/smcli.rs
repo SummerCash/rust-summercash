@@ -1,18 +1,18 @@
+extern crate clap;
 /// SMCli is the SummerCash command-line interface.
 extern crate console;
-extern crate clap;
 #[macro_use]
 extern crate log;
 use clap::Clap;
 
 use summercash::{
+    cmd::commands::*,
     crypto::hash::Hash,
     p2p::rpc::{accounts, dag},
-    cmd::commands::*
 };
 
-use std::clone::Clone;
 use console::Emoji;
+use std::clone::Clone;
 
 /// The SummerCash command-line interface.
 #[derive(Clap)]
@@ -103,7 +103,11 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
 
             // Generate the account
             match client.generate(&opts.data_dir).await {
-                Ok(acc) => info!("Successfully generated account: {}", acc),
+                Ok(acc) => info!(
+                    "{}Successfully generated account: {}",
+                    Emoji::new("💳 ", ""),
+                    acc
+                ),
                 Err(e) => error!("Failed to generate account: {}", e),
             }
         }
@@ -126,7 +130,7 @@ async fn create(opts: Opts, c: Create) -> Result<(), failure::Error> {
                     tx.to_disk_at_data_directory(&opts.data_dir)?;
 
                     info!(
-                        "Successfully created transaction (use publish command to add to DAG): {}",
+                        "{}Successfully created transaction (use publish command to add to DAG): {}", Emoji::new("📋 ", ""),
                         serde_json::to_string_pretty(&tx)?
                     );
                 }
@@ -150,7 +154,7 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
                 .get(Hash::from(acc.address.as_ref()), &opts.data_dir)
                 .await
             {
-                Ok(acc) => info!("Found account: {}", acc),
+                Ok(acc) => info!("{}Found account: {}", Emoji::new("📒 ", ""), acc),
                 Err(e) => error!("Failed to load the account: {}", e),
             }
         }
@@ -161,7 +165,8 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
             // Get the account
             match client.balance(Hash::from(acc.address.as_ref())).await {
                 Ok(balance) => info!(
-                    "Balance: {} SMC",
+                    "{}Balance: {} SMC",
+                    Emoji::new("💵 ", ""),
                     summercash::common::fink::convert_finks_to_smc(balance),
                 ),
                 Err(e) => error!("Failed to calculate the account's balance: {}", e),
@@ -173,7 +178,7 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
 
             match client.get().await {
                 Ok(nodes) => {
-                    info!("Loaded the DAG successfully!");
+                    info!("{}Loaded the DAG successfully!", Emoji::new("⛓️ ", ""));
 
                     // Print out each of the nodes
                     for node in nodes {
@@ -213,7 +218,11 @@ async fn lock(opts: Opts, l: Lock) -> Result<(), failure::Error> {
                 .lock(Hash::from(acc.address.as_ref()), &acc.key, &opts.data_dir)
                 .await
             {
-                Ok(_) => info!("Locked account '{}' successfully", acc.address),
+                Ok(_) => info!(
+                    "{}Locked account '{}' successfully",
+                    Emoji::new("🔒 ", ""),
+                    acc.address
+                ),
                 Err(e) => error!("Failed to lock the account: {}", e),
             }
         }
@@ -234,7 +243,11 @@ async fn unlock(opts: Opts, u: Unlock) -> Result<(), failure::Error> {
                 .unlock(Hash::from(acc.address.as_ref()), &acc.key, &opts.data_dir)
                 .await
             {
-                Ok(acc) => info!("Unlocked account successfully: {}", acc),
+                Ok(acc) => info!(
+                    "{}Unlocked account successfully: {}",
+                    Emoji::new("🔓 ", ""),
+                    acc
+                ),
                 Err(e) => error!("Failed to lock the account: {}", e),
             }
         }
@@ -255,7 +268,11 @@ async fn delete(opts: Opts, d: Delete) -> Result<(), failure::Error> {
                 .delete(Hash::from(acc.address.as_ref()), &opts.data_dir)
                 .await
             {
-                Ok(_) => info!("Deleted account '{}' successfully", acc.address),
+                Ok(_) => info!(
+                    "{}Deleted account '{}' successfully",
+                    Emoji::new("🗑️ ", ""),
+                    acc.address
+                ),
                 Err(e) => error!("Failed to delete account '{}': {}", acc.address, e),
             }
         }
@@ -294,7 +311,11 @@ async fn list(opts: Opts, l: List) -> Result<(), failure::Error> {
                         })
                         .collect();
 
-                    info!("Found accounts: {}", accounts_string);
+                    info!(
+                        "{}Found accounts: {}",
+                        Emoji::new("🔎 ", ""),
+                        accounts_string
+                    );
                 }
 
                 // Log the error
@@ -326,7 +347,11 @@ async fn list(opts: Opts, l: List) -> Result<(), failure::Error> {
                         })
                         .collect();
 
-                    info!("Found transactions: {}", transactions_string);
+                    info!(
+                        "{}Found transactions: {}",
+                        Emoji::new("🔎 ", ""),
+                        transactions_string
+                    );
                 }
 
                 // Log the error
@@ -351,7 +376,8 @@ async fn sign(opts: Opts, s: Sign) -> Result<(), failure::Error> {
                 .await
             {
                 Ok(signature) => info!(
-                    "Signed tx (publish with publish command): {}",
+                    "{}Signed tx (publish with publish command): {}",
+                    Emoji::new("✍️ ", ""),
                     serde_json::to_string(&signature)?
                 ),
                 Err(e) => error!("Failed to sign tx: {}", e),
