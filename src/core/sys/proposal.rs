@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 pub struct Proposal {
     /// The name of the proposal
     pub proposal_name: String,
+
     /// The body of the proposal
     pub proposal_data: ProposalData,
+
     /// The hash of the proposal
     pub proposal_id: hash::Hash,
 }
@@ -18,6 +20,7 @@ pub struct Proposal {
 pub struct ProposalData {
     /// The name of the system parameter to modify
     pub param_name: String,
+
     /// The manner in which to modify the parameter (e.g. "amend")
     pub operation: Operation,
 }

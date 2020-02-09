@@ -47,8 +47,13 @@ impl From<sled::Error> for ExecutionError {
 pub struct System {
     /// The system configuration
     pub config: config::Config,
+
     /// Known pending proposals
     pub pending_proposals: collections::HashMap<hash::Hash, proposal::Proposal>,
+
+    /// The set fo
+    pub localized_proposals: HashMap<Hash, Proposal>,
+
     /// The ledger
     pub ledger: graph::Graph,
 }

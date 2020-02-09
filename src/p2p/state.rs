@@ -1,6 +1,9 @@
 /// This module implements a state-ful NetworkBehaviour that essentially acts as a shell for the `Runtime` type inside
 /// a struct that is using a derived NetworkBehaviour.
-use super::{super::core::sys::system::System, client::CommunicationError};
+use super::{
+    super::core::sys::{proposal::Proposal, system::System},
+    client::CommunicationError,
+};
 use core::task::{Context, Poll};
 use futures::{AsyncRead, AsyncWrite};
 
@@ -29,6 +32,12 @@ pub struct RuntimeBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + '
     pub runtime: Arc<RwLock<System>>,
 
     stream: PhantomData<TSubstream>,
+}
+
+/// Represents a generic behavioral event emitted by the state contained inside a client.
+pub enum RuntimeEvent {
+    /// An event representing a new transaction that has been added to the publishing queue
+    QueuedProposal(Proposal),
 }
 
 impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> RuntimeBehavior<TSubstream> {
@@ -63,7 +72,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehavio
     // This behaviour isn't really doing anything, so we don't need to spec out any types
     type ProtocolsHandler = Handler<TSubstream>;
 
-    type OutEvent = ();
+    type OutEvent = RuntimeEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
         Handler::<TSubstream>(PhantomData)
@@ -109,7 +118,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ProtocolsHandl
     for Handler<TSubstream>
 {
     type InEvent = ();
-    type OutEvent = ();
+    type OutEvent = RuntimeEvent;
     type Error = io::Error;
     type Substream = TSubstream;
     type InboundProtocol = Ping;
