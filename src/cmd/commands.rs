@@ -49,6 +49,9 @@ pub enum List {
 
     /// Gets a list of transactions stored in the working DAG.
     Transactions(UnitObject),
+
+    /// Gets a list of pending proposals held in the working runtime.
+    Proposals(UnitObject),
 }
 
 #[derive(Clap, Clone)]

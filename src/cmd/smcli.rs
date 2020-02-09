@@ -8,7 +8,7 @@ use clap::Clap;
 use summercash::{
     cmd::commands::*,
     crypto::hash::Hash,
-    p2p::rpc::{accounts, dag},
+    p2p::rpc::{accounts, dag, runtime},
 };
 
 use console::Emoji;
@@ -356,6 +356,48 @@ async fn list(opts: Opts, l: List) -> Result<(), failure::Error> {
 
                 // Log the error
                 Err(e) => error!("Failed to locate all of the transactions in the DAG: {}", e),
+            }
+        }
+        List::Proposals(_) => {
+            // Make a client for the runtime API
+            let client = runtime::Client::new(&opts.rpc_host_url);
+
+            // List all of the pending proposals on the disk
+            match client.list_pending_proposals().await {
+                Ok(proposals) => {
+                    let mut proposals_string = String::new();
+
+                    // The current index in the proposals collection process
+                    let mut i = 0;
+
+                    let _: Vec<()> = proposals
+                        .iter()
+                        .map(|prop| {
+                            proposals_string += &format!(
+                                "{}Proposal to '{}' '{}': '{}' ({})",
+                                if i > 1 { "\n" } else { "" },
+                                prop.proposal_data.operation,
+                                prop.proposal_data.param_name,
+                                prop.proposal_name,
+                                prop.proposal_id
+                            );
+
+                            i += 1;
+                        })
+                        .collect();
+
+                    info!(
+                        "{}Found proposals: {}",
+                        Emoji::new("🔎 ", ""),
+                        proposals_string
+                    );
+                }
+
+                // Log the error
+                Err(e) => error!(
+                    "Failed to locate all of the proposals in the runtime: {}",
+                    e
+                ),
             }
         }
     }
