@@ -1,12 +1,22 @@
-use std::{collections, error::Error}; // Import collections
+use std::{
+    collections::HashMap,
+    error::Error,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+}; // Import collections
 
 use num::bigint; // Add support for large unsigned integers
 
-use super::super::super::crypto::hash; // Import hash types
-
-use super::super::types::{graph, transaction}; // Import transaction types
-
-use super::{config, proposal}; // Import parent module types
+use super::{
+    super::{
+        super::crypto::hash::Hash,
+        types::{graph::Graph, transaction::Transaction},
+    },
+    config,
+    proposal::{Operation, Proposal},
+}; // Import hash types
 
 /// An error encountered while executing a proposal.
 #[derive(Debug, Fail)]
@@ -49,13 +59,16 @@ pub struct System {
     pub config: config::Config,
 
     /// Known pending proposals
-    pub pending_proposals: collections::HashMap<hash::Hash, proposal::Proposal>,
+    pub pending_proposals: HashMap<Hash, Proposal>,
 
-    /// The set fo
+    /// The set of proposals that have been registered, but not published
     pub localized_proposals: HashMap<Hash, Proposal>,
 
     /// The ledger
-    pub ledger: graph::Graph,
+    pub ledger: Graph,
+
+    /// Whether or not new proposals have been added to the system
+    new_tx_ctx: Arc<AtomicBool>,
 }
 
 /// Implement a set of system helper methods.
@@ -66,9 +79,11 @@ impl System {
         let network_name = &config.network_name.clone();
 
         System {
-            config,                                                     // Set config
-            pending_proposals: collections::HashMap::new(), // set pending proposals to empty initialized hash map
-            ledger: graph::Graph::read_partial_from_disk(network_name), // Set ledger
+            config,                                              // Set config
+            pending_proposals: HashMap::new(), // set pending proposals to empty initialized hash map
+            localized_proposals: HashMap::new(), // a set of proposals that have been registered, but not yet published
+            ledger: Graph::read_partial_from_disk(network_name), // Set ledger
+            new_tx_ctx: Arc::new(AtomicBool::new(false)),
         } // Return initialized system
     }
 
@@ -79,21 +94,57 @@ impl System {
 
         System {
             config,
-            pending_proposals: collections::HashMap::new(),
-            ledger: graph::Graph::read_partial_from_disk_with_data_dir(data_dir, network_name),
+            pending_proposals: HashMap::new(),
+            localized_proposals: HashMap::new(),
+            ledger: Graph::read_partial_from_disk_with_data_dir(data_dir, network_name),
+            new_tx_ctx: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    /// Add a given proposal to the system's pending proposals list.
-    pub fn register_proposal(&mut self, proposal: proposal::Proposal) {
+    /// Add a given proposal to the system's localized proposals list.
+    pub fn register_proposal(&mut self, proposal: Proposal) {
         // Check proposal not already registered
-        self.pending_proposals
+        self.localized_proposals
             .entry(proposal.proposal_id)
             .or_insert(proposal); // Add proposal
+
+        // Make sure that we're going to broadcast the new proposals
+        self.new_tx_ctx.store(true, Ordering::SeqCst);
+    }
+
+    /// Clears the list of localized proposals contained inside the system.
+    pub fn clear_localized_proposals(&mut self) {
+        // Reset both state measures of localized prop.
+        self.localized_proposals.clear();
+        self.new_tx_ctx.store(false, Ordering::SeqCst);
+    }
+
+    /// Move a proposal from the system's set of localized proposals to its general proposals.
+    ///
+    /// # Arguments
+    ///
+    /// * `proposal_id` - The hash of the proposal that should be proposed
+    pub fn propose_proposal(&mut self, proposal_id: Hash) -> Result<(), ExecutionError> {
+        // Ensure that the proposal exists. Otherwise, return a suitable error
+        if let Some(prop) = self.localized_proposals.remove(&proposal_id) {
+            self.pending_proposals.insert(proposal_id, prop);
+
+            Ok(())
+        } else {
+            Err(ExecutionError::ProposalDoesNotExist {
+                proposal_id: proposal_id.to_str(),
+            })
+        }
+    }
+
+    /// Gets an atomic reference to the system's current new_tx state variable.
+    pub(crate) fn get_state_ref(&self) -> Arc<AtomicBool> {
+        // Clone the system's new_tx ctx reference variable
+        self.new_tx_ctx.clone()
     }
 
     /// Execute a proposal in the pending proposals set with the given hash.
-    pub fn execute_proposal(&mut self, proposal_id: hash::Hash) -> Result<(), ExecutionError> {
+    pub fn execute_proposal(&mut self, proposal_id: Hash) -> Result<(), ExecutionError> {
         // Check proposal doesn't exist
         if !self.pending_proposals.contains_key(&proposal_id) {
             Err(ExecutionError::ProposalDoesNotExist {
@@ -111,16 +162,16 @@ impl System {
                     // Handle different operations
                     match target_proposal.proposal_data.operation {
                         // Is updating reward_per_gas
-                        proposal::Operation::Amend { amended_value } => {
+                        Operation::Amend { amended_value } => {
                             self.config.reward_per_gas =
                                 bigint::BigUint::from_bytes_le(&amended_value)
                         } // Set reward_per_gas
                         // Is setting reward_per_gas to zero
-                        proposal::Operation::Remove => {
+                        Operation::Remove => {
                             self.config.reward_per_gas = bigint::BigUint::from(0 as u16)
                         }
                         // Is adding a value to the reward_per_gas
-                        proposal::Operation::Append { value_to_append } => {
+                        Operation::Append { value_to_append } => {
                             self.config.reward_per_gas = self.config.reward_per_gas.clone()
                                 + bigint::BigUint::from_bytes_le(&value_to_append)
                         } // Add to reward_per_gas
@@ -141,14 +192,14 @@ impl System {
                     // Handle different operations
                     match target_proposal.proposal_data.operation {
                         // Is updating network_name
-                        proposal::Operation::Amend { amended_value } => {
+                        Operation::Amend { amended_value } => {
                             self.config.network_name =
                                 String::from_utf8_lossy(&amended_value).into_owned()
                         } // Set network_name
                         // Is setting network_name to ""
-                        proposal::Operation::Remove => self.config.network_name = "".to_owned(), // Set network_name to empty string
+                        Operation::Remove => self.config.network_name = "".to_owned(), // Set network_name to empty string
                         // Is appending a substring to the network_name
-                        proposal::Operation::Append { value_to_append } => {
+                        Operation::Append { value_to_append } => {
                             self.config.network_name = format!(
                                 "{}{}",
                                 self.config.network_name,
@@ -172,20 +223,18 @@ impl System {
                     // Handle different operations
                     match target_proposal.proposal_data.operation {
                         // Targeted amend, despite the fact that ledger operations cannot be reverted
-                        proposal::Operation::Amend { .. } => {
-                            Err(ExecutionError::InvalidOperation {
-                                operation: "amend".to_owned(),
-                                proposal_param: "ledger::transactions".to_owned(),
-                            })
-                        }
+                        Operation::Amend { .. } => Err(ExecutionError::InvalidOperation {
+                            operation: "amend".to_owned(),
+                            proposal_param: "ledger::transactions".to_owned(),
+                        }),
                         // Targeted remove, despite the fact that ledger operations cannot be reverted
-                        proposal::Operation::Remove => Err(ExecutionError::InvalidOperation {
+                        Operation::Remove => Err(ExecutionError::InvalidOperation {
                             operation: "remove".to_owned(),
                             proposal_param: "ledger::transactions".to_owned(),
                         }),
                         // Is appending a transaction to the network ledger
-                        proposal::Operation::Append { value_to_append } => {
-                            let tx = transaction::Transaction::from_bytes(&value_to_append); // Deserialize transaction
+                        Operation::Append { value_to_append } => {
+                            let tx = Transaction::from_bytes(&value_to_append); // Deserialize transaction
 
                             // Get the index of the submitted transaction entry
                             let entry_index = self.ledger.push(tx.clone(), None);

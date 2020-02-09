@@ -10,7 +10,10 @@ use futures::{AsyncRead, AsyncWrite};
 use std::{
     io,
     marker::PhantomData,
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    },
 };
 
 use libp2p::{
@@ -32,12 +35,14 @@ pub struct RuntimeBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + '
     pub runtime: Arc<RwLock<System>>,
 
     stream: PhantomData<TSubstream>,
+
+    ledger_ctx: Arc<AtomicBool>,
 }
 
 /// Represents a generic behavioral event emitted by the state contained inside a client.
 pub enum RuntimeEvent {
-    /// An event representing a new transaction that has been added to the publishing queue
-    QueuedProposal(Proposal),
+    /// An event representing a new set of proposals that has been added to the publishing queue
+    QueuedProposals(Vec<Proposal>),
 }
 
 impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> RuntimeBehavior<TSubstream> {
@@ -94,17 +99,42 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> NetworkBehavio
     }
 
 fn poll(&mut self, _cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>>{
-        Poll::Pending
+        match self.ledger_ctx.load(Ordering::SeqCst) {
+            true => {
+                // Get a reading reference to the runtime instance so that we can load a list of
+                // new proposals
+                if let Ok(rt) = self.runtime.read() {
+                    Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+                        RuntimeEvent::QueuedProposals(
+                            rt.localized_proposals.values().cloned().collect(),
+                        ),
+                    ))
+                } else {
+                    Poll::Pending
+                }
+            }
+            false => Poll::Pending,
+        }
     }
 }
 
 impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> RuntimeBehavior<TSubstream> {
     /// Initializes a new RuntimeBehavior with the given runtime reference.
     pub fn new(runtime: std::sync::Arc<std::sync::RwLock<System>>) -> Self {
+        // Get reference to the provided runtime's current new_tx context variable. This is used to
+        // periodically publish transactions.
+        let ledger_ctx = if let Ok(rt) = runtime.read() {
+            rt.get_state_ref()
+        } else {
+            // We'll just use an empty atomic bool for now
+            Arc::new(AtomicBool::new(false))
+        };
+
         // Initialize a new runtime behavior with the given runtime reference
         Self {
             runtime,
             stream: PhantomData,
+            ledger_ctx,
         }
     }
 }
