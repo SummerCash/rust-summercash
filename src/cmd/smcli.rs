@@ -1,5 +1,5 @@
-extern crate clap;
 /// SMCli is the SummerCash command-line interface.
+extern crate clap;
 extern crate console;
 #[macro_use]
 extern crate log;
@@ -180,9 +180,13 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
                 Ok(nodes) => {
                     info!("{}Loaded the DAG successfully!", Emoji::new("⛓️ ", ""));
 
-                    // Print out each of the nodes
-                    for node in nodes {
-                        println!("{}", serde_json::to_string_pretty(&node)?);
+                    if nodes.len() != 0 {
+                        // Print out each of the nodes
+                        for node in nodes {
+                            println!("{}", serde_json::to_string_pretty(&node)?);
+                        }
+                    } else {
+                        info!("{}It's empty tho...", Emoji::new("🤔 ", ""));
                     }
                 }
                 Err(e) => error!("Failed to load the DAG: {}", e),

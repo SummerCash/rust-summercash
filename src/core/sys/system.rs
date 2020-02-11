@@ -16,6 +16,7 @@ use super::{
     },
     config,
     proposal::{Operation, Proposal},
+    vote::Vote,
 }; // Import hash types
 
 /// An error encountered while executing a proposal.
@@ -67,6 +68,9 @@ pub struct System {
     /// The ledger
     pub ledger: Graph,
 
+    /// The number of votes in favor of each proposal
+    votes: HashMap<Hash, u128>,
+
     /// Whether or not new proposals have been added to the system
     new_tx_ctx: Arc<AtomicBool>,
 }
@@ -84,6 +88,7 @@ impl System {
             localized_proposals: HashMap::new(), // a set of proposals that have been registered, but not yet published
             ledger: Graph::read_partial_from_disk(network_name), // Set ledger
             new_tx_ctx: Arc::new(AtomicBool::new(false)),
+            votes: HashMap::new(),
         } // Return initialized system
     }
 
@@ -98,6 +103,7 @@ impl System {
             localized_proposals: HashMap::new(),
             ledger: Graph::read_partial_from_disk_with_data_dir(data_dir, network_name),
             new_tx_ctx: Arc::new(AtomicBool::new(false)),
+            votes: HashMap::new(),
         }
     }
 
@@ -148,6 +154,33 @@ impl System {
     pub(crate) fn get_state_ref(&self) -> Arc<AtomicBool> {
         // Clone the system's new_tx ctx reference variable
         self.new_tx_ctx.clone()
+    }
+
+    /// Registers a provided vote as in favor or against a particular proposal.
+    ///
+    /// # Arguments
+    ///
+    /// * `proposal_id` - The hash of the proposal that the vote is targeting
+    /// * `vote` - The vote primitive instance
+    pub fn register_vote_for_proposal(
+        &mut self,
+        proposal_id: Hash,
+        vote: Vote,
+    ) -> Result<(), ExecutionError> {
+        // Ensure that the proposal exists in the runtime
+        if !self.pending_proposals.contains_key(&proposal_id) {
+            // Since the proposal is pending, we can submit this vote for it
+            match vote.in_favor {
+                true => *self.votes.entry(proposal_id).or_insert(0) += 1,
+                false => *self.votes.entry(proposal_id).or_insert(0) -= 1,
+            };
+
+            Ok(())
+        } else {
+            Err(ExecutionError::ProposalDoesNotExist {
+                proposal_id: proposal_id.to_str(),
+            })
+        }
     }
 
     /// Execute a proposal in the pending proposals set with the given hash.

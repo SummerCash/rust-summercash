@@ -1,4 +1,4 @@
-use super::{super::core::sys::proposal::Proposal, client::ClientBehavior, state::RuntimeEvent};
+use super::{super::core::sys::{proposal::Proposal, vote::Vote}, client::ClientBehavior, state::RuntimeEvent};
 use futures::{AsyncRead, AsyncWrite};
 use libp2p::{
     floodsub::{FloodsubEvent, TopicBuilder},
@@ -56,8 +56,17 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                         proposal.proposal_id
                     );
 
+                    // Copy the name of the parameter that the proposal will be changing so that we can vote on it.
+                    let param_name = proposal.proposal_data.param_name.clone();
+                    let id = proposal.proposal_id.clone();
+
                     // Add the proposal to the runtime
                     rt.push_proposal(proposal);
+
+                    // If this is a proposal that we can automatically vote on, do it.
+                    if param_name == "ledger::transactions" {
+                        let vote = Vote::new(id, )
+                    }
                 }
             }
             _ => (),
