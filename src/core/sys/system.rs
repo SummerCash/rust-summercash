@@ -69,7 +69,7 @@ pub struct System {
     pub ledger: Graph,
 
     /// The number of votes in favor of each proposal
-    votes: HashMap<Hash, u128>,
+    votes: HashMap<Hash, i128>,
 
     /// Whether or not new proposals have been added to the system
     new_tx_ctx: Arc<AtomicBool>,
