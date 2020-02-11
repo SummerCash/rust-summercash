@@ -1,4 +1,14 @@
-use super::{super::core::sys::{proposal::Proposal, vote::Vote}, client::ClientBehavior, state::RuntimeEvent};
+use super::{
+    super::{
+        core::sys::{
+            proposal::{Operation, Proposal},
+            vote::Vote,
+        },
+        validator::{GraphBoundValidator, Validator},
+    },
+    client::ClientBehavior,
+    state::RuntimeEvent,
+};
 use futures::{AsyncRead, AsyncWrite};
 use libp2p::{
     floodsub::{FloodsubEvent, TopicBuilder},
@@ -7,6 +17,9 @@ use libp2p::{
 
 /// A topic for all proposals in a network.
 pub const PROPOSALS_TOPIC: &str = "proposals";
+
+/// A topic for all votes in a network.
+pub const VOTES_TOPIC: &str = "votes";
 
 impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
@@ -59,13 +72,73 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                     // Copy the name of the parameter that the proposal will be changing so that we can vote on it.
                     let param_name = proposal.proposal_data.param_name.clone();
                     let id = proposal.proposal_id.clone();
+                    let data = proposal.proposal_data.clone();
 
                     // Add the proposal to the runtime
                     rt.push_proposal(proposal);
 
                     // If this is a proposal that we can automatically vote on, do it.
                     if param_name == "ledger::transactions" {
-                        let vote = Vote::new(id, )
+                        match data.operation {
+                            Operation::Append {
+                                value_to_append: tx_bytes,
+                            } => {
+                                // Derive a transaction from the data
+                                let tx = if let Ok(deserialized) = bincode::deserialize(&tx_bytes) {
+                                    deserialized
+                                } else {
+                                    return;
+                                };
+
+                                // The votes that we've generated for the proposal from each votinig account
+                                let mut resultant_votes: Vec<Vote> = Vec::new();
+
+                                // Vote for the proposal with each voting account
+                                for i in 0..self.voting_accounts.len() {
+                                    // Try to get a keypair for the account that we can use to vote with
+                                    if let Ok(keypair) = self.voting_accounts[i].keypair() {
+                                        // Make a validator for the transaction
+                                        let validator = GraphBoundValidator::new(&rt.ledger);
+
+                                        let vote = Vote::new(
+                                            id,
+                                            validator.transaction_is_valid(&tx),
+                                            keypair,
+                                        ); // Make the vote
+
+                                        // Save the vote for later so we can publish it
+                                        resultant_votes.push(vote.clone());
+
+                                        // Register the vote
+                                        match rt.register_vote_for_proposal(id, vote.clone()) {
+                                            Ok(_) => {
+                                                info!(
+                                                "Successfully submitted vote for proposal {}: {}",
+                                                id, vote.in_favor
+                                            );
+                                            }
+                                            Err(e) => {
+                                                warn!("Failed to vote for proposal {}: {}", id, e)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Publish each of the votes. This can't be done in a single loop, as rt is borrowed from self.
+                                for vote in resultant_votes {
+                                    // Serialize the vote and publish it
+                                    if let Ok(serialized) = bincode::serialize(&vote) {
+                                        self.gossipsub.publish(
+                                            TopicBuilder::new(VOTES_TOPIC).build(),
+                                            serialized,
+                                        );
+                                    }
+                                }
+                            }
+                            _ => {
+                                return;
+                            }
+                        };
                     }
                 }
             }

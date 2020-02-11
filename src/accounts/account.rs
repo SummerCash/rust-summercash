@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 use super::super::{common, common::address::Address, crypto::blake3}; // Import the address module
 
 /// A SummerCash account.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Clone, Deserialize)]
 pub struct Account {
     /// The account's private and public keys
     keypair: Vec<u8>,

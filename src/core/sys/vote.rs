@@ -7,7 +7,7 @@ use super::super::super::crypto::hash; // Import the hash primitive
 use super::super::types::signature; // Import the signature primitive
 
 /// A binary, signed vote regarding a particular proposal.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Vote {
     /// The hash of the target proposal
     pub target_proposal: hash::Hash,

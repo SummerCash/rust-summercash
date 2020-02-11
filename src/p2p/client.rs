@@ -163,6 +163,10 @@ pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 's
 
     /// Allow for a state to be maintained inside the client behavior
     pub runtime: state::RuntimeBehavior<TSubstream>,
+
+    /// The accounts that the client will use to vote on proposals
+    #[behaviour(ignore)]
+    pub voting_accounts: Vec<Account>,
 }
 
 impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
@@ -203,7 +207,7 @@ pub struct Client {
     pub runtime: Arc<RwLock<system::System>>,
 
     /// The list of accounts used to vote on proposals
-    pub voting_accounts: Vec<account::Account>,
+    pub voting_accounts: Option<Vec<account::Account>>,
 
     /// The client's libp2p peer identity keypair
     pub keypair: identity::Keypair,
@@ -218,9 +222,12 @@ impl Into<String> for &Client {
         // The collected accounts in a siingle string
         let mut accounts_string = String::new();
 
+        // Get a list of accounts that we can use to vote with
+        let voting_accounts = self.voting_accounts.clone().unwrap_or(Vec::new());
+
         // Iterate through the accounts in the client configuration
-        for i in 0..self.voting_accounts.len() {
-            if let Ok(addr) = self.voting_accounts[i].address() {
+        for i in 0..voting_accounts.len() {
+            if let Ok(addr) = voting_accounts[i].address() {
                 // Ensure that the account can be used to vote, and isn't a duplicate
                 if addr != blake3::hash_slice(b"p2p_identity") {
                     accounts_string += &format!(
@@ -338,7 +345,7 @@ impl Client {
         // Return the initialized client inside a result
         Client {
             runtime: Arc::new(RwLock::new(system::System::with_data_dir(cfg, data_dir))), // Set runtime
-            voting_accounts,                                    // Set voters
+            voting_accounts: Some(voting_accounts), // Set voters
             peer_id: PeerId::from_public_key(keypair.public()), // Set peer id
             keypair,
         }
@@ -472,6 +479,13 @@ impl Client {
         let mut sub = Floodsub::new(self.peer_id.clone());
         sub.subscribe(TopicBuilder::new(floodsub::PROPOSALS_TOPIC.to_owned()).build());
 
+        // Move the accounts stored in the client into the ClientBehavior
+        let accounts = if let Some(taken_accounts) = self.voting_accounts.take() {
+            taken_accounts
+        } else {
+            Vec::new()
+        };
+
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
         // an mDNS service handler as well as a gossipsub instance targeted at the given peer
         let behavior = ClientBehavior {
@@ -479,6 +493,7 @@ impl Client {
             mdns: Mdns::new()?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
             runtime: state::RuntimeBehavior::new(self.runtime.clone()),
+            voting_accounts: accounts,
         };
 
         let mut swarm = Swarm::new(

@@ -15,17 +15,17 @@ pub trait Validator {
 
 /// A validator that is bound to the confines of a given graph. This validator presents zero cost, and requires
 /// no runtime allocations.
-pub struct GraphBoundValidator {
-    graph: Graph,
+pub struct GraphBoundValidator<'a> {
+    graph: &'a Graph,
 }
 
-impl GraphBoundValidator {
+impl<'a> GraphBoundValidator<'a> {
     /// Initializes a new validator from the provided graph.
     ///
     /// # Arguments
     ///
     /// * `graph` - The graph to which validation will be bound.
-    pub fn new(graph: Graph) -> Self {
+    pub fn new(graph: &'a Graph) -> Self {
         // Make a new validator
         Self { graph: graph }
     }
@@ -48,9 +48,9 @@ impl GraphBoundValidator {
     /// * `tx` - The transaction that should be checked for uniqueness among the graph's txs
     fn transaction_is_head(&self, tx: &Transaction) -> bool {
         // Get all of the parents that the transaction relies on
-        for parent in tx.transaction_data.parents {
+        for i in 0..tx.transaction_data.parents.len() {
             // Check that the parent exists. If it doesen't, return false.
-            if let Ok(parent) = self.graph.get_with_hash(parent) {
+            if let Ok(Some(parent)) = self.graph.get_pure(i) {
                 // The parent node shouldn't have already been resolved. The transaction is, thus, invalid.
                 if parent.state_entry.is_some() {
                     return false;
@@ -90,7 +90,10 @@ impl GraphBoundValidator {
     /// * `tx` - The transaction that should be checked for a valid state transition
     fn transaction_parent_execution_is_valid(&self, tx: &Transaction) -> bool {
         // Collect the states for each of the transaction's parents
-        if let Ok(parent_state) = self.graph.resolve_parent_nodes(tx.transaction_data.parents) {
+        if let Ok(parent_state) = self
+            .graph
+            .resolve_parent_nodes(tx.transaction_data.parents.clone())
+        {
             // Ensure that the transaction provides a parent state hash that we can compare the reproduced one against
             if let Some(cited_parent_hash) = tx.transaction_data.parent_state_hash {
                 // Ensure that the parent hash is the same as that provided by the transaction
@@ -105,7 +108,7 @@ impl GraphBoundValidator {
     }
 }
 
-impl Validator for GraphBoundValidator {
+impl<'a> Validator for GraphBoundValidator<'a> {
     /// Validates the contents of a transaction.
     ///
     /// # Arguments
