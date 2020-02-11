@@ -168,7 +168,7 @@ impl System {
         vote: Vote,
     ) -> Result<(), ExecutionError> {
         // Ensure that the proposal exists in the runtime
-        if !self.pending_proposals.contains_key(&proposal_id) {
+        if self.pending_proposals.contains_key(&proposal_id) {
             // Since the proposal is pending, we can submit this vote for it
             match vote.in_favor {
                 true => *self.votes.entry(proposal_id).or_insert(0) += 1,
