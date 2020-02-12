@@ -1,6 +1,6 @@
 use super::{
     core::types::{graph::Graph, transaction::Transaction},
-    crypto::blake3,
+    crypto::{blake3, hash::Hash},
 };
 
 /// A generic rule-enforcing transactional system.
@@ -10,13 +10,37 @@ pub trait Validator {
     /// # Arguments
     ///
     /// * `tx` - The transaction that should be validated
-    fn transaction_is_valid(&self, tx: &Transaction) -> bool;
+    fn transaction_is_valid(&self, tx: &Transaction) -> Result<(), failure::Error>;
 }
 
 /// A validator that is bound to the confines of a given graph. This validator presents zero cost, and requires
 /// no runtime allocations.
 pub struct GraphBoundValidator<'a> {
     graph: &'a Graph,
+}
+
+/// A reason provided by a GraphBoundValidator for why a particular transaction is invalid.
+#[derive(Debug, Fail)]
+pub enum GraphBoundValidatorReason {
+    #[fail(display = "transaction {} is not unique", tx_hash)]
+    NotUnique { tx_hash: Hash },
+    #[fail(
+        display = "transaction {} is too old; parent node {} has already been executed",
+        tx_hash, invalid_parent_hash
+    )]
+    TooOld {
+        tx_hash: Hash,
+        invalid_parent_hash: Hash,
+    },
+    #[fail(
+        display = "transaction {} is invalid; expected {}",
+        tx_hash, desired_hash
+    )]
+    InvalidHash { tx_hash: Hash, desired_hash: Hash },
+    #[fail(display = "transaction {} has an invalid signature", tx_hash)]
+    InvalidSignature { tx_hash: Hash },
+    #[fail(display = "transaction {} has an invalid parent receipt", tx_hash)]
+    ParentReceiptInvalid { tx_hash: Hash },
 }
 
 impl<'a> GraphBoundValidator<'a> {
@@ -46,22 +70,22 @@ impl<'a> GraphBoundValidator<'a> {
     /// # Arguments
     ///
     /// * `tx` - The transaction that should be checked for uniqueness among the graph's txs
-    fn transaction_is_head(&self, tx: &Transaction) -> bool {
+    fn transaction_is_head(&self, tx: &Transaction) -> (bool, Hash) {
         // Get all of the parents that the transaction relies on
         for i in 0..tx.transaction_data.parents.len() {
             // Check that the parent exists. If it doesen't, return false.
             if let Ok(Some(parent)) = self.graph.get_pure(i) {
                 // The parent node shouldn't have already been resolved. The transaction is, thus, invalid.
                 if parent.state_entry.is_some() {
-                    return false;
+                    return (false, parent.hash);
                 }
             } else {
                 // Since the transaction's parents don't exist, the tx isn't valid
-                return false;
+                return (false, Hash::new("NILPARENT".to_owned().into_bytes()));
             }
         }
 
-        true
+        (true, Default::default())
     }
 
     /// Ensure that the transaction's reported hashes are in fact valid.
@@ -69,9 +93,12 @@ impl<'a> GraphBoundValidator<'a> {
     /// # Arguments
     ///
     /// * `tx` - The transaction that should be checked for uniqueness among the graph's txs
-    fn transaction_hash_is_valid(&self, tx: &Transaction) -> bool {
+    fn transaction_hash_is_valid(&self, tx: &Transaction) -> (bool, Hash) {
+        // Hash the transaction
+        let target = blake3::hash_slice(&tx.transaction_data.to_bytes());
+
         // Make sure that the transaction's hash can be reproduced
-        tx.hash == blake3::hash_slice(&tx.transaction_data.to_bytes())
+        (tx.hash == target, target)
     }
 
     /// Ensures that that the signature included in the transaction is in fact valid.
@@ -114,12 +141,39 @@ impl<'a> Validator for GraphBoundValidator<'a> {
     /// # Arguments
     ///
     /// * `tx` - The transaction that should be validated
-    fn transaction_is_valid(&self, tx: &Transaction) -> bool {
+    fn transaction_is_valid(&self, tx: &Transaction) -> Result<(), failure::Error> {
         // Ensure that all of the properties of the transaction are in fact valid
-        self.transaction_is_unique(tx)
-            && self.transaction_is_head(tx)
-            && self.transaction_hash_is_valid(tx)
-            && self.transaction_signature_is_valid(tx)
-            && self.transaction_parent_execution_is_valid(tx)
+        if !self.transaction_is_unique(tx) {
+            Err(GraphBoundValidatorReason::InvalidSignature { tx_hash: tx.hash }.into())
+        } else {
+            let (ok, offending_parent_hash) = self.transaction_is_head(tx);
+
+            // Ensure that the transaction is young enough
+            if !ok {
+                Err(GraphBoundValidatorReason::TooOld {
+                    tx_hash: tx.hash,
+                    invalid_parent_hash: offending_parent_hash,
+                }
+                .into())
+            } else if !self.transaction_signature_is_valid(tx) {
+                Err(GraphBoundValidatorReason::InvalidSignature { tx_hash: tx.hash }.into())
+            } else {
+                // Ensure that the transaction's hash can be reproduced
+                let (ok, target_hash) = self.transaction_hash_is_valid(tx);
+
+                // If the hash can't be reproduced, the tx is invalid
+                if !ok {
+                    Err(GraphBoundValidatorReason::InvalidHash {
+                        tx_hash: tx.hash,
+                        desired_hash: target_hash,
+                    }
+                    .into())
+                } else if !self.transaction_parent_execution_is_valid(tx) {
+                    Err(GraphBoundValidatorReason::ParentReceiptInvalid { tx_hash: tx.hash }.into())
+                } else {
+                    Ok(())
+                }
+            }
+        }
     }
 }

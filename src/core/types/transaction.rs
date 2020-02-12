@@ -184,8 +184,8 @@ impl Transaction {
     /// ```
     pub fn verify_signature(&self) -> bool {
         match &self.signature {
-            None => false,                                    // Nil signature can't be valid
-            Some(signature) => signature.verify(&*self.hash), // Verify signature
+            None => false,                                // Nil signature can't be valid
+            Some(signature) => signature.verify_tx(self), // Verify signature
         }
     }
 

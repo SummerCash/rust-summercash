@@ -14,6 +14,7 @@ use libp2p::{
     floodsub::{FloodsubEvent, TopicBuilder},
     swarm::NetworkBehaviourEventProcess,
 };
+use std::error::Error;
 
 /// A topic for all proposals in a network.
 pub const PROPOSALS_TOPIC: &str = "proposals";
@@ -93,6 +94,9 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                 // The votes that we've generated for the proposal from each votinig account
                                 let mut resultant_votes: Vec<Vote> = Vec::new();
 
+                                // Print out the beginning voting process
+                                info!("Automatically verifying, and voting in accordance to the result of the output of the chosen validator with {} accounts", self.voting_accounts.len());
+
                                 // Vote for the proposal with each voting account
                                 for i in 0..self.voting_accounts.len() {
                                     // Try to get a keypair for the account that we can use to vote with
@@ -100,11 +104,10 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                         // Make a validator for the transaction
                                         let validator = GraphBoundValidator::new(&rt.ledger);
 
-                                        let vote = Vote::new(
-                                            id,
-                                            validator.transaction_is_valid(&tx),
-                                            keypair,
-                                        ); // Make the vote
+                                        // See if the transaction is valid or not
+                                        let reason = validator.transaction_is_valid(&tx);
+
+                                        let vote = Vote::new(id, reason.is_ok(), keypair); // Make the vote
 
                                         // Save the vote for later so we can publish it
                                         resultant_votes.push(vote.clone());
@@ -113,9 +116,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                         match rt.register_vote_for_proposal(id, vote.clone()) {
                                             Ok(_) => {
                                                 info!(
-                                                "Successfully submitted vote for proposal {}: {}",
-                                                id, vote.in_favor
-                                            );
+                                                "Successfully submitted vote for proposal {}: {} because {}",
+                                                id, vote.in_favor, if let Some(e) = reason.err() {let e_err = e.compat(); format!("{}", e_err.description())} else {"transaction is valid".to_owned()});
                                             }
                                             Err(e) => {
                                                 warn!("Failed to vote for proposal {}: {}", id, e)
@@ -156,6 +158,9 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
         match message {
             // A new transaction has been found that a user would like to publish. Publish it.
             RuntimeEvent::QueuedProposals(props) => {
+                // Alert the user of the new proposals
+                info!("Publishing {} new proposals...", props.len());
+
                 // Get a mutable reference to the client's runtime so that we can update the list
                 // of pending proposals once we publish a prop.
                 let mut rt = if let Ok(runtime) = self.runtime.write() {
@@ -165,7 +170,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                 };
 
                 // Publish each proposal
-                for prop in props {
+                for (i, prop) in props.iter().enumerate() {
                     // Try to serialize the proposal. If this succeeds, we can try to publish the
                     // proposal.
                     if let Ok(ser) = bincode::serialize(&prop) {
@@ -175,7 +180,9 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 
                         // Propose the proposal
                         match rt.propose_proposal(prop.proposal_id) {
-                            Ok(_) => (),
+                            Ok(_) => {
+                                info!("Successfully proposed proposal {}: {}", i, prop.proposal_id)
+                            }
                             Err(e) => {
                                 warn!("Failed to propose proposal {}: {}", prop.proposal_id, e)
                             }

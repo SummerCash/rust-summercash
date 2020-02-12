@@ -1,5 +1,7 @@
 use ed25519_dalek; // Import the edwards25519 digital signature library
 
+use super::super::super::common::address::Address;
+use super::transaction::Transaction;
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
 /// An edwards25519 signature.
@@ -30,6 +32,19 @@ impl Signature {
         };
 
         pub_key.verify(message, &sig).is_ok() // Return is valid
+    }
+
+    /// Verify the signature against a target transaction that has this signature attached to it.
+    pub fn verify_tx(&self, transaction: &Transaction) -> bool {
+        // Get the public key of the sender of the transaction
+        if let Ok(sender_kp) = self.public_key() {
+            // Make sure that the sender has the same keypair as that in the tx
+            transaction.transaction_data.sender == Address::from_public_key(&sender_kp)
+                && self.verify(&*transaction.hash)
+        } else {
+            // If the sender doesn't have a keypair, the tx can't be valid
+            false
+        }
     }
 
     // Gets the signature associated with the signature (deserialize with bincode).
