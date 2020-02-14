@@ -61,7 +61,7 @@ impl<'a> GraphBoundValidator<'a> {
     /// * `tx` - The transaction that should be checked for uniqueness among the graph's txs
     fn transaction_is_unique(&self, tx: &Transaction) -> bool {
         // Return whether or not the transaction exists in the graph
-        self.graph.hash_routes.contains_key(&tx.hash)
+        !self.graph.hash_routes.contains_key(&tx.hash)
     }
 
     /// Checks whether or not the transaction exists along an incomplete head. In other words, the transaction must be
@@ -144,7 +144,7 @@ impl<'a> Validator for GraphBoundValidator<'a> {
     fn transaction_is_valid(&self, tx: &Transaction) -> Result<(), failure::Error> {
         // Ensure that all of the properties of the transaction are in fact valid
         if !self.transaction_is_unique(tx) {
-            Err(GraphBoundValidatorReason::InvalidSignature { tx_hash: tx.hash }.into())
+            Err(GraphBoundValidatorReason::NotUnique { tx_hash: tx.hash }.into())
         } else {
             let (ok, offending_parent_hash) = self.transaction_is_head(tx);
 

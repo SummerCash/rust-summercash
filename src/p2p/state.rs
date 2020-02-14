@@ -104,6 +104,11 @@ fn poll(&mut self, _cx: &mut Context, _params: &mut impl PollParameters) -> Poll
                 // Get a reading reference to the runtime instance so that we can load a list of
                 // new proposals
                 if let Ok(rt) = self.runtime.read() {
+                    info!(
+                        "Discovered {} new proposals to publish; alerting the swarm...",
+                        rt.localized_proposals.values().len()
+                    );
+
                     Poll::Ready(NetworkBehaviourAction::GenerateEvent(
                         RuntimeEvent::QueuedProposals(
                             rt.localized_proposals.values().cloned().collect(),

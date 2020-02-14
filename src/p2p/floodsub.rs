@@ -14,7 +14,6 @@ use libp2p::{
     floodsub::{FloodsubEvent, TopicBuilder},
     swarm::NetworkBehaviourEventProcess,
 };
-use std::error::Error;
 
 /// A topic for all proposals in a network.
 pub const PROPOSALS_TOPIC: &str = "proposals";
@@ -117,7 +116,7 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                             Ok(_) => {
                                                 info!(
                                                 "Successfully submitted vote for proposal {}: {} because {}",
-                                                id, vote.in_favor, if let Some(e) = reason.err() {let e_err = e.compat(); format!("{}", e_err.description())} else {"transaction is valid".to_owned()});
+                                                id, vote.in_favor, if let Some(e) = reason.err() {format!("{}", e)} else {"transaction is valid".to_owned()});
                                             }
                                             Err(e) => {
                                                 warn!("Failed to vote for proposal {}: {}", id, e)

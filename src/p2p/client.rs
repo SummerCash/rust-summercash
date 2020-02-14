@@ -17,22 +17,29 @@ use std::{
     error::Error,
     io, str,
     sync::{Arc, RwLock},
+    task::{Context, Poll},
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
     floodsub::{Floodsub, TopicBuilder},
+    futures::StreamExt,
     identity, kad,
     kad::{
         record::{store::MemoryStore, Key},
         Kademlia, Quorum, Record,
     },
     mdns::Mdns,
-    swarm::{NetworkBehaviourEventProcess, SwarmEvent},
+    swarm::NetworkBehaviourEventProcess,
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
 // We need these traits from the futures library in order to build a swarm.
-use futures::io::{AsyncRead, AsyncWrite};
+use futures::{
+    future,
+    io::{AsyncRead, AsyncWrite},
+};
+
+use async_std::task;
 
 /// The global string representation for an invalid peer id.
 pub static INVALID_PEER_ID_STRING: &str = "INVALID_PEER_ID";
@@ -167,6 +174,15 @@ pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 's
     /// The accounts that the client will use to vote on proposals
     #[behaviour(ignore)]
     pub voting_accounts: Vec<Account>,
+
+    /// Whether or not the client should be broadcasting the root transactions. Once we've broadcasted them at least once, we can stop.
+    /// Resume when all nodes detatch    
+    #[behaviour(ignore)]
+    pub(crate) should_broadcast_dag: bool,
+
+    /// Whether or not the client has synchronized a copy of the DAG.
+    #[behaviour(ignore)]
+    pub(crate) has_synchronized_dag: bool,
 }
 
 impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
@@ -187,11 +203,75 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
         // Get the number of active peers in the network
         let n_peers = self.active_peers();
 
+        // If we're not connected to any peers, we should resume broadcasting at some point
+        if n_peers == 0 {
+            self.should_broadcast_dag = false;
+            self.has_synchronized_dag = true;
+        } else {
+            self.should_broadcast_dag = true;
+            self.has_synchronized_dag = false;
+        }
+
         // Construct a quorum for at least 1/2 of the network
         Quorum::N(
             std::num::NonZeroUsize::new(n_peers / 2)
                 .unwrap_or_else(|| std::num::NonZeroUsize::new(1).unwrap()),
         )
+    }
+
+    /// Downloads a copy of the remote DAG, and publishes the existing copy, should it already exist.
+    pub fn synchronize_dag(&mut self) {
+        // Get a quorum for at least 1/2 of the network
+        let q: Quorum = self.active_subset_quorum();
+
+        // Try to get a lock on the runtime ref that we generated earlier, so we can kick off synchronization
+        if let Ok(runtime) = self.runtime.read() {
+            // If there aren't any nodes in the runtime's ledger instance, we'll have to start synchronizing from the very beginning
+            if runtime.ledger.nodes.is_empty() {
+                info!("Synchronizing root transaction");
+
+                // Fetch the hash of the first node from the network
+                self.kad_dht
+                    .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), q);
+            } else {
+                debug!("Broadcasting root transaction");
+
+                // Broadcast the local node's current root transaction to the network
+                self.kad_dht.put_record(
+                    Record::new(
+                        Key::new(&sync::ROOT_TRANSACTION_KEY),
+                        runtime.ledger.nodes[0].hash.to_vec(),
+                    ),
+                    q,
+                );
+
+                // Make sure the network has a full copy of the entire transaction history
+                for i in 0..runtime.ledger.nodes.len() {
+                    // If we aren't at the head tx yet, we can post the next tx hash
+                    if i < runtime.ledger.nodes.len() - 1 {
+                        // Post the next tx hash to the network
+                        self.kad_dht.put_record(
+                            Record::new(
+                                Key::new(&sync::next_transaction_key(runtime.ledger.nodes[i].hash)),
+                                runtime.ledger.nodes[i + 1].hash.to_vec(),
+                            ),
+                            q,
+                        );
+                    }
+
+                    // Broadcast a copy of the root node to the network
+                    self.kad_dht.put_record(
+                        Record::new(
+                            Key::new(&sync::transaction_with_hash_key(
+                                runtime.ledger.nodes[i].hash,
+                            )),
+                            runtime.ledger.nodes[i].transaction.to_bytes(),
+                        ),
+                        q,
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -478,6 +558,7 @@ impl Client {
 
         let mut sub = Floodsub::new(self.peer_id.clone());
         sub.subscribe(TopicBuilder::new(floodsub::PROPOSALS_TOPIC.to_owned()).build());
+        sub.subscribe(TopicBuilder::new(floodsub::VOTES_TOPIC.to_owned()).build());
 
         // Move the accounts stored in the client into the ClientBehavior
         let accounts = if let Some(taken_accounts) = self.voting_accounts.take() {
@@ -494,6 +575,8 @@ impl Client {
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
             runtime: state::RuntimeBehavior::new(self.runtime.clone()),
             voting_accounts: accounts,
+            should_broadcast_dag: true,
+            has_synchronized_dag: false,
         };
 
         let mut swarm = Swarm::new(
@@ -504,6 +587,7 @@ impl Client {
 
         // Log the pending bootstrap operation
         info!("Bootstrapping a network DHT & behavior to existing bootstrap nodes...");
+
         // Iterate through bootstrap addresses
         for (i, bootstrap_peer) in bootstrap_addresses.into_iter().enumerate() {
             // Log the pending connection op
@@ -528,114 +612,66 @@ impl Client {
         swarm.kad_dht.bootstrap();
 
         // Try to get the address we'll listen on
-        if let Ok(addr) = format!("/ip4/0.0.0.0/tcp/{}", port).parse::<Multiaddr>() {
-            // Try to tell the swarm to listen on this address, return an error if this doesn't work
-            if let Err(e) = Swarm::listen_on(&mut swarm, addr.clone()) {
-                // Log the error
-                error!("Swarm failed to bind to listening address {}: {}", addr, e);
+        match format!("/ip4/0.0.0.0/tcp/{}", port).parse::<Multiaddr>() {
+            Ok(addr) => {
+                // Try to tell the swarm to listen on this address, return an error if this doesn't work
+                if let Err(e) = Swarm::listen_on(&mut swarm, addr.clone()) {
+                    // Log the error
+                    error!("Swarm failed to bind to listening address {}: {}", addr, e);
 
-                // Convert the addr err into an io error
-                let e: std::io::Error = io::ErrorKind::AddrNotAvailable.into();
+                    // Convert the addr err into an io error
+                    let e: std::io::Error = io::ErrorKind::AddrNotAvailable.into();
 
-                // Return an error
-                return Err(e.into());
-            };
+                    // Return an error
+                    return Err(e.into());
+                };
 
-            // Print the address we'll be listening on
-            info!("Swarm listening on addr {}; ready for connections", addr);
+                // Print the address we'll be listening on
+                info!("Swarm listening on addr {}; ready for connections", addr);
 
-            // Get a quorum for at least 1/2 of the network
-            let q: Quorum = swarm.active_subset_quorum();
+                // We'll want to remember whether or not we have begun listening so that we can print out debug info
+                let mut listening = false;
 
-            // Try to get a lock on the runtime ref that we generated earlier, so we can kick off synchronization
-            if let Ok(runtime) = self.runtime.read() {
-                // If there aren't any nodes in the runtime's ledger instance, we'll have to start synchronizing from the very beginning
-                if runtime.ledger.nodes.is_empty() {
-                    debug!("Synchronizing root transaction");
+                task::block_on(future::poll_fn(move |cx: &mut Context| {
+                    loop {
+                        // If the swarm doesn't have a copy of the dag, get it
+                        if swarm.should_broadcast_dag || !swarm.has_synchronized_dag {
+                            debug!("Continuing DAG synchronization process...");
 
-                    // Fetch the hash of the first node from the network
-                    swarm
-                        .kad_dht
-                        .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), q);
-                } else {
-                    debug!("Broadcasting root transaction");
-
-                    // Broadcast the local node's current root transaction to the network
-                    swarm.kad_dht.put_record(
-                        Record::new(
-                            Key::new(&sync::ROOT_TRANSACTION_KEY),
-                            runtime.ledger.nodes[0].hash.to_vec(),
-                        ),
-                        q,
-                    );
-
-                    // Make sure the network has a full copy of the entire transaction history
-                    for i in 0..runtime.ledger.nodes.len() {
-                        // If we aren't at the head tx yet, we can post the next tx hash
-                        if i < runtime.ledger.nodes.len() - 1 {
-                            // Post the next tx hash to the network
-                            swarm.kad_dht.put_record(
-                                Record::new(
-                                    Key::new(&sync::next_transaction_key(
-                                        runtime.ledger.nodes[i].hash,
-                                    )),
-                                    runtime.ledger.nodes[i + 1].hash.to_vec(),
-                                ),
-                                q,
-                            );
+                            swarm.synchronize_dag();
                         }
 
-                        // Broadcast a copy of the root node to the network
-                        swarm.kad_dht.put_record(
-                            Record::new(
-                                Key::new(&sync::transaction_with_hash_key(
-                                    runtime.ledger.nodes[i].hash,
-                                )),
-                                runtime.ledger.nodes[i].transaction.to_bytes(),
-                            ),
-                            q,
-                        );
+                        // Poll the swarm
+                        match swarm.poll_next_unpin(cx) {
+                            Poll::Ready(Some(_)) => (),
+                            Poll::Ready(None) => return Poll::Ready(Ok(())),
+                            Poll::Pending => {
+                                if !listening {
+                                    for addr in Swarm::listeners(&swarm) {
+                                        // Print out that we're listening on the address
+                                        info!("Assigned to new address; listening on {} now", addr);
+                                    }
+
+                                    // We're listening now
+                                    listening = true;
+                                }
+                                break;
+                            }
+                        };
                     }
-                }
+                    Poll::Pending
+                }))
             }
+            _ => {
+                // Log the error
+                error!("Swarm failed to bind to listening address");
 
-            loop {
-                // Poll the swarm
-                match swarm.next_event().await {
-                    // Info from the swarm is really all we care about
-                    SwarmEvent::Behaviour(e) => error!("idk: {:?}", e),
+                // Convert the error into an IO error
+                let e: std::io::Error = io::ErrorKind::AddrNotAvailable.into();
 
-                    // Just do some logging with the excess data
-                    SwarmEvent::Connected(peer_id) => {
-                        debug!("Connected to peer: {}", peer_id.to_base58())
-                    }
-                    SwarmEvent::Disconnected(peer_id) => {
-                        debug!("Disconnected from peer: {}", peer_id.to_base58())
-                    }
-                    SwarmEvent::NewListenAddr(l_addr) => {
-                        info!("Assigned to new address; listening on {} now", l_addr)
-                    }
-                    SwarmEvent::ExpiredListenAddr(e_addr) => {
-                        info!("Listener address {} expired", e_addr)
-                    }
-                    SwarmEvent::UnreachableAddr { address, error, .. } => {
-                        debug!("Failed to connect to peer at addr {}: {}", address, error)
-                    }
-                    SwarmEvent::StartConnect(peer_id) => debug!(
-                        "Starting connection process with peer: {}",
-                        peer_id.to_base58()
-                    ),
-                };
+                // Return an error that says we can't listen on this address
+                Err(e.into())
             }
-        } else {
-            // Log the error
-            error!("Swarm failed to bind to listening address");
-
-            // Convert the error into an IO error
-            let e: std::io::Error = io::ErrorKind::AddrNotAvailable.into();
-
-            // Return an error that says we can't listen on this address
-            Err(e.into())
         }
     }
 }

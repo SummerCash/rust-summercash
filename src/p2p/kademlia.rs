@@ -14,7 +14,7 @@ use futures::{AsyncRead, AsyncWrite};
 use libp2p::{
     kad::{
         record::{Key, Record},
-        KademliaEvent, Quorum,
+        GetRecordError, KademliaEvent, Quorum,
     },
     swarm::NetworkBehaviourEventProcess,
 };
@@ -138,10 +138,19 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
             }
 
             // An error occurred while fetching the record; print it
-            KademliaEvent::GetRecordResult(Err(e)) => debug!("Failed to load record: {:?}", e),
+            KademliaEvent::GetRecordResult(Err(e)) => {
+                // We'll want to handle different kinds of results from reading the DHT differently
+                match e {
+                    GetRecordError::NotFound { .. } => self.has_synchronized_dag = true,
+                    _ => debug!("Failed to load record: {:?}", e),
+                }
+            }
 
             // The record was successfully set; print out the record name
             KademliaEvent::PutRecordResult(Ok(result)) => {
+                // Since we've already published part of the DAG information, we don't really need to continue broadcasting
+                self.should_broadcast_dag = false;
+
                 // Print out the successful set operation
                 info!(
                     "Set key successfully: {}",
