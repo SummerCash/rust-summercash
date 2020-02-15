@@ -69,38 +69,41 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                         return;
                                     };
 
+                                // We're going to need to synchronize a copy of the next transaction; save the transaction's hash so that we can do this
+                                let hash = tx.hash.clone();
+
                                 // Try to get a lock on the runtime so we can put the tx in the database
                                 if let Ok(mut rt) = self.runtime.write() {
                                     // If we haven't a single node in the graph, we'll just treat this node as the root
                                     if rt.ledger.nodes.is_empty() {
                                         // Just push the root node onto the graph
                                         rt.ledger.push(tx, None);
+                                    } else {
+                                        // Make a proposal for the transaction, so we can execute it more effectively
+                                        let proposal = Proposal::new(
+                                            "sync_child".to_owned(),
+                                            ProposalData::new(
+                                                "ledger::transactions".to_owned(),
+                                                Operation::Append {
+                                                    value_to_append: value,
+                                                },
+                                            ),
+                                        );
 
-                                        return;
-                                    }
+                                        // The ID of the proposal. We need to copy this, since we'll move it into the system through registration
+                                        let id = proposal.proposal_id;
 
-                                    // Make a proposal for the transaction, so we can execute it more effectively
-                                    let proposal = Proposal::new(
-                                        "sync_child".to_owned(),
-                                        ProposalData::new(
-                                            "ledger::transactions".to_owned(),
-                                            Operation::Append {
-                                                value_to_append: value,
-                                            },
-                                        ),
-                                    );
+                                        // Put the proposal in the system, so we can execute it
+                                        rt.push_proposal(proposal);
 
-                                    // The ID of the proposal. We need to copy this, since we'll move it into the system through registration
-                                    let id = proposal.proposal_id;
-
-                                    // Put the proposal in the system, so we can execute it
-                                    rt.push_proposal(proposal);
-
-                                    // Execute the proposal so it gets added to the dag
-                                    match rt.execute_proposal(id) {
-                                        Ok(_) => info!("Successfully executed transaction {}", id),
-                                        Err(e) => {
-                                            warn!("Failed to execute transaction {}: {}", id, e)
+                                        // Execute the proposal so it gets added to the dag
+                                        match rt.execute_proposal(id) {
+                                            Ok(_) => {
+                                                info!("Successfully executed transaction {}", id)
+                                            }
+                                            Err(e) => {
+                                                warn!("Failed to execute transaction {}: {}", id, e)
+                                            }
                                         }
                                     }
                                 }
@@ -108,24 +111,18 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                 // Get a quorum to poll at least 50% of the network
                                 let q: Quorum = self.active_subset_quorum();
 
+                                info!("Fetching the next transaction in the DAG...");
+
                                 // Get the next hash in the dag
                                 self.kad_dht
-                                    .get_record(&Key::new(&sync::next_transaction_key(tx.hash)), q);
+                                    .get_record(&Key::new(&sync::next_transaction_key(hash)), q);
                             } else if String::from_utf8_lossy(key.as_ref())
                                 .contains("ledger::transactions::next")
                             {
                                 // Try to convert the raw bytes into an actual hash
-                                let hash: Hash =
-                                    if let Ok(val) = bincode::deserialize::<Hash>(&value) {
-                                        info!(
-                                            "Determined the next hash in the remote DAG: {}",
-                                            val.clone()
-                                        );
+                                let hash: Hash = Hash::new(value);
 
-                                        val
-                                    } else {
-                                        return;
-                                    };
+                                info!("Determined the next hash in the remote DAG: {}", hash);
 
                                 // Get a quorum to poll at least 50% of the network
                                 let q: Quorum = self.active_subset_quorum();

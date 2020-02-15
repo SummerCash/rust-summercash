@@ -305,7 +305,7 @@ impl System {
                                 self.ledger.rollback_head();
 
                                 // Return the error
-                                return Err(ExecutionError::Miscellaneous{error: "Invalid transaction: merged parent states must have a hash matching that which is asserted by the transaction.".to_owned()});
+                                return Err(ExecutionError::Miscellaneous{error: format!("Invalid transaction: merged parent states must have a hash matching that which is asserted by the transaction (found {}, tx asserted {}).", parent_tx_hash, asserted_parent_state_hash)});
                             };
 
                             //if let Ok(prev_state_entry) = self
