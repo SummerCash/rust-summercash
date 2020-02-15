@@ -75,9 +75,20 @@ pub struct DagImpl {
 impl Dag for DagImpl {
     /// Gets a list of nodes contained in the currently attached network's DAG.
     fn get(&self) -> Result<Vec<Node>> {
-        if let Ok(rt) = self.runtime.read() {
+        if let Ok(rt) = self.runtime.write() {
+            // The finalized set of nodes contained in the DAG
+            let mut collected_nodes: Vec<Node> = Vec::new();
+
+            // Iterate through each of the nodes in the graph, and purely obtain the full representation of such nodes
+            for i in 0..rt.ledger.nodes.len() {
+                match rt.ledger.nodes.get(i) {
+                    Some(node) => collected_nodes.push(node.clone()),
+                    None => continue,
+                };
+            }
+
             // Return all of the nodes in the runtime's ledger
-            Ok(rt.ledger.nodes.clone())
+            Ok(collected_nodes)
         } else {
             // Return the corresponding error
             Err(Error::new(ErrorCode::from(
