@@ -81,9 +81,9 @@ impl Dag for DagImpl {
 
             // Iterate through each of the nodes in the graph, and purely obtain the full representation of such nodes
             for i in 0..rt.ledger.nodes.len() {
-                match rt.ledger.nodes.get(i) {
-                    Some(node) => collected_nodes.push(node.clone()),
-                    None => continue,
+                match rt.ledger.get_pure(i) {
+                    Ok(Some(node)) => collected_nodes.push(node.clone()),
+                    Ok(None) | Err(_) => continue,
                 };
             }
 

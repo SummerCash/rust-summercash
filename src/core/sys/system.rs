@@ -185,156 +185,152 @@ impl System {
 
     /// Execute a proposal in the pending proposals set with the given hash.
     pub fn execute_proposal(&mut self, proposal_id: Hash) -> Result<(), ExecutionError> {
-        // Check proposal doesn't exist
-        if !self.pending_proposals.contains_key(&proposal_id) {
-            Err(ExecutionError::ProposalDoesNotExist {
-                proposal_id: proposal_id.to_str(),
-            }) // Return error
+        // Try to pull the proposal out of the proposal queue. If this fails, that means that the proposal doesn't actually exist
+        let target_proposal = if let Some(prop) = self.pending_proposals.remove(&proposal_id) {
+            prop
         } else {
-            let target_proposal = self.pending_proposals.get(&proposal_id).unwrap().clone(); // Get proposal
+            return Err(ExecutionError::ProposalDoesNotExist {
+                proposal_id: proposal_id.to_str(),
+            }); // Return error
+        };
 
-            self.pending_proposals.remove(&proposal_id); // Remove proposal from pending proposals
-
-            // Handle different target system parameters
-            match target_proposal.proposal_data.param_name.as_str() {
-                // Proposal is targeting the reward_per_gas config field
-                "config::reward_per_gas" => {
-                    // Handle different operations
-                    match target_proposal.proposal_data.operation {
-                        // Is updating reward_per_gas
-                        Operation::Amend { amended_value } => {
-                            self.config.reward_per_gas =
-                                bigint::BigUint::from_bytes_le(&amended_value)
-                        } // Set reward_per_gas
-                        // Is setting reward_per_gas to zero
-                        Operation::Remove => {
-                            self.config.reward_per_gas = bigint::BigUint::from(0 as u16)
-                        }
-                        // Is adding a value to the reward_per_gas
-                        Operation::Append { value_to_append } => {
-                            self.config.reward_per_gas = self.config.reward_per_gas.clone()
-                                + bigint::BigUint::from_bytes_le(&value_to_append)
-                        } // Add to reward_per_gas
+        // Handle different target system parameters
+        match target_proposal.proposal_data.param_name.as_str() {
+            // Proposal is targeting the reward_per_gas config field
+            "config::reward_per_gas" => {
+                // Handle different operations
+                match target_proposal.proposal_data.operation {
+                    // Is updating reward_per_gas
+                    Operation::Amend { amended_value } => {
+                        self.config.reward_per_gas = bigint::BigUint::from_bytes_le(&amended_value)
+                    } // Set reward_per_gas
+                    // Is setting reward_per_gas to zero
+                    Operation::Remove => {
+                        self.config.reward_per_gas = bigint::BigUint::from(0 as u16)
                     }
-
-                    let operation_result = self.config.write_to_disk(); // Write config to disk
-                                                                        // Check for errors
-                    if let Err(e) = operation_result {
-                        Err(ExecutionError::Miscellaneous {
-                            error: e.to_string(),
-                        })
-                    } else {
-                        Ok(()) // Mhm
-                    }
+                    // Is adding a value to the reward_per_gas
+                    Operation::Append { value_to_append } => {
+                        self.config.reward_per_gas = self.config.reward_per_gas.clone()
+                            + bigint::BigUint::from_bytes_le(&value_to_append)
+                    } // Add to reward_per_gas
                 }
-                // Proposal is targeting the network_name config field
-                "config::network_name" => {
-                    // Handle different operations
-                    match target_proposal.proposal_data.operation {
-                        // Is updating network_name
-                        Operation::Amend { amended_value } => {
-                            self.config.network_name =
-                                String::from_utf8_lossy(&amended_value).into_owned()
-                        } // Set network_name
-                        // Is setting network_name to ""
-                        Operation::Remove => self.config.network_name = "".to_owned(), // Set network_name to empty string
-                        // Is appending a substring to the network_name
-                        Operation::Append { value_to_append } => {
-                            self.config.network_name = format!(
-                                "{}{}",
-                                self.config.network_name,
-                                String::from_utf8_lossy(&value_to_append).into_owned()
-                            )
-                        } // Append to network_name
-                    }
 
-                    let operation_result = self.config.write_to_disk(); // Write config to disk
-                    if let Err(e) = operation_result {
-                        // Check for errors
-                        Err(ExecutionError::Miscellaneous {
-                            error: e.to_string(),
-                        }) // Return error
-                    } else {
-                        Ok(()) // Mhm
-                    }
+                let operation_result = self.config.write_to_disk(); // Write config to disk
+                                                                    // Check for errors
+                if let Err(e) = operation_result {
+                    Err(ExecutionError::Miscellaneous {
+                        error: e.to_string(),
+                    })
+                } else {
+                    Ok(()) // Mhm
                 }
-                // Proposal is targeting the ledger
-                "ledger::transactions" => {
-                    // Handle different operations
-                    match target_proposal.proposal_data.operation {
-                        // Targeted amend, despite the fact that ledger operations cannot be reverted
-                        Operation::Amend { .. } => Err(ExecutionError::InvalidOperation {
-                            operation: "amend".to_owned(),
-                            proposal_param: "ledger::transactions".to_owned(),
-                        }),
-                        // Targeted remove, despite the fact that ledger operations cannot be reverted
-                        Operation::Remove => Err(ExecutionError::InvalidOperation {
-                            operation: "remove".to_owned(),
-                            proposal_param: "ledger::transactions".to_owned(),
-                        }),
-                        // Is appending a transaction to the network ledger
-                        Operation::Append { value_to_append } => {
-                            let tx = Transaction::from_bytes(&value_to_append); // Deserialize transaction
-
-                            // Get the index of the submitted transaction entry
-                            let entry_index = self.ledger.push(tx.clone(), None);
-
-                            // Execute the parent transactions, get the overall hash
-                            let parent_tx_hash =
-                                self.ledger.execute_parent_nodes(entry_index)?.hash;
-
-                            // Get the hash of the parent state that the transaction THINKS is right
-                            let asserted_parent_state_hash = if let Some(parent_state_hash) =
-                                tx.transaction_data.parent_state_hash
-                            {
-                                parent_state_hash
-                            } else {
-                                // Remove the head tx, since it's invalid
-                                self.ledger.rollback_head();
-
-                                // Return the error
-                                return Err(ExecutionError::Miscellaneous {
-                                    error: "Invalid transaction: must have parent state hash."
-                                        .to_owned(),
-                                });
-                            };
-
-                            // UWU WHAT'S THIS I SEE?
-                            if parent_tx_hash != asserted_parent_state_hash {
-                                // Remove the head tx, since it's invalid
-                                self.ledger.rollback_head();
-
-                                // Return the error
-                                return Err(ExecutionError::Miscellaneous{error: format!("Invalid transaction: merged parent states must have a hash matching that which is asserted by the transaction (found {}, tx asserted {}).", parent_tx_hash, asserted_parent_state_hash)});
-                            };
-
-                            //if let Ok(prev_state_entry) = self
-                            //    .ledger
-                            //    .execute_parent_nodes(self.ledger.nodes.len() - 1)
-                            //{
-                            //    let index = self.ledger.nodes.len() - 1; // Get index of pushed tx
-
-                            // Get previous state entry
-                            //self.ledger.nodes[index].state_entry =
-                            //Some(tx.execute(Some(prev_state_entry))); // Set node state entry
-                            //}
-
-                            let write_result = self.ledger.write_to_disk(); // Write ledger to disk
-                                                                            // Check for errors
-                            if let Err(e) = write_result {
-                                Err(ExecutionError::Miscellaneous {
-                                    error: e.to_string(),
-                                }) // Return error
-                            } else {
-                                Ok(()) // Mhm
-                            }
-                        }
-                    }
-                }
-                _ => Err(ExecutionError::InvalidTargetProposalParam {
-                    proposal_param: target_proposal.proposal_data.param_name,
-                }),
             }
+            // Proposal is targeting the network_name config field
+            "config::network_name" => {
+                // Handle different operations
+                match target_proposal.proposal_data.operation {
+                    // Is updating network_name
+                    Operation::Amend { amended_value } => {
+                        self.config.network_name =
+                            String::from_utf8_lossy(&amended_value).into_owned()
+                    } // Set network_name
+                    // Is setting network_name to ""
+                    Operation::Remove => self.config.network_name = "".to_owned(), // Set network_name to empty string
+                    // Is appending a substring to the network_name
+                    Operation::Append { value_to_append } => {
+                        self.config.network_name = format!(
+                            "{}{}",
+                            self.config.network_name,
+                            String::from_utf8_lossy(&value_to_append).into_owned()
+                        )
+                    } // Append to network_name
+                }
+
+                let operation_result = self.config.write_to_disk(); // Write config to disk
+                if let Err(e) = operation_result {
+                    // Check for errors
+                    Err(ExecutionError::Miscellaneous {
+                        error: e.to_string(),
+                    }) // Return error
+                } else {
+                    Ok(()) // Mhm
+                }
+            }
+            // Proposal is targeting the ledger
+            "ledger::transactions" => {
+                // Handle different operations
+                match target_proposal.proposal_data.operation {
+                    // Targeted amend, despite the fact that ledger operations cannot be reverted
+                    Operation::Amend { .. } => Err(ExecutionError::InvalidOperation {
+                        operation: "amend".to_owned(),
+                        proposal_param: "ledger::transactions".to_owned(),
+                    }),
+                    // Targeted remove, despite the fact that ledger operations cannot be reverted
+                    Operation::Remove => Err(ExecutionError::InvalidOperation {
+                        operation: "remove".to_owned(),
+                        proposal_param: "ledger::transactions".to_owned(),
+                    }),
+                    // Is appending a transaction to the network ledger
+                    Operation::Append { value_to_append } => {
+                        let tx = Transaction::from_bytes(&value_to_append); // Deserialize transaction
+
+                        // Get the index of the submitted transaction entry
+                        let entry_index = self.ledger.push(tx.clone(), None);
+
+                        // Execute the parent transactions, get the overall hash
+                        let parent_tx_hash = self.ledger.execute_parent_nodes(entry_index)?.hash;
+
+                        // Get the hash of the parent state that the transaction THINKS is right
+                        let asserted_parent_state_hash = if let Some(parent_state_hash) =
+                            tx.transaction_data.parent_state_hash
+                        {
+                            parent_state_hash
+                        } else {
+                            // Remove the head tx, since it's invalid
+                            self.ledger.rollback_head();
+
+                            // Return the error
+                            return Err(ExecutionError::Miscellaneous {
+                                error: "Invalid transaction: must have parent state hash."
+                                    .to_owned(),
+                            });
+                        };
+
+                        // UWU WHAT'S THIS I SEE?
+                        if parent_tx_hash != asserted_parent_state_hash {
+                            // Remove the head tx, since it's invalid
+                            self.ledger.rollback_head();
+
+                            // Return the error
+                            return Err(ExecutionError::Miscellaneous{error: format!("Invalid transaction: merged parent states must have a hash matching that which is asserted by the transaction (found {}, tx asserted {}).", parent_tx_hash, asserted_parent_state_hash)});
+                        };
+
+                        //if let Ok(prev_state_entry) = self
+                        //    .ledger
+                        //    .execute_parent_nodes(self.ledger.nodes.len() - 1)
+                        //{
+                        //    let index = self.ledger.nodes.len() - 1; // Get index of pushed tx
+
+                        // Get previous state entry
+                        //self.ledger.nodes[index].state_entry =
+                        //Some(tx.execute(Some(prev_state_entry))); // Set node state entry
+                        //}
+
+                        let write_result = self.ledger.write_to_disk(); // Write ledger to disk
+                                                                        // Check for errors
+                        if let Err(e) = write_result {
+                            Err(ExecutionError::Miscellaneous {
+                                error: e.to_string(),
+                            }) // Return error
+                        } else {
+                            Ok(()) // Mhm
+                        }
+                    }
+                }
+            }
+            _ => Err(ExecutionError::InvalidTargetProposalParam {
+                proposal_param: target_proposal.proposal_data.param_name,
+            }),
         }
     }
 }

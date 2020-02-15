@@ -175,14 +175,9 @@ pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 's
     #[behaviour(ignore)]
     pub voting_accounts: Vec<Account>,
 
-    /// Whether or not the client should be broadcasting the root transactions. Once we've broadcasted them at least once, we can stop.
-    /// Resume when all nodes detatch    
+    /// Whether or not the client has completed its publishing process
     #[behaviour(ignore)]
     pub(crate) should_broadcast_dag: bool,
-
-    /// Whether or not the client has synchronized a copy of the DAG.
-    #[behaviour(ignore)]
-    pub(crate) has_synchronized_dag: bool,
 }
 
 impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
@@ -190,6 +185,9 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
     pub fn add_address(&mut self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
         self.kad_dht.add_address(id, multi_address);
+
+        // Add the peer to the pubsub instance
+        self.gossipsub.add_node_to_partial_view(id.clone());
     }
 
     /// Gets the number of active, connected peers.
@@ -203,15 +201,6 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
         // Get the number of active peers in the network
         let n_peers = self.active_peers();
 
-        // If we're not connected to any peers, we should resume broadcasting at some point
-        if n_peers == 0 {
-            self.should_broadcast_dag = false;
-            self.has_synchronized_dag = true;
-        } else {
-            self.should_broadcast_dag = true;
-            self.has_synchronized_dag = false;
-        }
-
         // Construct a quorum for at least 1/2 of the network
         Quorum::N(
             std::num::NonZeroUsize::new(n_peers / 2)
@@ -219,7 +208,61 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
         )
     }
 
-    /// Downloads a copy of the remote DAG, and publishes the existing copy, should it already exist.
+    /// Publishes a copy of the DAG to the remote.
+    pub fn publish_dag(&mut self) {
+        // Get a quorum for at least 1/2 of the network
+        let q: Quorum = self.active_subset_quorum();
+
+        // Try to get a lock on the runtime ref that we generated earlier, so we can kick off synchronization
+        if let Ok(runtime) = self.runtime.read() {
+            // If the DAG is empty, we can't really publish anything
+            if runtime.ledger.nodes.is_empty() {
+                return;
+            }
+
+            debug!("Broadcasting root transaction");
+
+            // Broadcast the local node's current root transaction to the network
+            self.kad_dht.put_record(
+                Record::new(
+                    Key::new(&sync::ROOT_TRANSACTION_KEY),
+                    runtime.ledger.nodes[0].hash.to_vec(),
+                ),
+                q,
+            );
+
+            // Make sure the network has a full copy of the entire transaction history
+            for i in 0..runtime.ledger.nodes.len() {
+                // If we aren't at the head tx yet, we can post the next tx hash
+                if i + 1 < runtime.ledger.nodes.len() {
+                    // Post the next tx hash to the network
+                    self.kad_dht.put_record(
+                        Record::new(
+                            Key::new(&sync::next_transaction_key(runtime.ledger.nodes[i].hash)),
+                            runtime.ledger.nodes[i + 1].hash.to_vec(),
+                        ),
+                        q,
+                    );
+                }
+
+                // Read the information associated with the hash that we're going to publish
+                if let Ok(Some(node)) = runtime.ledger.get_pure(i) {
+                    // Broadcast a copy of the root node to the network
+                    self.kad_dht.put_record(
+                        Record::new(
+                            Key::new(&sync::transaction_with_hash_key(
+                                runtime.ledger.nodes[i].hash,
+                            )),
+                            node.transaction.to_bytes(),
+                        ),
+                        q,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Downloads a copy of the remote DAG.
     pub fn synchronize_dag(&mut self) {
         // Get a quorum for at least 1/2 of the network
         let q: Quorum = self.active_subset_quorum();
@@ -234,42 +277,13 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
                 self.kad_dht
                     .get_record(&Key::new(&sync::ROOT_TRANSACTION_KEY), q);
             } else {
-                debug!("Broadcasting root transaction");
-
-                // Broadcast the local node's current root transaction to the network
-                self.kad_dht.put_record(
-                    Record::new(
-                        Key::new(&sync::ROOT_TRANSACTION_KEY),
-                        runtime.ledger.nodes[0].hash.to_vec(),
-                    ),
+                // Start synchronizing from the last transaction that we got
+                self.kad_dht.get_record(
+                    &Key::new(&sync::next_transaction_key(
+                        runtime.ledger.nodes[runtime.ledger.nodes.len() - 1].hash,
+                    )),
                     q,
                 );
-
-                // Make sure the network has a full copy of the entire transaction history
-                for i in 0..runtime.ledger.nodes.len() {
-                    // If we aren't at the head tx yet, we can post the next tx hash
-                    if i < runtime.ledger.nodes.len() - 1 {
-                        // Post the next tx hash to the network
-                        self.kad_dht.put_record(
-                            Record::new(
-                                Key::new(&sync::next_transaction_key(runtime.ledger.nodes[i].hash)),
-                                runtime.ledger.nodes[i + 1].hash.to_vec(),
-                            ),
-                            q,
-                        );
-                    }
-
-                    // Broadcast a copy of the root node to the network
-                    self.kad_dht.put_record(
-                        Record::new(
-                            Key::new(&sync::transaction_with_hash_key(
-                                runtime.ledger.nodes[i].hash,
-                            )),
-                            runtime.ledger.nodes[i].transaction.to_bytes(),
-                        ),
-                        q,
-                    );
-                }
             }
         }
     }
@@ -299,7 +313,7 @@ pub struct Client {
 impl Into<String> for &Client {
     /// Converts the given client into a string.
     fn into(self) -> String {
-        // The collected accounts in a siingle string
+        // The collected accounts in a single string
         let mut accounts_string = String::new();
 
         // Get a list of accounts that we can use to vote with
@@ -575,8 +589,7 @@ impl Client {
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
             runtime: state::RuntimeBehavior::new(self.runtime.clone()),
             voting_accounts: accounts,
-            should_broadcast_dag: true,
-            has_synchronized_dag: false,
+            should_broadcast_dag: false,
         };
 
         let mut swarm = Swarm::new(
@@ -632,13 +645,19 @@ impl Client {
                 // We'll want to remember whether or not we have begun listening so that we can print out debug info
                 let mut listening = false;
 
+                // Tell the network what we know about the DAG
+                swarm.publish_dag();
+
+                // Get some information about what our peers know
+                swarm.synchronize_dag();
+
                 task::block_on(future::poll_fn(move |cx: &mut Context| {
                     loop {
-                        // If the swarm doesn't have a copy of the dag, get it
-                        if swarm.should_broadcast_dag || !swarm.has_synchronized_dag {
-                            debug!("Continuing DAG synchronization process...");
+                        // if we haven't completely publicized the DAG info, start publishing
+                        if swarm.should_broadcast_dag {
+                            swarm.publish_dag();
 
-                            swarm.synchronize_dag();
+                            swarm.should_broadcast_dag = false;
                         }
 
                         // Poll the swarm

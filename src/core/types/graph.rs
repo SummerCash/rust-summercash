@@ -839,6 +839,8 @@ impl Graph {
                         parent_entries
                             .push(self.clone().nodes[*index].state_entry.clone().unwrap());
                         // Add state entry to parent entries vec
+
+                        continue;
                     }
 
                     if let Ok(prev_state_entry) = self.execute_parent_nodes(*index) {
