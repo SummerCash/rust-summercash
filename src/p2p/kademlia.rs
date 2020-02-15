@@ -33,20 +33,14 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                     // Handle different key types
                     match key.as_ref() {
                         b"ledger::transactions::root" => {
-                            // Deserialize the root transaction hash from the given value
-                            let root_hash: Hash = if let Ok(val) = bincode::deserialize(&value) {
-                                // Alert the user that we've determined what the hash of the root tx is
-                                info!(
-                                    "Received the root transaction hash for the network: {}",
-                                    val
-                                );
+                            // Convert the pure bytes into a hash primitive
+                            let root_hash = Hash::new(value);
 
-                                val
-                            } else {
-                                return;
-                            };
-
-                            // Get a quorum to poll at least 50% of the network
+                            // Alert the user that we've determined what the hash of the root tx is
+                            info!(
+                                "Received the root transaction hash for the network: {}",
+                                root_hash
+                            );
                             let q: Quorum = self.active_subset_quorum();
 
                             // Get the actual root transaction, not just the hash, from the network
@@ -77,6 +71,14 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 
                                 // Try to get a lock on the runtime so we can put the tx in the database
                                 if let Ok(mut rt) = self.runtime.write() {
+                                    // If we haven't a single node in the graph, we'll just treat this node as the root
+                                    if rt.ledger.nodes.is_empty() {
+                                        // Just push the root node onto the graph
+                                        rt.ledger.push(tx, None);
+
+                                        return;
+                                    }
+
                                     // Make a proposal for the transaction, so we can execute it more effectively
                                     let proposal = Proposal::new(
                                         "sync_child".to_owned(),
@@ -97,7 +99,9 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
                                     // Execute the proposal so it gets added to the dag
                                     match rt.execute_proposal(id) {
                                         Ok(_) => info!("Successfully executed transaction {}", id),
-                                        Err(e) => warn!("Transaction execution failed: {}", e),
+                                        Err(e) => {
+                                            warn!("Failed to execute transaction {}: {}", id, e)
+                                        }
                                     }
                                 }
 
