@@ -72,6 +72,18 @@ impl From<&str> for Hash {
     }
 }
 
+impl From<&[u8]> for Hash {
+    /// Converts the given byte slice into a hash.
+    fn from(h: &[u8]) -> Self {
+        // Make a bytes buffer to store the data in. We'll need to copy the data into the buffer.
+        let mut buf: [u8; HASH_SIZE] = [0; HASH_SIZE];
+        buf.clone_from_slice(h);
+
+        // Finally, put the copied data into a hash primitive
+        Self(buf)
+    }
+}
+
 struct HashVisitor;
 
 impl<'de> Visitor<'de> for HashVisitor {

@@ -45,13 +45,16 @@ impl Entry {
             nonces,   // Set nonces
         }; // Initialize entry data
 
-        let mut entry_data_bytes = vec![0; entry_data.to_bytes().len()]; // Initialize entry data buffer
-
-        entry_data_bytes.clone_from_slice(entry_data.to_bytes().as_slice()); // Copy into buffer
+        // Try to convert the entry data to a slice of bytes via bincode serialization
+        let entry_data_hash = if let Ok(serialized) = bincode::serialize(&entry_data) {
+            serialized
+        } else {
+            Vec::new()
+        };
 
         Entry {
-            data: entry_data,                                      // Set data
-            hash: blake3::hash_slice(entry_data_bytes.as_slice()), // Set hash
+            data: entry_data,                           // Set data
+            hash: blake3::hash_slice(&entry_data_hash), // Set hash
         }
     }
 }

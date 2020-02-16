@@ -17,7 +17,7 @@ pub fn hash_slice(b: &[u8]) -> hash::Hash {
     let mut hasher = Hasher::new(); // Init hasher
     hasher.update(b); // Put the slice that the user gave us into the hasher
 
-    hash::Hash::new(hasher.finalize().as_bytes()[..].to_vec()) // Hash and return it!
+    hasher.finalize().as_bytes()[..].into() // Hash and return it!
 }
 
 /* END EXPORTED METHODS */
