@@ -10,7 +10,11 @@ use super::super::{
     accounts::account::{self, Account},
     common::address::Address,
 };
-use super::{floodsub, network, state, sync};
+use super::{
+    floodsub,
+    network::{self, Network},
+    state, sync,
+};
 use num::Zero;
 use std::{
     convert::TryInto,
@@ -26,7 +30,7 @@ use libp2p::{
     identity, kad,
     kad::{
         record::{store::MemoryStore, Key},
-        Kademlia, Quorum, Record,
+        Kademlia, KademliaConfig, Quorum, Record,
     },
     mdns::Mdns,
     swarm::NetworkBehaviourEventProcess,
@@ -308,6 +312,9 @@ pub struct Client {
 
     /// The client's libp2p peer identity
     pub peer_id: PeerId,
+
+    /// The network that the client should connect to
+    network: Network,
 }
 
 impl Into<String> for &Client {
@@ -438,6 +445,7 @@ impl Client {
     ) -> Client {
         // Return the initialized client inside a result
         Client {
+            network: Network::from(&*cfg.network_name),
             runtime: Arc::new(RwLock::new(system::System::with_data_dir(cfg, data_dir))), // Set runtime
             voting_accounts: Some(voting_accounts), // Set voters
             peer_id: PeerId::from_public_key(keypair.public()), // Set peer id
@@ -580,6 +588,11 @@ impl Client {
         } else {
             Vec::new()
         };
+
+        // Generate an empty configuration for the kademlia DHT that we'll use to bootstrap network consensus with.
+        // We're going to segregate the network's KAD DHT from all the other DHTs to prevent poisoning.
+        let mut kad_dht_cfg: KademliaConfig = Default::default();
+        kad_dht_cfg.set_protocol_name(<Network as Into<String>>::into(self.network).into_bytes());
 
         // Initialize a new behavior for a client that we will generate in the not-so-distant future with the given peerId, alongside
         // an mDNS service handler as well as a gossipsub instance targeted at the given peer

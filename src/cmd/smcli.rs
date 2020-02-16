@@ -150,10 +150,7 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
             let client = accounts::Client::new(&opts.rpc_host_url);
 
             // Get the account
-            match client
-                .get(Hash::from(acc.address.as_ref()), &opts.data_dir)
-                .await
-            {
+            match client.get(Hash::from(acc.address), &opts.data_dir).await {
                 Ok(acc) => info!("{}Found account: {}", Emoji::new("📒 ", ""), acc),
                 Err(e) => error!("Failed to load the account: {}", e),
             }
@@ -163,7 +160,7 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
             let client = accounts::Client::new(&opts.rpc_host_url);
 
             // Get the account
-            match client.balance(Hash::from(acc.address.as_ref())).await {
+            match client.balance(Hash::from(acc.address)).await {
                 Ok(balance) => info!(
                     "{}Balance: {} SMC",
                     Emoji::new("💵 ", ""),
@@ -219,7 +216,7 @@ async fn lock(opts: Opts, l: Lock) -> Result<(), failure::Error> {
 
             // Lock the account
             match client
-                .lock(Hash::from(acc.address.as_ref()), &acc.key, &opts.data_dir)
+                .lock(Hash::from(&*acc.address), &acc.key, &opts.data_dir)
                 .await
             {
                 Ok(_) => info!(
@@ -244,7 +241,7 @@ async fn unlock(opts: Opts, u: Unlock) -> Result<(), failure::Error> {
 
             // Lock the account
             match client
-                .unlock(Hash::from(acc.address.as_ref()), &acc.key, &opts.data_dir)
+                .unlock(Hash::from(acc.address), &acc.key, &opts.data_dir)
                 .await
             {
                 Ok(acc) => info!(
@@ -269,7 +266,7 @@ async fn delete(opts: Opts, d: Delete) -> Result<(), failure::Error> {
 
             // Delete the account
             match client
-                .delete(Hash::from(acc.address.as_ref()), &opts.data_dir)
+                .delete(Hash::from(&*acc.address), &opts.data_dir)
                 .await
             {
                 Ok(_) => info!(

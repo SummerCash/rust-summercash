@@ -68,7 +68,7 @@ impl Config {
         for (address, value) in raw_cfg.alloc.iter() {
             // Put the key pair into the final configuration
             final_cfg.allocate_to_address(
-                Address::from(address.as_ref()),
+                Address::from(&address[..]),
                 BigUint::from_i128(*value).unwrap_or_default(),
             );
         }
