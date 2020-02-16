@@ -83,6 +83,11 @@ pub fn merge_entries(entries: Vec<Entry>) -> Entry {
             {
                 // Update the nonce
                 nonces.insert(k.clone(), *entry.data.nonces.get(k).unwrap_or(&0));
+            } else {
+                nonces.insert(
+                    k.to_string(),
+                    *entry.data.nonces.get(k).clone().unwrap_or(&0),
+                ); // Set nonce
             }
         }
     }

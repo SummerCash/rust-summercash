@@ -836,8 +836,7 @@ impl Graph {
                         self.nodes[*index].state_entry =
                             Some(self.nodes[*index].transaction.execute(None)); // Set state entry
 
-                        parent_entries
-                            .push(self.clone().nodes[*index].state_entry.clone().unwrap());
+                        parent_entries.push(self.nodes[*index].state_entry.clone().unwrap());
                         // Add state entry to parent entries vec
 
                         continue;
