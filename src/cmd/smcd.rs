@@ -1,5 +1,4 @@
 /// SMCd is the SummerCash node daemon.
-#[macro_use]
 extern crate clap;
 
 #[macro_use]
@@ -27,6 +26,8 @@ use std::{
 
 use jsonrpc_core::IoHandler;
 use jsonrpc_http_server::ServerBuilder;
+
+use clap::Clap;
 
 /// The SummerCash node daemon.
 #[derive(Clap)]
