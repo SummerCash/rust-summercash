@@ -2,7 +2,7 @@
 FROM rust:1.40
 
 # Copy the entirety of the SummerCash source code
-COPY ../../../ ./
+COPY ./ ./
 
 # Build and optimize the SummerCash source
 RUN cargo build --release
