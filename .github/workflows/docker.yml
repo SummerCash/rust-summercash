@@ -4,14 +4,14 @@ jobs:
   build_smcd_image:
     runs-on: ubuntu-latest
     steps:
-      - name: Login
+      - uses: actions/labeler@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login
+        run: docker login
       - name: Build images
         run: docker build -t docker.pkg.github.com/SummerCash/rust-summercash/smcd:latest ./
       - name: Tag images
         run: docker tag smcd docker.pkg.github.com/SummerCash/rust-summercash/smcd:latest
       - name: Publish images
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
         run: docker push docker.pkg.github.com/SummerCash/rust-summercash
