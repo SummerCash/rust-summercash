@@ -1,6 +1,14 @@
-on: [push]
+on: [push, pull_request]
 
 jobs:
+  run_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: cargo build --verbose --all
+      - name: Test
+        run: cargo test --verbose --all
   build_smcd_image:
     runs-on: ubuntu-latest
     steps:
