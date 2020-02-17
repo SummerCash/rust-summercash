@@ -10,7 +10,7 @@ jobs:
       - name: Login
         run: docker login -u SummerCash -p ${{ secrets.GITHUB_TOKEN }} docker.pkg.github.com
       - name: Build images
-        run: docker build -t docker.pkg.github.com/summercash/rust-summercash/smcd:latest ./
+        run: docker build -t docker.pkg.github.com/summercash/rust-summercash/smcd:latest .
       - name: Tag images
         run: docker tag smcd docker.pkg.github.com/summercash/rust-summercash/smcd:latest
       - name: Publish images
