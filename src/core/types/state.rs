@@ -66,31 +66,25 @@ pub fn merge_entries(entries: Vec<Entry>) -> Entry {
 
     for entry in entries {
         // Iterate through entries
-        for (k, v) in entry.data.balances.iter() {
+        for (balance_addr, balance) in entry.data.balances.iter() {
             // Iterate through balances
-            if balances.contains_key(k) {
+            if balances.contains_key(balance_addr) {
                 // Check already exists in balances
-                let balance_difference =
-                    entry.data.balances.get(k).unwrap() - balances.get(k).unwrap(); // Calculate balance difference
+                let balance_difference = balance - balances.get(balance_addr).unwrap(); // Calculate balance difference
 
-                let mut_balance = balances.get_mut(k).unwrap(); // Get mutable balance
+                let mut_balance = balances.get_mut(balance_addr).unwrap(); // Get mutable balance
 
                 *mut_balance += balance_difference; // Set balance to difference between balance at old state and balance at tx
             } else {
-                balances.insert(k.to_string(), v.clone()); // Set balance
+                balances.insert(balance_addr.to_string(), balance.clone()); // Set balance
             }
+        }
 
-            // Update the nonces of each account. Use the latest one available
-            if nonces.contains_key(k)
-                && nonces.get(k).unwrap_or(&0) < entry.data.nonces.get(k).unwrap_or(&0)
-            {
-                // Update the nonce
-                nonces.insert(k.clone(), *entry.data.nonces.get(k).unwrap_or(&0));
-            } else {
-                nonces.insert(
-                    k.to_string(),
-                    *entry.data.nonces.get(k).clone().unwrap_or(&0),
-                ); // Set nonce
+        // Synchronize both of the nonce storage locations
+        for (nonce_addr, nonce) in entry.data.nonces.iter() {
+            // Use the highest nonce for the account
+            if *nonces.entry(nonce_addr.clone()).or_insert(*nonce) > *nonce {
+                nonces.insert(nonce_addr.clone(), *nonce);
             }
         }
     }

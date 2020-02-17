@@ -819,11 +819,14 @@ impl Graph {
                 // Iterate through node parents
                 if let Some(index) = self.clone().hash_routes.get(&parent) {
                     // Get index of parent
-                    if let Some(state_entry) = self.nodes[*index].state_entry.clone() {
-                        // Check already has state entry
-                        parent_entries.push(state_entry); // Add state entry to parent entries vec
+                    if let Some(node) = self.nodes.get(*index) {
+                        // If the node has already been executed, we don't need to do the heavy lifting
+                        if let Some(state_entry) = node.state_entry.clone() {
+                            // Check already has state entry
+                            parent_entries.push(state_entry); // Add state entry to parent entries vec
 
-                        continue; // Continue
+                            continue; // Continue
+                        }
                     }
 
                     if self.nodes[*index]
@@ -832,26 +835,25 @@ impl Graph {
                         .parents
                         .is_empty()
                     {
-                        // Check no parents
-                        self.nodes[*index].state_entry =
-                            Some(self.nodes[*index].transaction.execute(None)); // Set state entry
+                        // Execute the node, without any prior metadata, since the transaction is the root
+                        let executed = self.nodes[*index].transaction.execute(None);
 
-                        parent_entries.push(self.nodes[*index].state_entry.clone().unwrap());
-                        // Add state entry to parent entries vec
+                        // Keep the executed state in mind for later computation
+                        self.nodes[*index].state_entry = Some(executed.clone());
+                        parent_entries.push(executed);
 
                         continue;
                     }
 
                     if let Ok(prev_state_entry) = self.execute_parent_nodes(*index) {
-                        // Execute parent nodes
-                        self.nodes[*index].state_entry = Some(
-                            self.nodes[*index]
-                                .transaction
-                                .execute(Some(prev_state_entry)),
-                        ); // Set state entry
+                        // Execute the node with the given prior metadata / state
+                        let executed = self.nodes[*index]
+                            .transaction
+                            .execute(Some(prev_state_entry));
 
+                        // Store the calculated state in the tree, and in the collection vector
+                        self.nodes[*index].state_entry = Some(executed.clone());
                         parent_entries.push(self.nodes[*index].state_entry.clone().unwrap());
-                        // Add state entry to parent entries vec
                     }
                 }
             }

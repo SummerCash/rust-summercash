@@ -1,7 +1,9 @@
 use super::{
+    common::address::Address,
     core::types::{graph::Graph, transaction::Transaction},
     crypto::{blake3, hash::Hash},
 };
+use num::BigUint;
 
 /// A generic rule-enforcing transactional system.
 pub trait Validator {
@@ -41,6 +43,11 @@ pub enum GraphBoundValidatorReason {
     InvalidSignature { tx_hash: Hash },
     #[fail(display = "transaction {} has an invalid parent receipt", tx_hash)]
     ParentReceiptInvalid { tx_hash: Hash },
+    #[fail(
+        display = "the balance of the sender of transaction {} ({}) is insufficient to execute such a state transition",
+        tx_hash, sender
+    )]
+    InsufficientSenderBalance { tx_hash: Hash, sender: Address },
 }
 
 impl<'a> GraphBoundValidator<'a> {
@@ -112,6 +119,7 @@ impl<'a> GraphBoundValidator<'a> {
     }
 
     /// Ensures that the state transition provided by the transaction can be reproduced, and is valid.
+    ///
     /// # Arguments
     ///
     /// * `tx` - The transaction that should be checked for a valid state transition
@@ -132,6 +140,30 @@ impl<'a> GraphBoundValidator<'a> {
             // Since we can't execute the parents, this transaction must be invalid
             false
         }
+    }
+
+    /// Ensures that the sender of the provided transaction has enough SummerCash to perform the transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `tx` - The transaction that should be checked against
+    fn transaction_sender_balance_is_sufficient(&self, tx: &Transaction) -> bool {
+        // Check for a latest state entry in the graph. This will serve as the point from where we calculate the account's balance.
+        if let Some(last_state) = self.graph.obtain_executed_head() {
+            // Ensure that the provided transaction has in fact been executed
+            if let Some(state) = last_state.state_entry {
+                // The sender must have at least enough coins to send the transaction
+                return *state
+                    .data
+                    .balances
+                    .get(&tx.transaction_data.sender.to_str())
+                    .unwrap_or(&BigUint::default())
+                    >= tx.transaction_data.value;
+            }
+        }
+
+        // If the sender doesn't have any SMC, they can't send any. Therefore, the value of the transaction must be zero.
+        return tx.transaction_data.value == BigUint::default();
     }
 }
 
@@ -171,7 +203,16 @@ impl<'a> Validator for GraphBoundValidator<'a> {
                 } else if !self.transaction_parent_execution_is_valid(tx) {
                     Err(GraphBoundValidatorReason::ParentReceiptInvalid { tx_hash: tx.hash }.into())
                 } else {
-                    Ok(())
+                    // If the user sending the transaction doesn't have enough SMC to actually send this transaction, return an error
+                    if !self.transaction_sender_balance_is_sufficient(tx) {
+                        Err(GraphBoundValidatorReason::InsufficientSenderBalance {
+                            tx_hash: tx.hash,
+                            sender: tx.transaction_data.sender,
+                        }
+                        .into())
+                    } else {
+                        Ok(())
+                    }
                 }
             }
         }
