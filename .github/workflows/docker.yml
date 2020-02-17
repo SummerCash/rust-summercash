@@ -2,13 +2,12 @@ on: [push]
 
 jobs:
   build_smcd_image:
-    runs:
-      using: "docker"
-      image: "Dockerfile"
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/labeler@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./
       - name: Login
         run: docker login -u SummerCash -p ${{ secrets.GITHUB_TOKEN }} docker.pkg.github.com
       - name: Build images
