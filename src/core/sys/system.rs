@@ -280,8 +280,6 @@ impl System {
                         // Execute the parent transactions, get the overall hash
                         let parent_tx_state = self.ledger.execute_parent_nodes(entry_index)?;
 
-                        println!("{:?}", parent_tx_state);
-
                         // Get the hash of the parent state that the transaction THINKS is right
                         let asserted_parent_state_hash = if let Some(parent_state_hash) =
                             tx.transaction_data.parent_state_hash
@@ -297,11 +295,6 @@ impl System {
                                     .to_owned(),
                             });
                         };
-
-                        let individual_hash =
-                            self.ledger.nodes[0].state_entry.clone().unwrap().hash;
-
-                        println!("{}", individual_hash == asserted_parent_state_hash);
 
                         // UWU WHAT'S THIS I SEE?
                         if parent_tx_state.hash != asserted_parent_state_hash {
