@@ -8,7 +8,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Login
-        run: docker login
+        run: docker login -u SummerCash -p ${{ secrets.GITHUB_TOKEN }} docker.pkg.github.com
       - name: Build images
         run: docker build -t docker.pkg.github.com/SummerCash/rust-summercash/smcd:latest ./
       - name: Tag images
