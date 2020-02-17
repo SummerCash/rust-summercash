@@ -40,21 +40,29 @@ impl Entry {
         nonces: collections::HashMap<String, u64>,
         balances: collections::HashMap<String, BigUint>,
     ) -> Entry {
+        // Produce a reproducible hash of the state
+        let state_hash = blake3::hash_slice(
+            &bincode::serialize(&vec![
+                bincode::serialize(&nonces.keys().collect::<Vec<&String>>().sort())
+                    .unwrap_or_default(),
+                bincode::serialize(&nonces.values().collect::<Vec<&u64>>().sort())
+                    .unwrap_or_default(),
+                bincode::serialize(&balances.keys().collect::<Vec<&String>>().sort())
+                    .unwrap_or_default(),
+                bincode::serialize(&balances.values().collect::<Vec<&BigUint>>().sort())
+                    .unwrap_or_default(),
+            ])
+            .unwrap_or_default(),
+        );
+
         let entry_data: EntryData = EntryData {
             balances, // Set balances
             nonces,   // Set nonces
         }; // Initialize entry data
 
-        // Try to convert the entry data to a slice of bytes via bincode serialization
-        let entry_data_hash = if let Ok(serialized) = bincode::serialize(&entry_data) {
-            serialized
-        } else {
-            Vec::new()
-        };
-
         Entry {
-            data: entry_data,                           // Set data
-            hash: blake3::hash_slice(&entry_data_hash), // Set hash
+            data: entry_data, // Set data
+            hash: state_hash, // Set hash
         }
     }
 }
