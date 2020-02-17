@@ -20,4 +20,4 @@ jobs:
       - name: Tag images
         run: docker tag summercash/rust-summercash summercash/rust-summercash:latest
       - name: Publish images
-        run: docker push summercash/rust-summercash
+        run: docker push summercash/rust-summercash:latest
