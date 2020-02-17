@@ -47,7 +47,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "smcd"
-path = "src/cmd/smcd.rs"
+path = "src/cmd/smcd/smcd.rs"
 
 [[bin]]
 name = "smcli"

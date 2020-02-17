@@ -6,7 +6,6 @@ extern crate log;
 
 extern crate env_logger;
 extern crate tokio;
-//extern crate tokio_01;
 
 use failure::Error;
 use libp2p::{Multiaddr, PeerId};
