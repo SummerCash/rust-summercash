@@ -20,7 +20,7 @@ use std::{
     convert::TryInto,
     error::Error,
     io, str,
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicBool, Arc, RwLock},
     task::{Context, Poll},
 }; // Allow libp2p to implement the write() helper method.
 
@@ -181,6 +181,11 @@ pub struct ClientBehavior {
     /// Whether or not the client has completed its publishing process
     #[behaviour(ignore)]
     pub(crate) should_broadcast_dag: bool,
+
+    /// Whether or not the transaction queue contains proposals that have not yet been evaluated or
+    /// published
+    #[behaviour(ignore)]
+    pub(crate) proposal_queue_empty: Arc<AtomicBool>,
 }
 
 impl ClientBehavior {
@@ -209,6 +214,52 @@ impl ClientBehavior {
             std::num::NonZeroUsize::new(n_peers / 2)
                 .unwrap_or_else(|| std::num::NonZeroUsize::new(1).unwrap()),
         )
+    }
+
+    /// Checks the transaction queue for any unpublished proposals, and publishes any applicable
+    /// proposals.
+    pub fn clear_transaction_queue(&mut self) {
+        // We should only go through with publishing the items contained in the transaction queue
+        // if the queue actually contains something
+        if !self.proposal_queue_empty.load(Ordering::SeqCst) {
+            return;
+        }
+
+        // Alert the user of the new proposals
+        info!("Publishing {} new proposals...", props.len());
+
+        // Get a mutable reference to the client's runtime so that we can update the list
+        // of pending proposals once we publish a prop.
+        let mut rt = if let Ok(runtime) = self.runtime.write() {
+            runtime
+        } else {
+            return;
+        };
+
+        // Publish each proposal
+        for (i, prop) in props.iter().enumerate() {
+            // Try to serialize the proposal. If this succeeds, we can try to publish the
+            // proposal.
+            if let Ok(ser) = bincode::serialize(&prop) {
+                // We've got a serialized proposal; publish it
+                self.gossipsub
+                    .publish(&TopicBuilder::new(PROPOSALS_TOPIC.to_owned()).build(), ser);
+
+                // Propose the proposal
+                match rt.propose_proposal(prop.proposal_id) {
+                    Ok(_) => info!("Successfully proposed proposal {}: {}", i, prop.proposal_id),
+                    Err(e) => warn!("Failed to propose proposal {}: {}", prop.proposal_id, e),
+                }
+            } else {
+                warn!(
+                    "Failed to serialize proposal with hash: {}",
+                    prop.proposal_id
+                );
+            }
+        }
+
+        // Clear the runtime of all pending local proposals
+        rt.clear_localized_proposals();
     }
 
     /// Publishes a copy of the DAG to the remote.

@@ -7,13 +7,9 @@ use super::{
         validator::{GraphBoundValidator, Validator},
     },
     client::ClientBehavior,
-    state::RuntimeEvent,
 };
 use futures::{AsyncRead, AsyncWrite};
-use libp2p::{
-    floodsub::{FloodsubEvent, TopicBuilder},
-    swarm::NetworkBehaviourEventProcess,
-};
+use libp2p::{floodsub::FloodsubEvent, swarm::NetworkBehaviourEventProcess};
 
 /// A topic for all proposals in a network.
 pub const PROPOSALS_TOPIC: &str = "proposals";
@@ -21,9 +17,7 @@ pub const PROPOSALS_TOPIC: &str = "proposals";
 /// A topic for all votes in a network.
 pub const VOTES_TOPIC: &str = "votes";
 
-impl
-    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior
-{
+impl NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior {
     /// Wait for an incoming gossipsub message from a known peer. Handle it somehow.
     fn inject_event(&mut self, message: FloodsubEvent) {
         match message {
@@ -129,10 +123,7 @@ impl
                                 for vote in resultant_votes {
                                     // Serialize the vote and publish it
                                     if let Ok(serialized) = bincode::serialize(&vote) {
-                                        self.gossipsub.publish(
-                                            TopicBuilder::new(VOTES_TOPIC).build(),
-                                            serialized,
-                                        );
+                                        self.gossipsub.publish(Topic::new(VOTES_TOPIC), serialized);
                                     }
                                 }
                             }
@@ -144,59 +135,6 @@ impl
                 }
             }
             _ => (),
-        }
-    }
-}
-
-impl
-    NetworkBehaviourEventProcess<RuntimeEvent> for ClientBehavior
-{
-    /// Handle a pseudo-event from an executor. While this event might look like it's coming from a network peer, it
-    /// is really a command to publish a transaction from an external source (i.e. RPC).
-    fn inject_event(&mut self, message: RuntimeEvent) {
-        match message {
-            // A new transaction has been found that a user would like to publish. Publish it.
-            RuntimeEvent::QueuedProposals(props) => {
-                // Alert the user of the new proposals
-                info!("Publishing {} new proposals...", props.len());
-
-                // Get a mutable reference to the client's runtime so that we can update the list
-                // of pending proposals once we publish a prop.
-                let mut rt = if let Ok(runtime) = self.runtime.write() {
-                    runtime
-                } else {
-                    return;
-                };
-
-                // Publish each proposal
-                for (i, prop) in props.iter().enumerate() {
-                    // Try to serialize the proposal. If this succeeds, we can try to publish the
-                    // proposal.
-                    if let Ok(ser) = bincode::serialize(&prop) {
-                        // We've got a serialized proposal; publish it
-                        self.gossipsub
-                            .publish(&TopicBuilder::new(PROPOSALS_TOPIC.to_owned()).build(), ser);
-
-                        // Propose the proposal
-                        match rt.propose_proposal(prop.proposal_id) {
-                            Ok(_) => {
-                                info!("Successfully proposed proposal {}: {}", i, prop.proposal_id)
-                            }
-                            Err(e) => {
-                                warn!("Failed to propose proposal {}: {}", prop.proposal_id, e)
-                            }
-                        }
-                    } else {
-                        warn!(
-                            "Failed to serialize proposal with hash: {}",
-                            prop.proposal_id
-                        );
-                    }
-                }
-
-                // Clear the runtime of all pending local proposals
-                rt.clear_localized_proposals();
-            }
         }
     }
 }
