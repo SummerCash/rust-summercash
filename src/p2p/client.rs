@@ -13,7 +13,7 @@ use super::super::{
 use super::{
     floodsub,
     network::{self, Network},
-    state, sync,
+    sync,
 };
 use num::Zero;
 use std::{
@@ -25,7 +25,7 @@ use std::{
 }; // Allow libp2p to implement the write() helper method.
 
 use libp2p::{
-    floodsub::{Floodsub, TopicBuilder},
+    floodsub::{Floodsub, Topic},
     futures::StreamExt,
     identity, kad,
     kad::{
@@ -33,7 +33,6 @@ use libp2p::{
         Kademlia, KademliaConfig, Quorum, Record,
     },
     mdns::Mdns,
-    swarm::NetworkBehaviourEventProcess,
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -162,18 +161,18 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
 /// any libp2p transport, but any transport used with this behavior must implement
 /// asynchronous reading & writing capabilities.
 #[derive(NetworkBehaviour)]
-pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+pub struct ClientBehavior {
     /// Some pubsub mechanism bound to the above transport
-    pub gossipsub: Floodsub<TSubstream>,
+    pub gossipsub: Floodsub,
 
     /// Some mDNS service bound to the above transport
-    pub mdns: Mdns<TSubstream>,
+    pub mdns: Mdns,
 
     /// Allow for the client to do some external discovery on the global network through a KAD DHT
-    pub kad_dht: Kademlia<TSubstream, MemoryStore>,
+    pub kad_dht: Kademlia<MemoryStore>,
 
     /// Allow for a state to be maintained inside the client behavior
-    pub runtime: state::RuntimeBehavior<TSubstream>,
+    pub runtime: state::RuntimeBehavior,
 
     /// The accounts that the client will use to vote on proposals
     #[behaviour(ignore)]
@@ -184,7 +183,7 @@ pub struct ClientBehavior<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 's
     pub(crate) should_broadcast_dag: bool,
 }
 
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBehavior<TSubstream> {
+impl ClientBehavior {
     /// Adds the given peer with a particular ID & multi address to the behavior.
     pub fn add_address(&mut self, id: &PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
@@ -291,12 +290,6 @@ impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static> ClientBeha
             }
         }
     }
-}
-
-impl<'a, TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<()> for ClientBehavior<TSubstream>
-{
-    fn inject_event(&mut self, _event: ()) {}
 }
 
 /// A network client.
@@ -579,8 +572,8 @@ impl Client {
         let store = kad::record::store::MemoryStore::new(self.peer_id.clone()); // Initialize a memory store to store peer information in
 
         let mut sub = Floodsub::new(self.peer_id.clone());
-        sub.subscribe(TopicBuilder::new(floodsub::PROPOSALS_TOPIC.to_owned()).build());
-        sub.subscribe(TopicBuilder::new(floodsub::VOTES_TOPIC.to_owned()).build());
+        sub.subscribe(Topic::new(floodsub::PROPOSALS_TOPIC.to_owned()));
+        sub.subscribe(Topic::new(floodsub::VOTES_TOPIC.to_owned()));
 
         // Move the accounts stored in the client into the ClientBehavior
         let accounts = if let Some(taken_accounts) = self.voting_accounts.take() {

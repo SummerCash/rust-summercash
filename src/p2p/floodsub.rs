@@ -21,8 +21,8 @@ pub const PROPOSALS_TOPIC: &str = "proposals";
 /// A topic for all votes in a network.
 pub const VOTES_TOPIC: &str = "votes";
 
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior<TSubstream>
+impl
+    NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior
 {
     /// Wait for an incoming gossipsub message from a known peer. Handle it somehow.
     fn inject_event(&mut self, message: FloodsubEvent) {
@@ -148,8 +148,8 @@ impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     }
 }
 
-impl<TSubstream: AsyncRead + AsyncWrite + Send + Unpin + 'static>
-    NetworkBehaviourEventProcess<RuntimeEvent> for ClientBehavior<TSubstream>
+impl
+    NetworkBehaviourEventProcess<RuntimeEvent> for ClientBehavior
 {
     /// Handle a pseudo-event from an executor. While this event might look like it's coming from a network peer, it
     /// is really a command to publish a transaction from an external source (i.e. RPC).
