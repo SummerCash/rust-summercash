@@ -1,7 +1,7 @@
 use super::super::core::{
     sys::{
         config::{self, Config},
-        system,
+        system::{self, System},
     },
     types::{genesis, transaction::Transaction},
 }; // Import the system module
@@ -20,7 +20,10 @@ use std::{
     convert::TryInto,
     error::Error,
     io, str,
-    sync::{atomic::AtomicBool, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
     task::{Context, Poll},
 }; // Allow libp2p to implement the write() helper method.
 
@@ -172,7 +175,8 @@ pub struct ClientBehavior {
     pub kad_dht: Kademlia<MemoryStore>,
 
     /// Allow for a state to be maintained inside the client behavior
-    pub runtime: state::RuntimeBehavior,
+    #[behaviour(ignore)]
+    pub runtime: Arc<RwLock<System>>,
 
     /// The accounts that the client will use to vote on proposals
     #[behaviour(ignore)]
@@ -185,7 +189,7 @@ pub struct ClientBehavior {
     /// Whether or not the transaction queue contains proposals that have not yet been evaluated or
     /// published
     #[behaviour(ignore)]
-    pub(crate) proposal_queue_empty: Arc<AtomicBool>,
+    proposal_queue_empty: Arc<AtomicBool>,
 }
 
 impl ClientBehavior {
@@ -216,6 +220,11 @@ impl ClientBehavior {
         )
     }
 
+    /// Checks whether or not the proposal queue contains any new unpublished proposals.
+    pub fn transaction_queue_is_empty(&self) -> bool {
+        self.proposal_queue.empty.load(Ordering::SeqCst)
+    }
+
     /// Checks the transaction queue for any unpublished proposals, and publishes any applicable
     /// proposals.
     pub fn clear_transaction_queue(&mut self) {
@@ -225,9 +234,6 @@ impl ClientBehavior {
             return;
         }
 
-        // Alert the user of the new proposals
-        info!("Publishing {} new proposals...", props.len());
-
         // Get a mutable reference to the client's runtime so that we can update the list
         // of pending proposals once we publish a prop.
         let mut rt = if let Ok(runtime) = self.runtime.write() {
@@ -236,14 +242,20 @@ impl ClientBehavior {
             return;
         };
 
+        // Alert the user of the new proposals
+        info!(
+            "Publishing {} new proposals...",
+            rt.localized_proposals.len()
+        );
+
         // Publish each proposal
-        for (i, prop) in props.iter().enumerate() {
+        for (i, prop) in rt.localized_proposals.iter().enumerate() {
             // Try to serialize the proposal. If this succeeds, we can try to publish the
             // proposal.
             if let Ok(ser) = bincode::serialize(&prop) {
                 // We've got a serialized proposal; publish it
                 self.gossipsub
-                    .publish(&TopicBuilder::new(PROPOSALS_TOPIC.to_owned()).build(), ser);
+                    .publish(&Topic::new(floodsub::PROPOSALS_TOPIC.to_owned), ser);
 
                 // Propose the proposal
                 match rt.propose_proposal(prop.proposal_id) {
@@ -644,9 +656,14 @@ impl Client {
             gossipsub: sub,
             mdns: Mdns::new()?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
-            runtime: state::RuntimeBehavior::new(self.runtime.clone()),
+            runtime: self.runtime.clone(),
             voting_accounts: accounts,
             should_broadcast_dag: false,
+            proposal_queue_empty: if let Ok(rt) = self.runtime.read() {
+                rt.get_state_ref()
+            } else {
+                Arc::new(AtomicBool::new(false))
+            },
         };
 
         let mut swarm = Swarm::new(
@@ -715,6 +732,11 @@ impl Client {
                             swarm.publish_dag();
 
                             swarm.should_broadcast_dag = false;
+                        }
+
+                        // If there are transactions that we should be publishing, do just that
+                        if !swarm.transaction_queue_is_empty() {
+                            swarm.clear_transaction_queue();
                         }
 
                         // Poll the swarm

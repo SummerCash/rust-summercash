@@ -9,7 +9,10 @@ use super::{
     client::ClientBehavior,
 };
 use futures::{AsyncRead, AsyncWrite};
-use libp2p::{floodsub::FloodsubEvent, swarm::NetworkBehaviourEventProcess};
+use libp2p::{
+    floodsub::{FloodsubEvent, Topic},
+    swarm::NetworkBehaviourEventProcess,
+};
 
 /// A topic for all proposals in a network.
 pub const PROPOSALS_TOPIC: &str = "proposals";
@@ -31,7 +34,7 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior {
                 }
 
                 // If the message is a proposal message, handle it as such
-                if message.topics[0] == *TopicBuilder::new(PROPOSALS_TOPIC).build().hash() {
+                if message.topics[0] == *Topic::new(PROPOSALS_TOPIC).hash() {
                     // Try to deserialize a proposal from the provided message data. If this fails, we'll want to print the error to stderr.
                     let proposal: Proposal = match bincode::deserialize(&message.data) {
                         Ok(deserialized) => deserialized,
