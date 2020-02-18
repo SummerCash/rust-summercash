@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 use super::super::super::crypto::hash; // Import the hash primitive
 use super::super::types::signature; // Import the signature primitive
 
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+};
+
 /// A binary, signed vote regarding a particular proposal.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Vote {
@@ -43,5 +48,34 @@ impl Vote {
         }
 
         vote // Return initialized vote
+    }
+}
+
+impl fmt::Display for Vote {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // If the vote is in favor, express such an agreement as a string by saying "in favor of
+        // prop"
+        write!(
+            f,
+            "{}",
+            if self.in_favor {
+                format!("in favor of proposal {}", self.target_proposal)
+            } else {
+                format!("in opposition to proposal {}", self.target_proposal)
+            }
+        )
+    }
+}
+
+impl Hash for Vote {
+    /// Hashes the vote using the stdlib hasher.
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Copy and remove the signature from the vote; this will preserve its original contents
+        let mut to_be_hashed = self.clone();
+        to_be_hashed.signature = None;
+
+        // Hash the contents of the vote
+        self.target_proposal.hash(state);
+        self.in_favor.hash(state);
     }
 }

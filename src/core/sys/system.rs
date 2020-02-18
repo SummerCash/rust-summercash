@@ -11,7 +11,7 @@ use num::bigint; // Add support for large unsigned integers
 
 use super::{
     super::{
-        super::crypto::hash::Hash,
+        super::{common::address::Address, crypto::hash::Hash},
         types::{graph::Graph, transaction::Transaction},
     },
     config,
@@ -71,6 +71,9 @@ pub struct System {
     /// The number of votes in favor of each proposal
     votes: HashMap<Hash, i128>,
 
+    /// Whether or not a user has voted for a particular proposal
+    voted: HashMap<Hash, HashMap<Address, bool>>,
+
     /// Whether or not new proposals have been added to the system
     new_tx_ctx: Arc<AtomicBool>,
 }
@@ -88,6 +91,7 @@ impl System {
             localized_proposals: HashMap::new(), // a set of proposals that have been registered, but not yet published
             ledger: Graph::read_partial_from_disk(network_name), // Set ledger
             new_tx_ctx: Arc::new(AtomicBool::new(false)),
+            voted: HashMap::new(),
             votes: HashMap::new(),
         } // Return initialized system
     }
@@ -103,6 +107,7 @@ impl System {
             localized_proposals: HashMap::new(),
             ledger: Graph::read_partial_from_disk_with_data_dir(data_dir, network_name),
             new_tx_ctx: Arc::new(AtomicBool::new(false)),
+            voted: HashMap::new(),
             votes: HashMap::new(),
         }
     }
@@ -169,11 +174,40 @@ impl System {
     ) -> Result<(), ExecutionError> {
         // Ensure that the proposal exists in the runtime
         if self.pending_proposals.contains_key(&proposal_id) {
-            // Since the proposal is pending, we can submit this vote for it
-            match vote.in_favor {
-                true => *self.votes.entry(proposal_id).or_insert(0) += 1,
-                false => *self.votes.entry(proposal_id).or_insert(0) -= 1,
+            let sig = if let Some(sig) = vote.signature {
+                sig
+            } else {
+                return Err(ExecutionError::Miscellaneous {
+                    error: "vote signature is nil".to_owned(),
+                });
             };
+
+            // The signature must be valid
+            if !sig.verify(vote) {
+                return Err(ExecutionError::Miscellaneous {
+                    error: "vote signature is invalid",
+                });
+            }
+
+            // Try to get a public key from the vote's signature. If there is no public key
+            // associated with the signature, it must be invalid.
+            if let Some(public_key) = sig.public_key() {
+                // Get the set of users that have voted for the proposal so that we can ensure
+                // this person isn't voting twice
+                if let Some(voters) = self.voted.get(proposal_id).or_insert(HashMap::new()) {
+                    // Make sure this voter is unique
+                    if !voters.contains_key(Address::from_public_key(&public_key)) {
+                        // We've voted now
+                        voters.put(Address::from_public_key(&public_key), true);
+
+                        // Since the proposal is pending, we can submit this vote for it
+                        match vote.in_favor {
+                            true => *self.votes.entry(proposal_id).or_insert(0) += 1,
+                            false => *self.votes.entry(proposal_id).or_insert(0) -= 1,
+                        };
+                    }
+                }
+            }
 
             Ok(())
         } else {
