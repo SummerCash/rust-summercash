@@ -182,31 +182,35 @@ impl System {
                 });
             };
 
-            // The signature must be valid
-            if !sig.verify(vote) {
-                return Err(ExecutionError::Miscellaneous {
-                    error: "vote signature is invalid",
-                });
-            }
-
             // Try to get a public key from the vote's signature. If there is no public key
             // associated with the signature, it must be invalid.
-            if let Some(public_key) = sig.public_key() {
+            if let Ok(public_key) = sig.public_key() {
+                // The signature must be valid
+                if !vote.valid() {
+                    return Err(ExecutionError::Miscellaneous {
+                        error: "vote signature is invalid".to_owned(),
+                    });
+                }
+
                 // Get the set of users that have voted for the proposal so that we can ensure
                 // this person isn't voting twice
-                if let Some(voters) = self.voted.get(proposal_id).or_insert(HashMap::new()) {
-                    // Make sure this voter is unique
-                    if !voters.contains_key(Address::from_public_key(&public_key)) {
-                        // We've voted now
-                        voters.put(Address::from_public_key(&public_key), true);
+                let voters = self.voted.entry(proposal_id).or_insert(HashMap::new());
 
-                        // Since the proposal is pending, we can submit this vote for it
-                        match vote.in_favor {
-                            true => *self.votes.entry(proposal_id).or_insert(0) += 1,
-                            false => *self.votes.entry(proposal_id).or_insert(0) -= 1,
-                        };
-                    }
+                // Make sure this voter is unique
+                if !voters.contains_key(&Address::from_public_key(&public_key)) {
+                    // We've voted now
+                    voters.insert(Address::from_public_key(&public_key), true);
+
+                    // Since the proposal is pending, we can submit this vote for it
+                    match vote.in_favor {
+                        true => *self.votes.entry(proposal_id).or_insert(0) += 1,
+                        false => *self.votes.entry(proposal_id).or_insert(0) -= 1,
+                    };
                 }
+            } else {
+                return Err(ExecutionError::Miscellaneous {
+                    error: "vote signature public key is nil".to_owned(),
+                });
             }
 
             Ok(())

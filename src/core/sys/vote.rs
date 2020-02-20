@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize}; // Import serde serialization
 use super::super::super::crypto::hash; // Import the hash primitive
 use super::super::types::signature; // Import the signature primitive
 
+use blake3::Hasher as BlakeHasher;
 use std::{
     fmt,
     hash::{Hash, Hasher},
@@ -41,13 +42,27 @@ impl Vote {
             vote.signature = Some(signature::Signature {
                 public_key_bytes: bincode::serialize(&signature_keypair.public).unwrap_or_default(),
                 signature_bytes: bincode::serialize(
-                    &signature_keypair.sign(serialized_vote.as_slice()),
+                    &signature_keypair.sign(vote.hash(&mut BlakeHasher::new())),
                 )
                 .unwrap_or_default(),
             }); // Set signature
         }
 
         vote // Return initialized vote
+    }
+
+    /// Ensures that the signature associated with the vote is authentic.
+    pub fn valid(&self) -> bool {
+        // Ensure that the vote has a signature attached to it
+        let sig = if let Some(signature) = self.signature {
+            signature
+        } else {
+            // The vote must be invalid, since it doesn't even have a signature
+            return false;
+        };
+
+        // Ensure that the signature is valid, considering the vote's hash
+        sig.verify(self.hash())
     }
 }
 
