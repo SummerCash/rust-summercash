@@ -7,7 +7,5 @@ COPY ./ ./
 # Build and optimize the SummerCash source
 RUN cargo build --release
 
-# Install the smcd and smcli commands
-RUN cargo install --path .
-
-ENTRYPOINT smcd
+# Run SMCd
+ENTRYPOINT ["./target/release/smcd"]
