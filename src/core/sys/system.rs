@@ -142,10 +142,10 @@ impl System {
     /// # Arguments
     ///
     /// * `proposal_id` - The hash of the proposal that should be proposed
-    pub fn propose_proposal(&mut self, proposal_id: Hash) -> Result<(), ExecutionError> {
+    pub fn propose_proposal(&mut self, proposal_id: &Hash) -> Result<(), ExecutionError> {
         // Ensure that the proposal exists. Otherwise, return a suitable error
-        if let Some(prop) = self.localized_proposals.remove(&proposal_id) {
-            self.pending_proposals.insert(proposal_id, prop);
+        if let Some(prop) = self.localized_proposals.remove(proposal_id) {
+            self.pending_proposals.insert(*proposal_id, prop);
 
             Ok(())
         } else {
@@ -170,11 +170,12 @@ impl System {
     pub fn register_vote_for_proposal(
         &mut self,
         proposal_id: Hash,
-        vote: Vote,
+        mut vote: Vote,
     ) -> Result<(), ExecutionError> {
         // Ensure that the proposal exists in the runtime
         if self.pending_proposals.contains_key(&proposal_id) {
-            let sig = if let Some(sig) = vote.signature {
+            // The vote must have a signature in order to be registered
+            let sig = if let Some(sig) = vote.signature.take() {
                 sig
             } else {
                 return Err(ExecutionError::Miscellaneous {
@@ -194,18 +195,19 @@ impl System {
 
                 // Get the set of users that have voted for the proposal so that we can ensure
                 // this person isn't voting twice
-                let voters = self.voted.entry(proposal_id).or_insert(HashMap::new());
+                let voters = self.voted.entry(proposal_id).or_insert_with(HashMap::new);
 
-                // Make sure this voter is unique
-                if !voters.contains_key(&Address::from_public_key(&public_key)) {
+                // Ensure the voter is unique
+                let has_voted = voters
+                    .entry(Address::from_public_key(&public_key))
+                    .or_insert(false);
+
+                if !*has_voted {
                     // We've voted now
-                    voters.insert(Address::from_public_key(&public_key), true);
+                    *has_voted = true;
 
-                    // Since the proposal is pending, we can submit this vote for it
-                    match vote.in_favor {
-                        true => *self.votes.entry(proposal_id).or_insert(0) += 1,
-                        false => *self.votes.entry(proposal_id).or_insert(0) -= 1,
-                    };
+                    *self.votes.entry(proposal_id).or_insert(0) +=
+                        if vote.in_favor { 1 } else { -1 };
                 }
             } else {
                 return Err(ExecutionError::Miscellaneous {

@@ -3,14 +3,13 @@ use ed25519_dalek; // Import the edwards25519 digital signature library
 use bincode; // Import serde bincode
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::crypto::hash; // Import the hash primitive
+use super::super::super::crypto::{
+    blake3,
+    hash::{self, Hash as HashPrim},
+}; // Import the hash primitive
 use super::super::types::signature; // Import the signature primitive
 
-use blake3::Hasher as BlakeHasher;
-use std::{
-    fmt,
-    hash::{Hash, Hasher},
-};
+use std::fmt;
 
 /// A binary, signed vote regarding a particular proposal.
 #[derive(Serialize, Deserialize, Clone)]
@@ -37,16 +36,12 @@ impl Vote {
             signature: None,              // No signature yet
         }; // Initialize vote
 
-        if let Ok(serialized_vote) = bincode::serialize(&vote) {
-            // Serialize vote
-            vote.signature = Some(signature::Signature {
-                public_key_bytes: bincode::serialize(&signature_keypair.public).unwrap_or_default(),
-                signature_bytes: bincode::serialize(
-                    &signature_keypair.sign(vote.hash(&mut BlakeHasher::new())),
-                )
+        // Serialize vote
+        vote.signature = Some(signature::Signature {
+            public_key_bytes: bincode::serialize(&signature_keypair.public).unwrap_or_default(),
+            signature_bytes: bincode::serialize(&signature_keypair.sign(&*vote.hash()))
                 .unwrap_or_default(),
-            }); // Set signature
-        }
+        }); // Set signature
 
         vote // Return initialized vote
     }
@@ -54,7 +49,7 @@ impl Vote {
     /// Ensures that the signature associated with the vote is authentic.
     pub fn valid(&self) -> bool {
         // Ensure that the vote has a signature attached to it
-        let sig = if let Some(signature) = self.signature {
+        let sig = if let Some(signature) = &self.signature {
             signature
         } else {
             // The vote must be invalid, since it doesn't even have a signature
@@ -62,7 +57,17 @@ impl Vote {
         };
 
         // Ensure that the signature is valid, considering the vote's hash
-        sig.verify(self.hash())
+        sig.verify(&*self.hash())
+    }
+
+    /// Hashes the contents of the vote, excluding any signature.
+    pub fn hash(&self) -> HashPrim {
+        // Copy the vote since we need to remove the signature from it to ensure validity
+        let mut to_be_hashed = self.clone();
+        to_be_hashed.signature = None;
+
+        // Hash the vote's contents
+        self::blake3::hash_slice(&bincode::serialize(&to_be_hashed).unwrap_or_default())
     }
 }
 
@@ -79,18 +84,5 @@ impl fmt::Display for Vote {
                 format!("in opposition to proposal {}", self.target_proposal)
             }
         )
-    }
-}
-
-impl Hash for Vote {
-    /// Hashes the vote using the stdlib hasher.
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // Copy and remove the signature from the vote; this will preserve its original contents
-        let mut to_be_hashed = self.clone();
-        to_be_hashed.signature = None;
-
-        // Hash the contents of the vote
-        self.target_proposal.hash(state);
-        self.in_favor.hash(state);
     }
 }

@@ -40,10 +40,7 @@ use libp2p::{
 }; // Import the libp2p library
 
 // We need these traits from the futures library in order to build a swarm.
-use futures::{
-    future,
-    io::{AsyncRead, AsyncWrite},
-};
+use futures::future;
 
 use async_std::task;
 
@@ -222,7 +219,7 @@ impl ClientBehavior {
 
     /// Checks whether or not the proposal queue contains any new unpublished proposals.
     pub fn transaction_queue_is_empty(&self) -> bool {
-        self.proposal_queue.empty.load(Ordering::SeqCst)
+        self.proposal_queue_empty.load(Ordering::SeqCst)
     }
 
     /// Checks the transaction queue for any unpublished proposals, and publishes any applicable
@@ -248,17 +245,20 @@ impl ClientBehavior {
             rt.localized_proposals.len()
         );
 
+        // Get the list of proposals that haven't been published yet
+        let unpublished_proposals = rt.localized_proposals.clone();
+
         // Publish each proposal
-        for (i, prop) in rt.localized_proposals.iter().enumerate() {
+        for (i, (id, prop)) in unpublished_proposals.into_iter().enumerate() {
             // Try to serialize the proposal. If this succeeds, we can try to publish the
             // proposal.
             if let Ok(ser) = bincode::serialize(&prop) {
                 // We've got a serialized proposal; publish it
                 self.gossipsub
-                    .publish(&Topic::new(floodsub::PROPOSALS_TOPIC.to_owned), ser);
+                    .publish(Topic::new(floodsub::PROPOSALS_TOPIC.to_owned()), ser);
 
                 // Propose the proposal
-                match rt.propose_proposal(prop.proposal_id) {
+                match rt.propose_proposal(&id) {
                     Ok(_) => info!("Successfully proposed proposal {}: {}", i, prop.proposal_id),
                     Err(e) => warn!("Failed to propose proposal {}: {}", prop.proposal_id, e),
                 }
@@ -380,11 +380,11 @@ impl Into<String> for &Client {
         let mut accounts_string = String::new();
 
         // Get a list of accounts that we can use to vote with
-        let voting_accounts = self.voting_accounts.clone().unwrap_or(Vec::new());
+        let voting_accounts = self.voting_accounts.clone().unwrap_or_default();
 
         // Iterate through the accounts in the client configuration
-        for i in 0..voting_accounts.len() {
-            if let Ok(addr) = voting_accounts[i].address() {
+        for (i, voting_account) in voting_accounts.into_iter().enumerate() {
+            if let Ok(addr) = voting_account.address() {
                 // Ensure that the account can be used to vote, and isn't a duplicate
                 if addr != blake3::hash_slice(b"p2p_identity") {
                     accounts_string += &format!(

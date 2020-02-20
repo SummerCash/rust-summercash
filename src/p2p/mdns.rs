@@ -1,11 +1,8 @@
 use super::client::ClientBehavior;
-use futures::{AsyncRead, AsyncWrite};
 use libp2p::{mdns::MdnsEvent, swarm::NetworkBehaviourEventProcess};
 
 /// Discovery via mDNS events.
-impl
-    NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior
-{
+impl NetworkBehaviourEventProcess<MdnsEvent> for ClientBehavior {
     /// Wait for an incoming mDNS message from a potential peer. Add them to the local registry if the connection succeeds.
     fn inject_event(&mut self, event: MdnsEvent) {
         match event {

@@ -58,7 +58,7 @@ impl<'a> GraphBoundValidator<'a> {
     /// * `graph` - The graph to which validation will be bound.
     pub fn new(graph: &'a Graph) -> Self {
         // Make a new validator
-        Self { graph: graph }
+        Self { graph }
     }
 
     /// Checks whether or not the transaction already eists in the graph.
@@ -163,7 +163,7 @@ impl<'a> GraphBoundValidator<'a> {
         }
 
         // If the sender doesn't have any SMC, they can't send any. Therefore, the value of the transaction must be zero.
-        return tx.transaction_data.value == BigUint::default();
+        tx.transaction_data.value == BigUint::default()
     }
 }
 

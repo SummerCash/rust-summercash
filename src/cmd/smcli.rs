@@ -177,7 +177,7 @@ async fn get(opts: Opts, g: Get) -> Result<(), failure::Error> {
                 Ok(nodes) => {
                     info!("{}Loaded the DAG successfully!", Emoji::new("⛓️ ", ""));
 
-                    if nodes.len() != 0 {
+                    if nodes.is_empty() {
                         // Print out each of the nodes
                         for node in nodes {
                             println!("{}", serde_json::to_string_pretty(&node)?);

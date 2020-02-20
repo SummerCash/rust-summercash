@@ -10,7 +10,6 @@ use super::{
     sync,
 };
 
-use futures::{AsyncRead, AsyncWrite};
 use libp2p::{
     kad::{
         record::{Key, Record},
@@ -21,9 +20,7 @@ use libp2p::{
 
 /// Network synchronization via KAD DHT events.
 /// Synchronization of network proposals, for example, is done in this manner.
-impl
-    NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior
-{
+impl NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior {
     // Wait for a peer to send us a kademlia event message. Once this happens, we can try to use the message for something (e.g. synchronization).
     fn inject_event(&mut self, event: KademliaEvent) {
         match event {
@@ -68,9 +65,7 @@ impl
                                     } else {
                                         return;
                                     };
-
-                                // We're going to need to synchronize a copy of the next transaction; save the transaction's hash so that we can do this
-                                let hash = tx.hash.clone();
+                                let hash = tx.hash;
 
                                 // Try to get a lock on the runtime so we can put the tx in the database
                                 if let Ok(mut rt) = self.runtime.write() {
