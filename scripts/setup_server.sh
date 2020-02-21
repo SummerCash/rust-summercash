@@ -28,6 +28,9 @@ if ! [ hash apt 2>/dev/null ]; then
     # Install rust
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init.sh
     chmod +x rustup-init.sh && ./rustup-init.sh -y
+
+    # Add cargo to the PATH
+    source $HOME/.cargo/env
 fi
 
 # Compile the SummerCash soure code
