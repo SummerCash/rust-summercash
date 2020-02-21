@@ -75,7 +75,7 @@ pub struct DagImpl {
 impl Dag for DagImpl {
     /// Gets a list of nodes contained in the currently attached network's DAG.
     fn get(&self) -> Result<Vec<Node>> {
-        if let Ok(rt) = self.runtime.write() {
+        if let Ok(rt) = self.runtime.read() {
             // The finalized set of nodes contained in the DAG
             let mut collected_nodes: Vec<Node> = Vec::new();
 
