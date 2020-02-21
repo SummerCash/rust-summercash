@@ -26,7 +26,8 @@ git clone https://github.com/SummerCash/rust-summercash.git
 # Make sure rust is installed
 if ! [ -x "$(cargo)" ]; then
     # Install rust
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -y
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init.sh
+    chmod +x rustup-init.sh && ./rustup-init.sh -y
 fi
 
 # Compile the SummerCash soure code
