@@ -11,7 +11,7 @@ mkdir -p ~/rust/src/github.com/SummerCash && cd ~/rust/src/github.com/SummerCash
 # Make sure git is installed
 if hash apt 2>/dev/null; then
     echo "installing git via apt..."
-    sudo apt install git
+    sudo apt install git -y
 elif hash brew 2>/dev/null; then 
     echo "installing git via homebrew..."
     sudo brew install git
