@@ -20,7 +20,7 @@ if hash apt 2>/dev/null; then
     sudo apt-get install -y libssl-dev
 
     printf "\n== DEPS == installing pkgconfig..."
-    sudo apt-get instlal -y pkg-config
+    sudo apt-get install -y pkg-config
 elif hash brew 2>/dev/null; then 
     echo "== DEPS == installing git via homebrew..."
     sudo brew install git
