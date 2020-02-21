@@ -9,10 +9,10 @@ fi
 mkdir -p ~/rust/src/github.com/SummerCash && cd ~/rust/src/github.com/SummerCash
 
 # Make sure git is installed
-if [ -x "$(apt)" ]; then
+if hash apt 2>/dev/null; then
     echo "installing git via apt..."
     sudo apt install git
-elif [ -x "$(brew)" ]; then 
+elif hash brew 2>/dev/null; then 
     echo "installing git via homebrew..."
     sudo brew install git
 else
@@ -24,7 +24,7 @@ fi
 git clone https://github.com/SummerCash/rust-summercash.git
 
 # Make sure rust is installed
-if ! [ -x "$(cargo)" ]; then
+if ! [ hash apt 2>/dev/null ]; then
     # Install rust
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init.sh
     chmod +x rustup-init.sh && ./rustup-init.sh -y
