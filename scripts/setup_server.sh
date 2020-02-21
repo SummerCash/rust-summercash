@@ -13,13 +13,13 @@ if hash apt 2>/dev/null; then
     echo "== DEPS == installing git via apt..."
     sudo apt-get install -y git
 
-    echo "\n== DEPS == installing cc linker utils..."
+    printf "\n== DEPS == installing cc linker utils..."
     sudo apt-get install -y build-essential
 
-    echo "\n== DEPS == installing libssl..."
+    printf "\n== DEPS == installing libssl..."
     sudo apt-get install -y libssl-dev
 
-    echo "\n== DEPS == installing pkgconfig..."
+    printf "\n== DEPS == installing pkgconfig..."
     sudo apt-get instlal -y pkg-config
 elif hash brew 2>/dev/null; then 
     echo "== DEPS == installing git via homebrew..."
