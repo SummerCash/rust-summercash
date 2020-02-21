@@ -10,16 +10,19 @@ mkdir -p ~/rust/src/github.com/SummerCash && cd ~/rust/src/github.com/SummerCash
 
 # Make sure git is installed
 if hash apt 2>/dev/null; then
-    echo "installing git via apt..."
+    echo "== DEPS == installing git via apt..."
     sudo apt-get install -y git
 
-    echo "installing cc linker utils..."
+    echo "\n== DEPS == installing cc linker utils..."
     sudo apt-get install -y build-essential
 
-    echo "installing libssl..."
+    echo "\n== DEPS == installing libssl..."
     sudo apt-get install -y libssl-dev
+
+    echo "\n== DEPS == installing pkgconfig..."
+    sudo apt-get instlal -y pkg-config
 elif hash brew 2>/dev/null; then 
-    echo "installing git via homebrew..."
+    echo "== DEPS == installing git via homebrew..."
     sudo brew install git
 else
     echo "unable to install git :("
