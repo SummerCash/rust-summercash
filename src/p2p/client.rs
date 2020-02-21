@@ -743,7 +743,7 @@ impl Client {
 
                         // Poll the swarm
                         match swarm.poll_next_unpin(cx) {
-                            Poll::Ready(Some(_)) => (),
+                            Poll::Ready(Some(e)) => error!("{:?}", e),
                             Poll::Ready(None) => return Poll::Ready(Ok(())),
                             Poll::Pending => {
                                 if !listening {
