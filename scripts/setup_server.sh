@@ -70,5 +70,7 @@ WantedBy=multi-user.target" > /etc/systemd/system/smcd.service
 
 echo -e "\n== SERVICE == Starting smcd..."
 
+sudo chown -R $(whoami) $HOME/rust
+
 # Start the SummerCash daemon
 sudo systemctl daemon-reload && sudo systemctl start smcd
