@@ -79,11 +79,16 @@ impl Dag for DagImpl {
             // The finalized set of nodes contained in the DAG
             let mut collected_nodes: Vec<Node> = Vec::new();
 
+            debug!("Collecting {} nodes in the DAG", rt.ledger.nodes.len());
+
             // Iterate through each of the nodes in the graph, and purely obtain the full representation of such nodes
             for i in 0..rt.ledger.nodes.len() {
                 match rt.ledger.get_pure(i) {
                     Ok(Some(node)) => collected_nodes.push(node.clone()),
-                    Ok(None) | Err(_) => continue,
+                    Ok(None) | Err(_) => {
+                        debug!("Skipping node {}", i);
+                        continue;
+                    }
                 };
             }
 
