@@ -17,7 +17,7 @@ failure = "0.1.6"
 sled = "0.30.3"
 path-clean = "0.1.0"
 bincode = "1.2.1"
-libp2p = "0.16.0"
+libp2p = "0.16.1"
 walkdir = "2"
 futures = { version = "0.3.1", features = ["default", "compat"] }
 tokio = { version = "0.2.9", features = ["full"] }
