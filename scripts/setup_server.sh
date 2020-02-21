@@ -10,9 +10,14 @@ mkdir -p ~/rust/src/github.com/SummerCash && cd ~/rust/src/github.com/SummerCash
 
 # Make sure git is installed
 if [ -x "$(apt)" ]; then
-    sudo apt-get install git
-elif [ -x "$(brew)" ]; then
+    echo "installing git via apt..."
+    sudo apt install git
+elif [ -x "$(brew)" ]; then 
+    echo "installing git via homebrew..."
     sudo brew install git
+else
+    echo "unable to install git :("
+    exit
 fi
 
 # Download the rust-summercash source code
