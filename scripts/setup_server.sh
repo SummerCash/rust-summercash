@@ -34,7 +34,7 @@ if ! [ hash apt 2>/dev/null ]; then
 fi
 
 # Compile the SummerCash soure code
-cargo build --release
+cd rust-summercash && cargo build --release
 
 # Create a systemd service file for the SummerCash daemon
 sudo touch /etc/systemd/system/smcd.service
