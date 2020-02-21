@@ -14,7 +14,7 @@ if hash apt 2>/dev/null; then
     sudo apt-get install -y git
 
     echo "installing cc linker utils..."
-    sudo apt install -y build-essential
+    sudo apt-get install -y build-essential
 elif hash brew 2>/dev/null; then 
     echo "installing git via homebrew..."
     sudo brew install git
