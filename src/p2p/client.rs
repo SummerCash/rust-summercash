@@ -729,9 +729,11 @@ impl Client {
                     loop {
                         // if we haven't completely publicized the DAG info, start publishing
                         if swarm.should_broadcast_dag {
-                            swarm.publish_dag();
-
                             swarm.should_broadcast_dag = false;
+
+                            debug!("Broadcasting a copy of the DAG to the network...");
+
+                            swarm.publish_dag();
                         }
 
                         // If there are transactions that we should be publishing, do just that
