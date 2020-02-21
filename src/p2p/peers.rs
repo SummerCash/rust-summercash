@@ -8,8 +8,8 @@ pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<(PeerId, Mu
     match network {
         // We're trying to sync to the main SummerCash network
         network::Network::MainNetwork => vec![(
-            get_peer_id("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"),
-            get_multiaddr("/ip4/108.41.124.60/tcp/2048"),
+            get_peer_id("QmUGGG7T5AicmMUjUTay3wT7jRPwfhrjM1e8W8i1DZXjBg"),
+            get_multiaddr("/ip4/35.224.25.40/tcp/2048"),
         )],
         // This time to the public test network
         network::Network::PublicTestNetwork => vec![(
