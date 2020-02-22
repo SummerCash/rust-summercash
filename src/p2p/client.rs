@@ -30,12 +30,14 @@ use std::{
 use libp2p::{
     floodsub::{Floodsub, Topic},
     futures::StreamExt,
+    identify::Identify,
     identity, kad,
     kad::{
         record::{store::MemoryStore, Key},
         Kademlia, KademliaConfig, Quorum, Record,
     },
     mdns::Mdns,
+    ping::Ping,
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -163,21 +165,27 @@ impl<T> From<std::sync::PoisonError<T>> for CommunicationError {
 #[derive(NetworkBehaviour)]
 pub struct ClientBehavior {
     /// Some pubsub mechanism bound to the above transport
-    pub gossipsub: Floodsub,
+    pub(crate) gossipsub: Floodsub,
 
     /// Some mDNS service bound to the above transport
-    pub mdns: Mdns,
+    pub(crate) mdns: Mdns,
 
     /// Allow for the client to do some external discovery on the global network through a KAD DHT
-    pub kad_dht: Kademlia<MemoryStore>,
+    pub(crate) kad_dht: Kademlia<MemoryStore>,
+
+    /// Allow the client to maintain connections with each of its peers
+    pub(crate) pinger: Ping,
+
+    /// Allow the client to inform its peers of its identity
+    pub(crate) identification: Identify,
 
     /// Allow for a state to be maintained inside the client behavior
     #[behaviour(ignore)]
-    pub runtime: Arc<RwLock<System>>,
+    pub(crate) runtime: Arc<RwLock<System>>,
 
     /// The accounts that the client will use to vote on proposals
     #[behaviour(ignore)]
-    pub voting_accounts: Vec<Account>,
+    pub(crate) voting_accounts: Vec<Account>,
 
     /// Whether or not the client has completed its publishing process
     #[behaviour(ignore)]
@@ -656,6 +664,7 @@ impl Client {
             gossipsub: sub,
             mdns: Mdns::new()?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
+            identification: Identify::new(format!("{}", self.network), config::NODE_VERSION, ,
             runtime: self.runtime.clone(),
             voting_accounts: accounts,
             should_broadcast_dag: false,
@@ -743,7 +752,7 @@ impl Client {
 
                         // Poll the swarm
                         match swarm.poll_next_unpin(cx) {
-                            Poll::Ready(Some(e)) => deubg!("{:?}", e),
+                            Poll::Ready(Some(e)) => debug!("{:?}", e),
                             Poll::Ready(None) => return Poll::Ready(Ok(())),
                             Poll::Pending => {
                                 if !listening {
