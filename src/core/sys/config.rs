@@ -75,17 +75,16 @@ impl Config {
 /// # Examples
 ///
 /// ```
-/// // The current version of the node
-/// let current_version = summercash::core::sys::config;
+/// use summercash::core::sys::config;
 ///
-/// assert_eq!!(is_compatible_with_client(config::NODE_VERSION), true);
+/// assert_eq!(config::is_compatible_with_client(config::NODE_VERSION), true);
 /// ```
 pub fn is_compatible_with_client(agent_version: &str) -> bool {
     // Remove the last, "minor" / patch parts of the version numbers, since they don't matter that
     // much
     let breaking_version_parts = (
-        &NODE_VERSION.split(".").collect::<Vec<&str>>()[..2],
-        &agent_version.split(".").collect::<Vec<&str>>()[..2],
+        &NODE_VERSION.split('.').collect::<Vec<&str>>()[..2],
+        &agent_version.split('.').collect::<Vec<&str>>()[..2],
     );
 
     // Each of the nodes must have the same version numbers, excluding the final characters, in
@@ -121,5 +120,8 @@ mod tests {
         let read_config = Config::read_from_disk("olympia").unwrap(); // Read config
         assert_eq!(read_config.reward_per_gas, config.reward_per_gas); // Ensure deserialized correctly
         assert_eq!(read_config.network_name, config.network_name); // Ensure deserialized correctly
+
+        // Delete the test config file
+        fs::remove_file(common::io::format_config_dir("network_olympia.json")).unwrap();
     }
 }
