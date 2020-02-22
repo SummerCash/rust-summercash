@@ -47,6 +47,21 @@ impl Vote {
     }
 
     /// Ensures that the signature associated with the vote is authentic.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use summercash::{core::sys::vote::{self, Vote}, crypto::blake3, accounts::account::Account};
+    /// # use std::error::Error;
+    ///
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// let acc: Account = Account::new();
+    /// let v: Vote = Vote::new(blake3::hash_slice(b"test"), true, acc.keypair()?);
+    ///
+    /// assert_eq!(v.valid(), true);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn valid(&self) -> bool {
         // Ensure that the vote has a signature attached to it
         let sig = if let Some(signature) = &self.signature {

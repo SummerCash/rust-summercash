@@ -187,7 +187,7 @@ impl System {
             // associated with the signature, it must be invalid.
             if let Ok(public_key) = sig.public_key() {
                 // The signature must be valid
-                if !vote.valid() {
+                if !sig.verify(&*vote.hash()) {
                     return Err(ExecutionError::Miscellaneous {
                         error: "vote signature is invalid".to_owned(),
                     });

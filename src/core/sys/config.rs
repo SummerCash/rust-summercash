@@ -102,10 +102,13 @@ mod tests {
     fn test_write_to_disk() {
         let config = Config {
             reward_per_gas: BigUint::from_str("10000000000000000000000000000000000000000").unwrap(), // Venezuela style
-            network_name: "olympia".to_owned(),
+            network_name: "olympia1".to_owned(),
         }; // Initialize network config
 
         config.write_to_disk().unwrap(); // Panic if not Ok()
+
+        // Delete the test config file
+        fs::remove_file(common::io::format_config_dir("network_olympia1.json")).unwrap();
     }
 
     #[test]
