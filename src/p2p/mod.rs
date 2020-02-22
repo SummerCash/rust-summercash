@@ -1,6 +1,7 @@
 pub mod client; // Export the client module
 mod floodsub;
 mod kademlia;
+mod liveliness;
 mod mdns;
 pub mod message; // Export the message module
 pub mod network; // Export the network module

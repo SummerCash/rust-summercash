@@ -664,7 +664,12 @@ impl Client {
             gossipsub: sub,
             mdns: Mdns::new()?,
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
-            identification: Identify::new(format!("{}", self.network), config::NODE_VERSION, ,
+            identification: Identify::new(
+                format!("{}", self.network),
+                config::NODE_VERSION,
+                self.keypair.public(),
+            ),
+            pinger: Ping::new(PingConfig::new()),
             runtime: self.runtime.clone(),
             voting_accounts: accounts,
             should_broadcast_dag: false,
