@@ -185,11 +185,9 @@ impl Transaction {
     pub fn verify_signature(&self) -> bool {
         match &self.signature {
             None => {
-                warn!("asdfsfsdaf");
                 false
             } // Nil signature can't be valid
             Some(signature) => {
-                warn!("test");
                 signature.verify_tx(self)
             } // Verify signature
         }
