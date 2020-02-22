@@ -198,7 +198,7 @@ pub struct ClientBehavior {
     /// Whether or not the transaction queue contains proposals that have not yet been evaluated or
     /// published
     #[behaviour(ignore)]
-    proposal_queue_empty: Arc<AtomicBool>,
+    proposal_queue_full: Arc<AtomicBool>,
 }
 
 impl ClientBehavior {
@@ -237,7 +237,7 @@ impl ClientBehavior {
 
     /// Checks whether or not the proposal queue contains any new unpublished proposals.
     pub fn transaction_queue_is_empty(&self) -> bool {
-        self.proposal_queue_empty.load(Ordering::SeqCst)
+        !self.proposal_queue_full.load(Ordering::SeqCst)
     }
 
     /// Checks the transaction queue for any unpublished proposals, and publishes any applicable
@@ -684,7 +684,7 @@ impl Client {
             runtime: self.runtime.clone(),
             voting_accounts: accounts,
             should_broadcast_dag: false,
-            proposal_queue_empty: if let Ok(rt) = self.runtime.read() {
+            proposal_queue_full: if let Ok(rt) = self.runtime.read() {
                 rt.get_state_ref()
             } else {
                 Arc::new(AtomicBool::new(false))

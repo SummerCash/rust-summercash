@@ -16,11 +16,15 @@ impl NetworkBehaviourEventProcess<IdentifyEvent> for ClientBehavior {
                 if <Network as From<String>>::from(info.protocol_version) != self.network
                     || !config::is_compatible_with_client(&info.agent_version)
                 {
+                    debug!("Peer {} is incompatible; removing from the Swarm", peer_id);
+
                     // Remove the peer from the client's perspective
                     self.remove_address(&peer_id);
 
                     return;
                 }
+
+                debug!("Discovered a new peer to add to the swarm: {}", peer_id);
 
                 // Since the node is compatible, we can register them in each of our local views of
                 // the network

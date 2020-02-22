@@ -33,6 +33,8 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior {
 
             // If the message is a proposal message, handle it as such
             if message.topics[0].id() == PROPOSALS_TOPIC {
+                debug!("Message is a proposal message; handling it as such");
+
                 // Try to deserialize a proposal from the provided message data. If this fails, we'll want to print the error to stderr.
                 let proposal: Proposal = match bincode::deserialize(&message.data) {
                     Ok(deserialized) => deserialized,
