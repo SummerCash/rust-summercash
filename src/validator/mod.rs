@@ -80,15 +80,22 @@ impl<'a> GraphBoundValidator<'a> {
     fn transaction_is_head(&self, tx: &Transaction) -> (bool, Hash) {
         // Get all of the parents that the transaction relies on
         for i in 0..tx.transaction_data.parents.len() {
-            // Check that the parent exists. If it doesen't, return false.
-            if let Ok(Some(parent)) = self.graph.get_pure(i) {
-                // The parent node shouldn't have already been resolved. The transaction is, thus, invalid.
-                if parent.state_entry.is_some() {
-                    return (false, parent.hash);
+            // The hash of the parental node
+            let parent = tx.transaction_data.parents[i];
+
+            // If we know what the index of this parent transaction is in the state graph, we can
+            // try to pull out a fully-formed state matching this parent transaction
+            if let Some(parent_index) = self.graph.hash_routes.get(&parent) {
+                // Check that the parent exists. If it doesen't, return false.
+                if let Ok(Some(parent)) = self.graph.get_pure(*parent_index) {
+                    // The parent node shouldn't have already been resolved. The transaction is, thus, invalid.
+                    if parent.state_entry.is_some() {
+                        return (false, parent.hash);
+                    }
+                } else {
+                    // Since the transaction's parents don't exist, the tx isn't valid
+                    return (false, Hash::new("NILPARENT".to_owned().into_bytes()));
                 }
-            } else {
-                // Since the transaction's parents don't exist, the tx isn't valid
-                return (false, Hash::new("NILPARENT".to_owned().into_bytes()));
             }
         }
 
