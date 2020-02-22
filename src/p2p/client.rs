@@ -245,7 +245,7 @@ impl ClientBehavior {
     pub fn clear_transaction_queue(&mut self) {
         // We should only go through with publishing the items contained in the transaction queue
         // if the queue actually contains something
-        if !self.proposal_queue_empty.load(Ordering::SeqCst) {
+        if self.transaction_queue_is_empty() {
             return;
         }
 

@@ -139,12 +139,13 @@ impl Hash {
     /// let hash = hash::Hash::new(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]); // [0, 1...] (values after index of 32 trimmed)
     /// ```
     pub fn new(b: Vec<u8>) -> Hash {
+        // If the hash isn't big enough to fit into the buffer, just return a zero-value hash
+        if b.len() != HASH_SIZE {
+            return Default::default();
+        }
+
         let mut buffer: Hash = Hash([0; HASH_SIZE]); // Initialize hash buffer
-
-        let mut modifiable_b: Vec<u8> = b; // Get local scope b value
-        modifiable_b.truncate(HASH_SIZE); // Trim past index 32
-
-        buffer.copy_from_slice(modifiable_b.as_slice()); // Copy contents of vec into buffer
+        buffer.copy_from_slice(b.as_slice()); // Copy contents of vec into buffer
 
         buffer // Return contents of buffer
     }
