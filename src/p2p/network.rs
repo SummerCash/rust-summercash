@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize}; // Import serde serialization
+use std::{cmp::PartialEq, fmt};
 
 /// The main SummerCash network name.
 pub static MAIN_NETWORK_NAME: &str = "andromeda";
@@ -13,14 +14,17 @@ pub static DEV_TEST_NETWORK_NAME: &str = "virgo";
 pub static LOCAL_TEST_NETWORK_NAME: &str = "olympia";
 
 /// A SummerCash network.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum Network {
     /// The main SummerCash network.
     MainNetwork,
+
     /// The stable public SummerCash test network.
     PublicTestNetwork,
+
     /// The bleeding-edge SummerCash network name.
     DevTestNetwork,
+
     /// The local SummerCash test network name.
     LocalTestNetwork,
 }
@@ -35,6 +39,12 @@ impl Network {
             Network::DevTestNetwork => DEV_TEST_NETWORK_NAME,
             Network::LocalTestNetwork => LOCAL_TEST_NETWORK_NAME,
         } // Handle different networks
+    }
+}
+
+impl fmt::Display for Network {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", <Self as Into<String>>::into(*self))
     }
 }
 

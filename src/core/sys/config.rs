@@ -64,6 +64,35 @@ impl Config {
     }
 }
 
+/// Checks whether or not the two clients are within an acceptable version range of each other in
+/// order to maintain compatibility.
+///
+/// # Arguments
+///
+/// * `agent_version` - The version number associated with the client to which compatibility of the
+/// current node should be assessed
+///
+/// # Examples
+///
+/// ```
+/// // The current version of the node
+/// let current_version = summercash::core::sys::config;
+///
+/// assert_eq!!(is_compatible_with_client(config::NODE_VERSION), true);
+/// ```
+pub fn is_compatible_with_client(agent_version: &str) -> bool {
+    // Remove the last, "minor" / patch parts of the version numbers, since they don't matter that
+    // much
+    let breaking_version_parts = (
+        &NODE_VERSION.split(".").collect::<Vec<&str>>()[..2],
+        &agent_version.split(".").collect::<Vec<&str>>()[..2],
+    );
+
+    // Each of the nodes must have the same version numbers, excluding the final characters, in
+    // order to be the same
+    breaking_version_parts.0 == breaking_version_parts.1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*; // Import names from parent module

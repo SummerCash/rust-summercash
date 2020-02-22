@@ -37,7 +37,7 @@ use libp2p::{
         Kademlia, KademliaConfig, Quorum, Record,
     },
     mdns::Mdns,
-    ping::Ping,
+    ping::{Ping, PingConfig},
     Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
 }; // Import the libp2p library
 
@@ -191,6 +191,10 @@ pub struct ClientBehavior {
     #[behaviour(ignore)]
     pub(crate) should_broadcast_dag: bool,
 
+    /// The newtork that the behavior should be listening on
+    #[behaviour(ignore)]
+    pub(crate) network: Network,
+
     /// Whether or not the transaction queue contains proposals that have not yet been evaluated or
     /// published
     #[behaviour(ignore)]
@@ -199,12 +203,18 @@ pub struct ClientBehavior {
 
 impl ClientBehavior {
     /// Adds the given peer with a particular ID & multi address to the behavior.
-    pub fn add_address(&mut self, id: &PeerId, multi_address: Multiaddr) {
+    pub fn add_address(&mut self, id: PeerId, multi_address: Multiaddr) {
         // Add the peer to the KAD DHT
-        self.kad_dht.add_address(id, multi_address);
+        self.kad_dht.add_address(&id, multi_address);
 
         // Add the peer to the pubsub instance
-        self.gossipsub.add_node_to_partial_view(id.clone());
+        self.gossipsub.add_node_to_partial_view(id);
+    }
+
+    /// Removes the given peer with the given ID from the behavior.
+    pub fn remove_address(&mut self, id: &PeerId) {
+        // Remove the peer from the pubsub instance
+        self.gossipsub.remove_node_from_partial_view(id);
     }
 
     /// Gets the number of active, connected peers.
@@ -666,10 +676,11 @@ impl Client {
             kad_dht: Kademlia::new(self.peer_id.clone(), store),
             identification: Identify::new(
                 format!("{}", self.network),
-                config::NODE_VERSION,
+                config::NODE_VERSION.to_owned(),
                 self.keypair.public(),
             ),
             pinger: Ping::new(PingConfig::new()),
+            network: self.network,
             runtime: self.runtime.clone(),
             voting_accounts: accounts,
             should_broadcast_dag: false,
@@ -697,7 +708,7 @@ impl Client {
                 i, bootstrap_peer.1
             );
 
-            swarm.add_address(&bootstrap_peer.0, bootstrap_peer.1.clone()); // Add the bootstrap peer to the DHT
+            swarm.add_address(bootstrap_peer.0, bootstrap_peer.1.clone()); // Add the bootstrap peer to the DHT
 
             // Connect to the peer
             match Swarm::dial_addr(&mut swarm, bootstrap_peer.1) {
