@@ -137,14 +137,10 @@ impl Transaction {
             timestamp: chrono::Utc::now(), // Set timestamp
         }; // Initialize transaction data
 
-        let mut transaction_data_bytes = vec![0; transaction_data.to_bytes().len()]; // Initialize transaction data buffer
-
-        transaction_data_bytes.clone_from_slice(transaction_data.to_bytes().as_slice()); // Copy into buffer
-
         Transaction {
+            hash: blake3::hash_slice(&bincode::serialize(&transaction_data).unwrap_or_default()),
             transaction_data, // Set transaction data
-            hash: blake3::hash_slice(transaction_data_bytes.as_slice()),
-            signature: None, // Set signature
+            signature: None,  // Set signature
             deployed_contract_address: None,
             contract_creation: false, // Set does create contract
             genesis: false,           // Set is genesis
@@ -184,12 +180,8 @@ impl Transaction {
     /// ```
     pub fn verify_signature(&self) -> bool {
         match &self.signature {
-            None => {
-                false
-            } // Nil signature can't be valid
-            Some(signature) => {
-                signature.verify_tx(self)
-            } // Verify signature
+            None => false,                                // Nil signature can't be valid
+            Some(signature) => signature.verify_tx(self), // Verify signature
         }
     }
 
