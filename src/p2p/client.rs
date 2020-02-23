@@ -793,6 +793,7 @@ impl Client {
                                     // We're listening now
                                     listening = true;
                                 }
+
                                 break;
                             }
                         };
