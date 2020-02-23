@@ -13,7 +13,7 @@ pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<(PeerId, Mu
                 get_multiaddr("/dns4/node1.summer.cash/tcp/2048"),
             ),
             (
-                get_peer_id("QmRvkPpU6nBdFsWkq6v656PynM3pCZezhLVZFLBt5jqoE8"),
+                get_peer_id("QmbsNGBZxjzFHmbj7NdtEQL7VRLF1RLe3Nj9vbr2jCMP8S"),
                 get_multiaddr("/dns4/node2.summer.cash/tcp/2048"),
             ),
         ],
