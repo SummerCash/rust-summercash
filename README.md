@@ -22,14 +22,24 @@ git clone https://github.com/SummerCash/rust-summercash && cd rust-summercash
 cargo install --path .
 ```
 
-After running this command, `smcd` and `smcli` will be available for use from the `$PATH`, provided that ~/.cargo/bin is in such an environment variable.
+After running this sequence of commands, `smcd` and `smcli` will be available for use from the `$PATH`, provided that `~/.cargo/bin` is in such an environment variable.
 
 ### Hello, SummerCash!
 
-To get started with rust-summercash, make sure you've got an up-to-date installation of `smcd` and `smcli`. Then, start the SummerCash node daemon by running:
+To get started with rust-summercash, make sure you've got an up-to-date installation of `smcd` and `smcli` installed locally. Then, start the SummerCash node daemon by running:
 
 ```bash
 smcd
 ```
 
 and create an account by calling `smcli create account`. If you wish to encrypt your private key file, run `smcli lock account <address>`.
+
+Should one wish to send a transaction from this new account, use `smcli create transaction <address created in last step> <recipient address> <number of finks> <message>`.
+Keep in mind, values of SMC are expressed in finks, where `1000000000000000000 finks = 1 SMC`.
+
+After having created a transaction, one must first sign and then publish this transaction. This can be achieved through the following sequence of commands:
+
+```bash
+smcli sign transaction <hash> <sender address>
+smcli publish transaction <hash>
+```
