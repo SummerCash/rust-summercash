@@ -56,4 +56,13 @@ impl Signature {
     pub fn public_key(&self) -> Result<ed25519_dalek::PublicKey, failure::Error> {
         Ok(bincode::deserialize(&self.public_key_bytes)?)
     }
+
+    /// Gets the address associated with the signature.
+    pub fn address(&self) -> Result<Address, failure::Error> {
+        // Get the public key of the signature
+        let pub_key = self.public_key()?;
+
+        // Convert the public key to an address
+        Ok(Address::from_public_key(&pub_key))
+    }
 }

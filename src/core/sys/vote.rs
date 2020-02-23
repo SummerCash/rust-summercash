@@ -3,9 +3,12 @@ use ed25519_dalek; // Import the edwards25519 digital signature library
 use bincode; // Import serde bincode
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
-use super::super::super::crypto::{
-    blake3,
-    hash::{self, Hash as HashPrim},
+use super::super::super::{
+    common::address::Address,
+    crypto::{
+        blake3,
+        hash::{self, Hash as HashPrim},
+    },
 }; // Import the hash primitive
 use super::super::types::signature; // Import the signature primitive
 
@@ -83,6 +86,17 @@ impl Vote {
 
         // Hash the vote's contents
         self::blake3::hash_slice(&bincode::serialize(&to_be_hashed).unwrap_or_default())
+    }
+
+    /// Derives an address from the signature associated with the vote.
+    pub fn voter_address(&self) -> Option<Address> {
+        // The vote must have a signature in order to derive a voter address from it
+        if let Some(sig) = &self.signature {
+            // Convert the signature's public key to an address
+            sig.address().ok()
+        } else {
+            None
+        }
     }
 }
 

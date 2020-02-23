@@ -7,7 +7,10 @@ use std::{
     },
 }; // Import collections
 
-use num::bigint; // Add support for large unsigned integers
+use num::{
+    bigint::{self, BigInt, BigUint, ToBigInt},
+    Zero,
+}; // Add support for large unsigned integers
 
 use super::{
     super::{
@@ -68,8 +71,8 @@ pub struct System {
     /// The ledger
     pub ledger: Graph,
 
-    /// The number of votes in favor of each proposal
-    votes: HashMap<Hash, i128>,
+    /// The total weight of each proposed vote
+    votes: HashMap<Hash, BigInt>,
 
     /// Whether or not a user has voted for a particular proposal
     voted: HashMap<Hash, HashMap<Address, bool>>,
@@ -170,12 +173,12 @@ impl System {
     pub fn register_vote_for_proposal(
         &mut self,
         proposal_id: Hash,
-        mut vote: Vote,
+        vote: &Vote,
     ) -> Result<(), ExecutionError> {
         // Ensure that the proposal exists in the runtime
         if self.pending_proposals.contains_key(&proposal_id) {
             // The vote must have a signature in order to be registered
-            let sig = if let Some(sig) = vote.signature.take() {
+            let sig = if let Some(sig) = vote.clone().signature.take() {
                 sig
             } else {
                 return Err(ExecutionError::Miscellaneous {
@@ -206,8 +209,20 @@ impl System {
                     // We've voted now
                     *has_voted = true;
 
-                    *self.votes.entry(proposal_id).or_insert(0) +=
-                        if vote.in_favor { 1 } else { -1 };
+                    // Calculate the weight of the vote
+                    let vote_value =
+                        if let Some(bigint) = self.determine_vote_weight(vote).to_bigint() {
+                            bigint
+                        } else {
+                            BigInt::zero()
+                        };
+
+                    *self.votes.entry(proposal_id).or_insert_with(BigInt::zero) += if vote.in_favor
+                    {
+                        vote_value
+                    } else {
+                        -vote_value
+                    };
                 }
             } else {
                 return Err(ExecutionError::Miscellaneous {
@@ -372,5 +387,32 @@ impl System {
                 proposal_param: target_proposal.proposal_data.param_name,
             }),
         }
+    }
+
+    /// Determines the number of coins associated with a particular voter.
+    ///
+    /// # Arguments
+    ///
+    /// * `vote` - The vote that the weight should be determined of
+    pub fn determine_vote_weight(&self, vote: &Vote) -> BigUint {
+        // Determine the address of the account submitting the vote
+        let voter = if let Some(addr) = vote.voter_address() {
+            addr
+        } else {
+            // Since the vote doesn't have a voter, the vote can't have any weight
+            return BigUint::zero();
+        };
+
+        // Get the balance of the voter
+        self.ledger.get_balance_of_account(&voter)
+    }
+
+    /// Determins the number of coins from voters in favor of the proposal.
+    ///
+    /// # Arguments
+    ///
+    /// * `proposal` - The proposal that the weight should be determined of
+    pub fn get_coins_in_support_of(&self, proposal: &Hash) -> BigInt {
+        self.votes.get(proposal).unwrap_or(&BigInt::zero()).clone()
     }
 }

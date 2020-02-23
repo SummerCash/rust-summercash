@@ -1,12 +1,13 @@
 use super::state::{self, Entry}; // Import state module
 use super::transaction; // Import transaction types
 
+use num::{bigint::BigUint, Zero};
 use std::collections; // Import collections, io modules
 
 use serde::{Deserialize, Serialize}; // Import serde serialization
 
 use super::super::super::{
-    common::io,
+    common::{address::Address, io},
     crypto::hash::{self, Hash},
 }; // Import address, hash types
 
@@ -548,6 +549,52 @@ impl Graph {
                 error: "no route to node found".to_owned(), // Set error
             }) // Return error in result
         }
+    }
+
+    /// Get the last recorded balance of the provided account.
+    ///
+    /// # Arguments
+    ///
+    /// * `account` - The account of which the balance should be determined
+    pub fn get_balance_of_account(&self, account: &Address) -> BigUint {
+        // Get a non-empty state in which the account's balance might reside
+        if let Some(head) = self.obtain_executed_head() {
+            // The state must have a state entry, since it was marked as "executed"
+            if let Some(state) = head.state_entry {
+                // Get the balance of the account
+                return state
+                    .data
+                    .balances
+                    .get(&account.to_str())
+                    .unwrap_or(&BigUint::zero())
+                    .clone();
+            }
+        }
+
+        // The account must have a balance of zero, since it hasn't been included in the DAG yet
+        BigUint::zero()
+    }
+
+    /// Gets the number of finks issued in the genesis block.
+    pub fn overall_issuance(&self) -> BigUint {
+        // Get the genesis transaction
+        if let Ok(Some(genesis)) = self.get_pure(0) {
+            // Try to get the state, and, by extension, all of the balances at the genesis
+            // transaction
+            if let Some(state) = genesis.state_entry {
+                // We're going to sum up the coins issued to each address; make a var to store this
+                let mut total_issuance = BigUint::zero();
+
+                // Collect the balances of each address
+                for balance in state.data.balances.values().into_iter() {
+                    total_issuance += balance;
+                }
+
+                return total_issuance;
+            }
+        }
+
+        BigUint::zero()
     }
 
     /// Read the entirety of a persisted graph, or just state entry headers.
