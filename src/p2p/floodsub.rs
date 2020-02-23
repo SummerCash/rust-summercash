@@ -133,6 +133,13 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior {
                     if let Err(e) = publish_votes(resultant_votes, &mut self.gossipsub) {
                         warn!("Failed to publish votes: {}", e);
                     }
+
+                    // Try to clear the proposal
+                    if potentially_clear_proposal(rt, &id) {
+                        info!("Successfully cleared proposal {}!", id);
+                    } else {
+                        debug!("Proposal {} is not mature enough...", id);
+                    }
                 }
             } else if message.topics[0].id() == VOTES_TOPIC {
                 debug!("Message is a vote message; handling it as such");
