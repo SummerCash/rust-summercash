@@ -259,6 +259,13 @@ pub(crate) fn potentially_clear_proposal(
         .unwrap_or_else(BigUint::zero)
         >= acceptable_majority
     {
+        // If the proposal is invalid, don't execute it, but clear it, nonetheless
+        if !runtime.validate_proposal(proposal) {
+            runtime.pending_proposals.remove(proposal);
+
+            return false;
+        }
+
         // Execute the proposal
         return match runtime.execute_proposal(*proposal) {
             Ok(()) => true,

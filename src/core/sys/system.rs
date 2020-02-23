@@ -14,7 +14,11 @@ use num::{
 
 use super::{
     super::{
-        super::{common::address::Address, crypto::hash::Hash},
+        super::{
+            common::address::Address,
+            crypto::hash::Hash,
+            validator::{GraphBoundValidator, Validator},
+        },
         types::{graph::Graph, transaction::Transaction},
     },
     config,
@@ -414,5 +418,36 @@ impl System {
     /// * `proposal` - The proposal that the weight should be determined of
     pub fn get_coins_in_support_of(&self, proposal: &Hash) -> BigInt {
         self.votes.get(proposal).unwrap_or(&BigInt::zero()).clone()
+    }
+
+    /// Determines whether or not a particular proposal is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `proposal` - The proposal that should be validated
+    pub fn validate_proposal(&self, proposal: &Hash) -> bool {
+        // Get the proposal's metadata
+        if let Some(prop) = self.pending_proposals.get(proposal) {
+            // If the proposal is a transaction, validate it
+            return if prop.proposal_data.param_name.as_str() == "ledger::transactions" {
+                // The proposal must be an append op if it is proposing a TX
+                if let Operation::Append { value_to_append } = &prop.proposal_data.operation {
+                    // Try to deserialize the transaction
+                    if let Ok(tx) = bincode::deserialize::<Transaction>(&value_to_append) {
+                        // Validate the transaction
+                        let validator = GraphBoundValidator::new(&self.ledger);
+                        validator.transaction_is_valid(&tx).is_ok()
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                true
+            };
+        }
+
+        false
     }
 }
