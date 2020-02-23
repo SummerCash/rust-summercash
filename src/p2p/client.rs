@@ -3,7 +3,11 @@ use super::super::core::{
         config::{self, Config},
         system::{self, System},
     },
-    types::{genesis, transaction::Transaction},
+    types::{
+        genesis,
+        receipt::{Receipt, ReceiptMap},
+        transaction::Transaction,
+    },
 }; // Import the system module
 use super::super::crypto::blake3; // Import the blake3 hashing module
 use super::super::{
@@ -608,6 +612,15 @@ impl Client {
 
             // We should be mentioning the last state hash in this tx, since we know it already
             tx.transaction_data.parent_state_hash = Some(last_state_hash);
+            tx.transaction_data.parent_receipts = Some(ReceiptMap {
+                associated_transactions: vec![last_hash],
+                receipts: vec![Receipt {
+                    state_hash: last_state_hash,
+                    logs: Vec::new(),
+                }],
+            });
+            tx.hash =
+                blake3::hash_slice(&bincode::serialize(&tx.transaction_data).unwrap_or_default());
 
             // Execute the transaction, and collect its state
             let state = tx.execute(runtime.ledger.get(i - 1)?.unwrap().state_entry.clone());

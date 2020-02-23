@@ -296,6 +296,10 @@ impl Transaction {
 
         // Use the generated receipts map as the parental receipts list
         self.transaction_data.parent_receipts = Some(receipts);
+
+        // Rehash the transaction
+        self.hash =
+            blake3::hash_slice(&bincode::serialize(&self.transaction_data).unwrap_or_default());
     }
 
     /// Persists the transaction to a mem dir in the given data directory.
