@@ -203,6 +203,10 @@ pub struct ClientBehavior {
     /// published
     #[behaviour(ignore)]
     proposal_queue_full: Arc<AtomicBool>,
+
+    /// The index of the last published node
+    #[behaviour(ignore)]
+    last_published_tx: usize,
 }
 
 impl ClientBehavior {
@@ -320,7 +324,7 @@ impl ClientBehavior {
             );
 
             // Make sure the network has a full copy of the entire transaction history
-            for i in 0..runtime.ledger.nodes.len() {
+            for i in self.last_published_tx..runtime.ledger.nodes.len() {
                 // If we aren't at the head tx yet, we can post the next tx hash
                 if i + 1 < runtime.ledger.nodes.len() {
                     // Post the next tx hash to the network
@@ -347,6 +351,9 @@ impl ClientBehavior {
                     );
                 }
             }
+
+            // Move the published head to the last published tx
+            self.last_published_tx = runtime.ledger.nodes.len();
         }
     }
 
@@ -702,6 +709,7 @@ impl Client {
             } else {
                 Arc::new(AtomicBool::new(false))
             },
+            last_published_tx: 0,
         };
 
         let mut swarm = Swarm::new(

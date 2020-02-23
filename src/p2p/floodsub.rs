@@ -137,6 +137,8 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior {
                     // Try to clear the proposal
                     if potentially_clear_proposal(rt, &id) {
                         info!("Successfully cleared proposal {}!", id);
+
+                        self.publish_dag();
                     } else {
                         debug!("Proposal {} is not mature enough...", id);
                     }
@@ -202,6 +204,8 @@ impl NetworkBehaviourEventProcess<FloodsubEvent> for ClientBehavior {
                 // Try to clear the proposal
                 if potentially_clear_proposal(rt, &vote.target_proposal) {
                     info!("Successfully cleared proposal {}!", vote.target_proposal);
+
+                    self.publish_dag();
                 } else {
                     debug!("Proposal {} is not mature enough...", vote.target_proposal);
                 }
