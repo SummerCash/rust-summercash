@@ -7,10 +7,16 @@ use libp2p::{Multiaddr, PeerId}; // Import the libp2p library
 pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<(PeerId, Multiaddr)> {
     match network {
         // We're trying to sync to the main SummerCash network
-        network::Network::MainNetwork => vec![(
-            get_peer_id("QmQZJ5p27AcQk6QHPB3PuxyT6hn8RB488j67NGhcJ84Qmv"),
-            get_multiaddr("/dns4/node1.summer.cash/tcp/2048"),
-        )],
+        network::Network::MainNetwork => vec![
+            (
+                get_peer_id("QmQZJ5p27AcQk6QHPB3PuxyT6hn8RB488j67NGhcJ84Qmv"),
+                get_multiaddr("/dns4/node1.summer.cash/tcp/2048"),
+            ),
+            (
+                get_peer_id("QmRvkPpU6nBdFsWkq6v656PynM3pCZezhLVZFLBt5jqoE8"),
+                get_multiaddr("/dns4/node2.summer.cash/tcp/2048"),
+            ),
+        ],
         // This time to the public test network
         network::Network::PublicTestNetwork => vec![(
             get_peer_id("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"),
