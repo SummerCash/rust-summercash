@@ -109,7 +109,8 @@ impl<'a> GraphBoundValidator<'a> {
     /// * `tx` - The transaction that should be checked for uniqueness among the graph's txs
     fn transaction_hash_is_valid(&self, tx: &Transaction) -> (bool, Hash) {
         // Hash the transaction
-        let target = blake3::hash_slice(&tx.transaction_data.to_bytes());
+        let target =
+            blake3::hash_slice(&bincode::serialize(&tx.transaction_data).unwrap_or_default());
 
         // Make sure that the transaction's hash can be reproduced
         (tx.hash == target, target)
