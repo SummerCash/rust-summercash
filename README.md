@@ -14,3 +14,22 @@ The latter of these two tools can be installed with `cargo install summercash --
 ```toml
 summercash = "0.1.0"
 ```
+
+Alternatively, install all three of these tools by running the following commands:
+
+```bash
+git clone https://github.com/SummerCash/rust-summercash && cd rust-summercash
+cargo install --path .
+```
+
+After running this command, `smcd` and `smcli` will be available for use from the `$PATH`, provided that ~/.cargo/bin is in such an environment variable.
+
+### Hello, SummerCash!
+
+To get started with rust-summercash, make sure you've got an up-to-date installation of `smcd` and `smcli`. Then, start the SummerCash node daemon by running:
+
+```bash
+smcd
+```
+
+and create an account by calling `smcli create account`. If you wish to encrypt your private key file, run `smcli lock account <address>`.
