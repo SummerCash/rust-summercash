@@ -41,7 +41,7 @@ impl NetworkBehaviourEventProcess<PingEvent> for ClientBehavior {
             // Since our connection to the peer has basically cut out, we can remove them from our
             // view of the network
             Err(e) => {
-                debug!("Removing peer {}: {}", event.peer, e);
+                info!("Removing peer {}: {}", event.peer, e);
                 self.remove_address(&event.peer);
             }
             _ => debug!("Received ping event: {:?}", event),
