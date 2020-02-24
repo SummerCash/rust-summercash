@@ -139,9 +139,9 @@ impl Dag for DagImpl {
 
         // Get a head from the DAG. This is necessary, as we need to determine what nonce we can use for the tx.
         let (head, head_entry): (Node, Entry) =
-            if let Some(h) = runtime.ledger.obtain_executed_head() {
+            if let Some(mut h) = runtime.ledger.obtain_executed_head() {
                 // Load the entry's state data
-                if let Some(state_entry) = h.state_entry.clone() {
+                if let Some(state_entry) = h.state_entry.take() {
                     (h, state_entry)
                 } else {
                     // Return a state ref error
