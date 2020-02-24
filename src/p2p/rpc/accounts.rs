@@ -328,7 +328,7 @@ impl Accounts for AccountsImpl {
     /// Gets the balance of the account.
     fn balance(&self, address: Address) -> Result<num::BigUint> {
         // Get a runtime that we can use to get the balances at the last transaction
-        let mut rt = if let Ok(runtime) = self.runtime.write() {
+        let rt = if let Ok(runtime) = self.runtime.read() {
             runtime
         } else {
             // Return an error communicating the inability to obtain a read lock
@@ -342,51 +342,15 @@ impl Accounts for AccountsImpl {
             // Return a zero balance
             Ok(num::BigUint::default())
         } else {
-            // The index of the last node in the ledger
-            let head_index = rt.ledger.nodes.len() - 1;
-
             // The head of the graph, where its state has been executed properly
-            let mut working_state = if let Ok(n) = rt.ledger.get(head_index) {
-                if let Some(node) = n {
-                    node
-                } else {
-                    // Return a zero balance, since this node doesn't really exist
-                    return Ok(num::BigUint::default());
-                }
+            let working_state = if let Some(n) = rt.ledger.obtain_executed_head() {
+                n
             } else {
                 // Return an error communicating the inability to read the node
                 return Err(Error::new(ErrorCode::from(
                     error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
                 )));
             };
-
-            // The current index in the set of nodes in the ledger graph
-            let mut i = head_index;
-
-            // Keep getting the previous state until we have a tx with a valid state
-            while working_state.state_entry.is_none() {
-                // Set the current tx to the node at the current index
-                working_state = if let Ok(n) = rt.ledger.get(i) {
-                    if let Some(node) = n {
-                        node
-                    } else {
-                        // Return a zero balance, since this node doesn't really exist
-                        return Ok(num::BigUint::default());
-                    }
-                } else {
-                    // Return an error containing the inability to read this node
-                    return Err(Error::new(ErrorCode::from(
-                        error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
-                    )));
-                };
-
-                // Only go down to the previous node if we're not already at the root node
-                if i == 0 {
-                    break;
-                } else {
-                    i -= 1;
-                }
-            }
 
             // Try to get the balance of the user from the state entry data, and return it
             if let Some(state) = &working_state.state_entry {

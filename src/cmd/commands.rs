@@ -57,7 +57,7 @@ pub enum List {
 #[derive(Clap, Clone)]
 pub enum Sign {
     /// Signs the provided transaction with a given account
-    Transaction(SignableTransaction),
+    Transaction(HashableObject),
 }
 
 #[derive(Clap, Clone)]
@@ -96,15 +96,6 @@ pub struct Transaction {
 
     /// A UTF-8-encoded payload sent along with the transaction
     pub payload: String,
-}
-
-#[derive(Clap, Clone)]
-pub struct SignableTransaction {
-    /// The hash of the transaction
-    pub hash: String,
-
-    /// The address of the account that will be used to sign the transaction
-    pub account: String,
 }
 
 #[derive(Clap, Clone)]

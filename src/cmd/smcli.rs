@@ -414,10 +414,7 @@ async fn sign(opts: Opts, s: Sign) -> Result<(), failure::Error> {
             let client = dag::Client::new(&opts.rpc_host_url);
 
             // Sign the transaction
-            match client
-                .sign_tx(signable.hash, signable.account, opts.data_dir)
-                .await
-            {
+            match client.sign_tx(signable.hash, opts.data_dir).await {
                 Ok(signature) => info!(
                     "{}Signed tx (publish with publish command): {}",
                     Emoji::new("✍️ ", ""),

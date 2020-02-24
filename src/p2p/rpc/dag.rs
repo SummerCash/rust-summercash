@@ -56,7 +56,7 @@ pub trait Dag {
 
     /// Signs the transaction with the provided hash.
     #[rpc(name = "sign_transaction")]
-    fn sign_tx(&self, hash: String, account: String, data_dir: String) -> Result<Signature>;
+    fn sign_tx(&self, hash: String, data_dir: String) -> Result<Signature>;
 
     /// Gets a list of transactions contained in the transaction cache.
     #[rpc(name = "get_mem_transactions")]
@@ -216,10 +216,21 @@ impl Dag for DagImpl {
     }
 
     /// Signs the transaction with the provided hash.
-    fn sign_tx(&self, hash: String, account: String, data_dir: String) -> Result<Signature> {
+    fn sign_tx(&self, hash: String, data_dir: String) -> Result<Signature> {
+        // Read the transaction from the disk
+        let mut tx: Transaction =
+            if let Ok(tx) = Transaction::from_disk_at_data_directory(&data_dir, Hash::from(hash)) {
+                tx
+            } else {
+                // Return an error representing the inabiility of the tx to be opened
+                return Err(Error::new(ErrorCode::from(
+                    error::ERROR_UNABLE_TO_OPEN_TRANSACTION,
+                )));
+            };
+
         // Read the account from the disk
         let acc = if let Ok(a) =
-            Account::read_from_disk_at_data_directory(Address::from(account), &data_dir)
+            Account::read_from_disk_at_data_directory(tx.transaction_data.sender, &data_dir)
         {
             a
         } else {
@@ -238,17 +249,6 @@ impl Dag for DagImpl {
                 error::ERROR_SIGNATURE_UNDEFINED,
             )));
         };
-
-        // Read the transaction from the disk
-        let mut tx: Transaction =
-            if let Ok(tx) = Transaction::from_disk_at_data_directory(&data_dir, Hash::from(hash)) {
-                tx
-            } else {
-                // Return an error representing the inabiility of the tx to be opened
-                return Err(Error::new(ErrorCode::from(
-                    error::ERROR_UNABLE_TO_OPEN_TRANSACTION,
-                )));
-            };
 
         // Sign the transaction, and return it
         match transaction::sign_transaction(keypair, &mut tx) {
@@ -447,15 +447,13 @@ impl Client {
     pub async fn sign_tx(
         &self,
         hash: String,
-        account: String,
         data_dir: String,
     ) -> std::result::Result<Signature, failure::Error> {
         self.do_request::<Signature>(
             "sign_transaction",
             &format!(
-                "[{}, {}, {}]",
+                "[{}, {}]",
                 &serde_json::to_string(&hash)?,
-                &serde_json::to_string(&account)?,
                 &serde_json::to_string(&data_dir)?
             ),
         )
