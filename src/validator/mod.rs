@@ -3,7 +3,7 @@ use super::{
     core::types::{graph::Graph, transaction::Transaction},
     crypto::{blake3, hash::Hash},
 };
-use num::BigUint;
+use num::{BigUint, Zero};
 
 /// A generic rule-enforcing transactional system.
 pub trait Validator {
@@ -48,6 +48,20 @@ pub enum GraphBoundValidatorReason {
         tx_hash, sender
     )]
     InsufficientSenderBalance { tx_hash: Hash, sender: Address },
+    #[fail(
+        display = "the sender ({}) of transaction {} is the same as the recipient",
+        sender, tx_hash
+    )]
+    AttemptedIdentityOperation { tx_hash: Hash, sender: Address },
+    #[fail(
+        display = "transaction {} has an invalid nonce (expected {}, found {})",
+        tx_hash, target, found
+    )]
+    InvalidNonce {
+        tx_hash: Hash,
+        found: u64,
+        target: BigUint,
+    },
 }
 
 impl<'a> GraphBoundValidator<'a> {
@@ -173,6 +187,35 @@ impl<'a> GraphBoundValidator<'a> {
         // If the sender doesn't have any SMC, they can't send any. Therefore, the value of the transaction must be zero.
         tx.transaction_data.value == BigUint::default()
     }
+
+    /// Ensures that the nonce provided by the transaction matches the target nonce for such a
+    /// transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `tx` - The transaction that the nonce should be checked of
+    fn transaction_nonce_is_valid(&self, tx: &Transaction) -> (bool, BigUint) {
+        // Check for a latest state entry in the graph. This will serve as the point from where we calculate the account's nonce.
+        if let Some(last_state) = self.graph.obtain_executed_head() {
+            // Ensure that the provided transaction has in fact been executed
+            if let Some(state) = last_state.state_entry {
+                // Ensure that the current nonce is equal to exactly the last nonce +1
+                if let Some(last_nonce) = state
+                    .data
+                    .balances
+                    .get(&tx.transaction_data.sender.to_str())
+                {
+                    return (
+                        last_nonce.clone() == BigUint::from(tx.transaction_data.nonce - 1),
+                        last_nonce.clone() + (1 as u8),
+                    );
+                }
+            }
+        }
+
+        // The nonce must be 0 since there is not a parent
+        (tx.transaction_data.nonce == 0, BigUint::zero())
+    }
 }
 
 impl<'a> Validator for GraphBoundValidator<'a> {
@@ -218,8 +261,26 @@ impl<'a> Validator for GraphBoundValidator<'a> {
                             sender: tx.transaction_data.sender,
                         }
                         .into())
+                    } else if tx.transaction_data.sender == tx.transaction_data.recipient {
+                        Err(GraphBoundValidatorReason::AttemptedIdentityOperation {
+                            tx_hash: tx.hash,
+                            sender: tx.transaction_data.sender,
+                        }
+                        .into())
                     } else {
-                        Ok(())
+                        // Make sure the transaction's nonce is valid
+                        let (ok, target) = self.transaction_nonce_is_valid(tx);
+
+                        if !ok {
+                            Err(GraphBoundValidatorReason::InvalidNonce {
+                                tx_hash: tx.hash,
+                                found: tx.transaction_data.nonce,
+                                target,
+                            }
+                            .into())
+                        } else {
+                            Ok(())
+                        }
                     }
                 }
             }

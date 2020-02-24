@@ -92,7 +92,7 @@ pub struct Transaction {
     pub recipient: String,
 
     /// The number of finks sent through the transaction
-    pub amount: u64,
+    pub amount: u128,
 
     /// A UTF-8-encoded payload sent along with the transaction
     pub payload: String,
