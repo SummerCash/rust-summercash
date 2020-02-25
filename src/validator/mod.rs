@@ -19,6 +19,7 @@ pub trait Validator {
 /// no runtime allocations.
 pub struct GraphBoundValidator<'a> {
     graph: &'a Graph,
+    minimum_balance: BigUint,
 }
 
 /// A reason provided by a GraphBoundValidator for why a particular transaction is invalid.
@@ -44,10 +45,15 @@ pub enum GraphBoundValidatorReason {
     #[fail(display = "transaction {} has an invalid parent receipt", tx_hash)]
     ParentReceiptInvalid { tx_hash: Hash },
     #[fail(
-        display = "the balance of the sender of transaction {} ({}) is insufficient to execute such a state transition",
-        tx_hash, sender
+        display = "the balance of the sender ({}) of transaction {}, {} is insufficient to execute such a state transition ({})",
+        sender, tx_hash, balance, tx_value
     )]
-    InsufficientSenderBalance { tx_hash: Hash, sender: Address },
+    InsufficientSenderBalance {
+        tx_hash: Hash,
+        sender: Address,
+        balance: BigUint,
+        tx_value: BigUint,
+    },
     #[fail(
         display = "the sender ({}) of transaction {} is the same as the recipient",
         sender, tx_hash
@@ -72,7 +78,10 @@ impl<'a> GraphBoundValidator<'a> {
     /// * `graph` - The graph to which validation will be bound.
     pub fn new(graph: &'a Graph) -> Self {
         // Make a new validator
-        Self { graph }
+        Self {
+            graph,
+            minimum_balance: BigUint::zero(),
+        }
     }
 
     /// Checks whether or not the transaction already eists in the graph.
@@ -169,23 +178,36 @@ impl<'a> GraphBoundValidator<'a> {
     /// # Arguments
     ///
     /// * `tx` - The transaction that should be checked against
-    fn transaction_sender_balance_is_sufficient(&self, tx: &Transaction) -> bool {
+    fn transaction_sender_balance_is_sufficient<'b>(
+        &'a self,
+        tx: &'b Transaction,
+    ) -> (&'a BigUint, &'b BigUint, bool) {
         // Check for a latest state entry in the graph. This will serve as the point from where we calculate the account's balance.
         if let Some(last_state) = self.graph.obtain_executed_head() {
             // Ensure that the provided transaction has in fact been executed
-            if let Some(state) = last_state.state_entry {
-                // The sender must have at least enough coins to send the transaction
-                return *state
+            if let Some(state) = &last_state.state_entry {
+                // Get the balance of the sender of the transaction
+                let sender_balance = state
                     .data
                     .balances
                     .get(&tx.transaction_data.sender.to_str())
-                    .unwrap_or(&BigUint::default())
-                    >= tx.transaction_data.value;
+                    .unwrap_or(&self.minimum_balance);
+
+                // The sender must have at least enough coins to send the transaction
+                return (
+                    sender_balance,
+                    &tx.transaction_data.value,
+                    *sender_balance >= tx.transaction_data.value,
+                );
             }
         }
 
         // If the sender doesn't have any SMC, they can't send any. Therefore, the value of the transaction must be zero.
-        tx.transaction_data.value == BigUint::default()
+        (
+            &self.minimum_balance,
+            &tx.transaction_data.value,
+            tx.transaction_data.value == BigUint::default(),
+        )
     }
 
     /// Ensures that the nonce provided by the transaction matches the target nonce for such a
@@ -254,11 +276,18 @@ impl<'a> Validator for GraphBoundValidator<'a> {
                 } else if !self.transaction_parent_execution_is_valid(tx) {
                     Err(GraphBoundValidatorReason::ParentReceiptInvalid { tx_hash: tx.hash }.into())
                 } else {
+                    // Check that the sender of the transaction has enough coins to send the
+                    // transaction
+                    let (sender_balance, value, ok) =
+                        self.transaction_sender_balance_is_sufficient(tx);
+
                     // If the user sending the transaction doesn't have enough SMC to actually send this transaction, return an error
-                    if !self.transaction_sender_balance_is_sufficient(tx) {
+                    if !ok {
                         Err(GraphBoundValidatorReason::InsufficientSenderBalance {
                             tx_hash: tx.hash,
                             sender: tx.transaction_data.sender,
+                            balance: sender_balance.clone(),
+                            tx_value: value.clone(),
                         }
                         .into())
                     } else if tx.transaction_data.sender == tx.transaction_data.recipient {
