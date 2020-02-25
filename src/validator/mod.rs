@@ -178,14 +178,14 @@ impl<'a> GraphBoundValidator<'a> {
     /// # Arguments
     ///
     /// * `tx` - The transaction that should be checked against
-    fn transaction_sender_balance_is_sufficient<'b>(
-        &'a self,
-        tx: &'b Transaction,
-    ) -> (&'a BigUint, &'b BigUint, bool) {
+    fn transaction_sender_balance_is_sufficient(
+        &self,
+        tx: &Transaction,
+    ) -> (BigUint, BigUint, bool) {
         // Check for a latest state entry in the graph. This will serve as the point from where we calculate the account's balance.
         if let Some(last_state) = self.graph.obtain_executed_head() {
             // Ensure that the provided transaction has in fact been executed
-            if let Some(state) = &last_state.state_entry {
+            if let Some(state) = last_state.state_entry {
                 // Get the balance of the sender of the transaction
                 let sender_balance = state
                     .data
@@ -195,8 +195,8 @@ impl<'a> GraphBoundValidator<'a> {
 
                 // The sender must have at least enough coins to send the transaction
                 return (
-                    sender_balance,
-                    &tx.transaction_data.value,
+                    sender_balance.clone(),
+                    tx.transaction_data.value.clone(),
                     *sender_balance >= tx.transaction_data.value,
                 );
             }
@@ -204,8 +204,8 @@ impl<'a> GraphBoundValidator<'a> {
 
         // If the sender doesn't have any SMC, they can't send any. Therefore, the value of the transaction must be zero.
         (
-            &self.minimum_balance,
-            &tx.transaction_data.value,
+            self.minimum_balance.clone(),
+            tx.transaction_data.value.clone(),
             tx.transaction_data.value == BigUint::default(),
         )
     }
@@ -286,8 +286,8 @@ impl<'a> Validator for GraphBoundValidator<'a> {
                         Err(GraphBoundValidatorReason::InsufficientSenderBalance {
                             tx_hash: tx.hash,
                             sender: tx.transaction_data.sender,
-                            balance: sender_balance.clone(),
-                            tx_value: value.clone(),
+                            balance: sender_balance,
+                            tx_value: value,
                         }
                         .into())
                     } else if tx.transaction_data.sender == tx.transaction_data.recipient {
