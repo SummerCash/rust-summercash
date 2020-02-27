@@ -714,28 +714,18 @@ impl Graph {
     /// assert_eq!(dag.write_to_disk(), Ok(())); // Close dag
     /// ```
     pub fn write_to_disk(&self) -> Result<(), sled::Error> {
-        let mut i = 0; // Init incrementor
-
         // Get database instance
         if let Some(db) = &self.db {
             // Iterate through nodes
-            for node in &self.nodes {
-                // Check not already in db
-                if !db.contains_key(i.to_string().as_bytes()).unwrap() {
-                    let set_result = db.insert(i.to_string().as_bytes(), node.to_bytes()); // Insert node bytes
-
-                    match set_result {
-                        // Returned error
-                        Err(error) => return Err(error),
-                        // No errors, carry on
-                        _ => {
-                            i += 1;
-                            continue;
-                        }
-                    }; // Check for errors while setting in db
+            for (i, node) in self.nodes.iter().rev().enumerate() {
+                // Only continue with the persistence process if the nodes haven't already been
+                // saved to the database
+                if db.contains_key(i.to_string().as_bytes())? {
+                    break;
                 }
 
-                i += 1; // Increment
+                // Save the node in the database
+                db.insert(i.to_string().as_bytes(), node.to_bytes())?;
             }
 
             db.flush()?; // Close db

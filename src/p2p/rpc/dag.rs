@@ -50,7 +50,7 @@ pub trait Dag {
         &self,
         sender: String,
         recipient: String,
-        value: u128,
+        value: String,
         payload: String,
     ) -> Result<Transaction>;
 
@@ -95,6 +95,8 @@ impl Dag for DagImpl {
             // Return all of the nodes in the runtime's ledger
             Ok(collected_nodes)
         } else {
+            debug!("Unable to obtain a lock on the client's runtime");
+
             // Return the corresponding error
             Err(Error::new(ErrorCode::from(
                 error::ERROR_UNABLE_TO_OBTAIN_LOCK,
@@ -108,6 +110,8 @@ impl Dag for DagImpl {
             // Return all of the keys, which are the node hashes, stored in the DAG
             Ok(rt.ledger.hash_routes.keys().copied().collect())
         } else {
+            debug!("Unable to obtain a lock on the client's runtime");
+
             // Return the corresponding error
             Err(Error::new(ErrorCode::from(
                 error::ERROR_UNABLE_TO_OBTAIN_LOCK,
@@ -120,7 +124,7 @@ impl Dag for DagImpl {
         &self,
         sender: String,
         recipient: String,
-        value: u128,
+        value: String,
         payload: String,
     ) -> Result<Transaction> {
         // Convert the provided sender and recipient values to addresses
@@ -131,6 +135,8 @@ impl Dag for DagImpl {
         let runtime = if let Ok(rt) = self.runtime.read() {
             rt
         } else {
+            debug!("Unable to obtain a lock on the client's runtime");
+
             // Return a mutex error
             return Err(Error::new(ErrorCode::from(
                 error::ERROR_UNABLE_TO_OBTAIN_LOCK,
@@ -144,12 +150,16 @@ impl Dag for DagImpl {
                 if let Some(state_entry) = h.state_entry.take() {
                     (h, state_entry)
                 } else {
+                    debug!("Best graph node doesn't contain a state entry; terminating");
+
                     // Return a state ref error
                     return Err(Error::new(ErrorCode::from(
                         error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
                     )));
                 }
             } else {
+                debug!("Unable to obtain a lock on the client's runtime");
+
                 // Return a state ref error
                 return Err(Error::new(ErrorCode::from(
                     error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
@@ -190,7 +200,7 @@ impl Dag for DagImpl {
             nonce,
             sender_address,
             recipient_address,
-            BigUint::from(value),
+            BigUint::from_bytes_be(&value.into_bytes()),
             payload.as_bytes(),
             parent_hashes,
         );
@@ -202,6 +212,11 @@ impl Dag for DagImpl {
         {
             res
         } else {
+            debug!(
+                "Failed to merge the parent entries required to produce transaction {}",
+                transaction.hash
+            );
+
             // Return a state error
             return Err(Error::new(ErrorCode::from(
                 error::ERROR_UNABLE_TO_OBTAIN_STATE_REF,
@@ -433,10 +448,10 @@ impl Client {
         self.do_request::<Transaction>(
             "create_transaction",
             &format!(
-                "[{}, {}, {}, {}]",
+                r#"[{}, {}, "{}", {}]"#,
                 serde_json::to_string(&sender)?,
                 serde_json::to_string(&recipient)?,
-                amount,
+                serde_json::to_string(&amount)?,
                 serde_json::to_string(&payload)?
             ),
         )
