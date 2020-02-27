@@ -60,11 +60,12 @@ pub enum GraphBoundValidatorReason {
     )]
     AttemptedIdentityOperation { tx_hash: Hash, sender: Address },
     #[fail(
-        display = "transaction {} has an invalid nonce (expected {}, found {})",
-        tx_hash, target, found
+        display = "transaction {} has an invalid nonce (expected {} for account {}, found {})",
+        tx_hash, target, offending_account, found
     )]
     InvalidNonce {
         tx_hash: Hash,
+        offending_account: Address,
         found: u64,
         target: BigUint,
     },
@@ -305,6 +306,7 @@ impl<'a> Validator for GraphBoundValidator<'a> {
                                 tx_hash: tx.hash,
                                 found: tx.transaction_data.nonce,
                                 target,
+                                offending_account: tx.transaction_data.sender,
                             }
                             .into())
                         } else {
