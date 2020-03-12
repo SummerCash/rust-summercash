@@ -96,9 +96,10 @@ impl NetworkBehaviourEventProcess<KademliaEvent> for ClientBehavior {
                                             Ok(_) => {
                                                 info!("Successfully executed transaction {}", id)
                                             }
-                                            Err(e) => {
-                                                warn!("Failed to execute transaction {}: {}", id, e)
-                                            }
+                                            Err(e) => warn!(
+                                                "Failed to execute transaction {}: {}",
+                                                hash, e
+                                            ),
                                         }
                                     }
                                 }
