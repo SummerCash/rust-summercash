@@ -8,7 +8,7 @@ pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<(PeerId, Mu
         // We're trying to sync to the main SummerCash network
         network::Network::MainNetwork => vec![
             (
-                get_peer_id("QmUGGG7T5AicmMUjUTay3wT7jRPwfhrjM1e8W8i1DZXjBg"),
+                get_peer_id("QmQZJ5p27AcQk6QHPB3PuxyT6hn8RB488j67NGhcJ84Qmv"),
                 get_multiaddr("/dns4/node1.summer.cash/tcp/2048"),
             ),
             (
@@ -18,12 +18,12 @@ pub fn get_network_bootstrap_peers(network: network::Network) -> Vec<(PeerId, Mu
         ],
         // This time to the public test network
         network::Network::PublicTestNetwork => vec![(
-            get_peer_id("QmUGGG7T5AicmMUjUTay3wT7jRPwfhrjM1e8W8i1DZXjBg"),
+            get_peer_id("QmbsNGBZxjzFHmbj7NdtEQL7VRLF1RLe3Nj9vbr2jCMP8S"),
             get_multiaddr("/ip4/108.41.124.60/tcp/4096"),
         )],
         // This time to the public, but bleeding-edge dev test network
         network::Network::DevTestNetwork => vec![(
-            get_peer_id("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"),
+            get_peer_id("QmUGGG7T5AicmMUjUTay3wT7jRPwfhrjM1e8W8i1DZXjBg"),
             get_multiaddr("/ip4/108.41.124.60/tcp/8192"),
         )],
         // This should be a completely local test network
