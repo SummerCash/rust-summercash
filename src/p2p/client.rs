@@ -851,3 +851,9 @@ mod tests {
         ); // Ensure client has correct net
     }
 }
+
+/*
+    TODO:
+        - Add transport fallback for record lookup
+        - Cache results in the KAD DHT
+*/
