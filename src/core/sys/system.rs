@@ -375,15 +375,7 @@ impl System {
                         //Some(tx.execute(Some(prev_state_entry))); // Set node state entry
                         //}
 
-                        let write_result = self.ledger.write_to_disk(); // Write ledger to disk
-                                                                        // Check for errors
-                        if let Err(e) = write_result {
-                            Err(ExecutionError::Miscellaneous {
-                                error: e.to_string(),
-                            }) // Return error
-                        } else {
-                            Ok(()) // Mhm
-                        }
+                        Ok(())
                     }
                 }
             }
