@@ -42,7 +42,7 @@ use libp2p::{
     },
     mdns::Mdns,
     ping::{Ping, PingConfig},
-    Multiaddr, NetworkBehaviour, PeerId, Swarm, TransportError,
+    Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport, TransportError,
 }; // Import the libp2p library
 
 // We need these traits from the futures library in order to build a swarm.
